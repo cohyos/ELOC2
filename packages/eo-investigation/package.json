@@ -1,0 +1,25 @@
+{
+  "name": "@eloc2/eo-investigation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@eloc2/domain": "workspace:*",
+    "@eloc2/events": "workspace:*",
+    "@eloc2/shared-utils": "workspace:*",
+    "@eloc2/fusion-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.3.0",
+    "vitest": "^3.0.0",
+    "typescript": "^5.7.0"
+  }
+}

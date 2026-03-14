@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "workstation",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@eloc2/workstation", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@eloc2/api", "dev"],
+      "port": 3001
+    },
+    {
+      "name": "simulator",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@eloc2/simulator", "dev"],
+      "port": 3002
+    }
+  ]
+}

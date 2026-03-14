@@ -1,0 +1,23 @@
+{
+  "name": "@eloc2/simulator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm",
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@eloc2/domain": "workspace:*",
+    "@eloc2/events": "workspace:*",
+    "@eloc2/shared-utils": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.0",
+    "tsx": "^4.19.0",
+    "vitest": "^3.0.0",
+    "typescript": "^5.7.0"
+  }
+}
