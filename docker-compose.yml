@@ -4,8 +4,7 @@ services:
   eloc2:
     build: .
     ports:
-      - "3000:3000"   # Workstation UI (static files via serve)
-      - "3001:3001"   # API + WebSocket server
+      - "3001:3001"   # API + WebSocket + UI (single port)
     environment:
       - NODE_ENV=production
     restart: unless-stopped

@@ -6,15 +6,18 @@ A full-stack simulation of an air defense C2 system that fuses radar, electro-op
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                    Workstation (React + MapLibre)    │  :3000
+│                    Workstation (React + MapLibre)    │
 │   Map ─ Track detail ─ Sensor detail ─ Timeline     │
 └────────────────────────┬────────────────────────────┘
                          │ REST + WebSocket
 ┌────────────────────────┴────────────────────────────┐
 │                    API Server (Fastify)              │  :3001
 │   LiveEngine → ScenarioRunner → TrackManager → RAP  │
+│   (serves static UI in production)                  │
 └─────────────────────────────────────────────────────┘
 ```
+
+In **development**, Vite runs the workstation on `:3000` with hot reload and proxies API calls to `:3001`. In **production** (Docker / Cloud Run), Fastify serves both the API and the static workstation build on a single port (`:3001`).
 
 **LiveEngine** drives the simulation:
 1. `ScenarioRunner` generates synthetic sensor observations (radar plots, EO bearings, C4ISR tracks) along scripted flight paths with injected faults.
@@ -72,7 +75,26 @@ docker compose up --build
 docker compose up --build -d
 ```
 
-The workstation is served at **http://localhost:3000** and the API at **http://localhost:3001**.
+Open **http://localhost:3001** — both the UI and API are served on a single port.
+
+## Deploy to Google Cloud Run
+
+```bash
+# One-time setup
+gcloud auth login
+gcloud config set project YOUR_PROJECT_ID
+
+# Deploy (builds Docker image and deploys)
+gcloud run deploy eloc2 \
+  --source . \
+  --port 3001 \
+  --allow-unauthenticated \
+  --region me-west1 \
+  --memory 1Gi \
+  --cpu 1
+```
+
+Cloud Run will print the public URL (e.g. `https://eloc2-xxxxx.a.run.app`). Open it to use the workstation.
 
 ## Running Tests
 
@@ -118,7 +140,7 @@ Click a track on the map to see its detail (classification, velocity, contributi
 - **API**: Fastify 5, @fastify/websocket
 - **Frontend**: React 19, MapLibre GL JS 5, Zustand 5
 - **Testing**: Vitest 3
-- **Deployment**: Docker multi-stage build, `serve` for static files
+- **Deployment**: Docker multi-stage build, Google Cloud Run
 
 ## License
 

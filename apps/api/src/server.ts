@@ -1,5 +1,9 @@
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import fs from 'node:fs';
 import Fastify from 'fastify';
 import fastifyWebsocket from '@fastify/websocket';
+import fastifyStatic from '@fastify/static';
 import { rapRoutes } from './routes/rap-routes.js';
 import { sensorRoutes } from './routes/sensor-routes.js';
 import { taskRoutes } from './routes/task-routes.js';
@@ -11,6 +15,21 @@ const server = Fastify({ logger: true });
 
 // Register WebSocket support
 await server.register(fastifyWebsocket);
+
+// In production, serve workstation static files from the same port
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const workstationDist = path.resolve(__dirname, '../../workstation/dist');
+if (process.env.NODE_ENV === 'production' && fs.existsSync(workstationDist)) {
+  await server.register(fastifyStatic, { root: workstationDist, prefix: '/' });
+  // SPA fallback: serve index.html for non-API routes
+  server.setNotFoundHandler((req, reply) => {
+    if (req.url.startsWith('/api') || req.url.startsWith('/ws')) {
+      reply.code(404).send({ error: 'Not found' });
+    } else {
+      reply.sendFile('index.html');
+    }
+  });
+}
 
 // Health check
 server.get('/api/health', async () => {

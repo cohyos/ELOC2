@@ -43,13 +43,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/apps ./apps
 
-# Serve workstation static files via a simple server
-RUN npm install -g serve@14
+ENV NODE_ENV=production
+EXPOSE 3001
 
-EXPOSE 3000 3001
-
-# Start both API and static file server
-CMD sh -c '\
-  cd /app/apps/api && node dist/server.js & \
-  serve -s /app/apps/workstation/dist -l 3000 --no-clipboard & \
-  wait'
+CMD ["node", "apps/api/dist/server.js"]
