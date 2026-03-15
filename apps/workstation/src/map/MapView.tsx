@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useTrackStore } from '../stores/track-store';
@@ -13,7 +13,8 @@ import { initTriangulationLayer, updateTriangulationLayer } from './layers/trian
 export function MapView() {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
-  const layersInitialized = useRef(false);
+  // Use state (not ref) so that when layers become ready, effects re-fire
+  const [layersReady, setLayersReady] = useState(false);
 
   const tracks = useTrackStore(s => s.tracks);
   const sensors = useSensorStore(s => s.sensors);
@@ -44,7 +45,6 @@ export function MapView() {
             source: 'osm',
           },
         ],
-        // Dark tint is applied via CSS filter on the map container
       },
       center: [34.8, 31.5],
       zoom: 8,
@@ -60,9 +60,11 @@ export function MapView() {
       try { initEoRayLayer(map.current); } catch (e) { console.warn('EO ray layer init failed:', e); }
       try { initSensorLayer(map.current); } catch (e) { console.warn('Sensor layer init failed:', e); }
       try { initTrackLayer(map.current); } catch (e) { console.warn('Track layer init failed:', e); }
-      layersInitialized.current = true;
 
-      // Click handlers — must be registered after layers are initialized
+      // Use setState to trigger re-render so data effects re-fire
+      setLayersReady(true);
+
+      // Click handlers
       map.current.on('click', getTrackLayerId(), (e) => {
         if (e.features && e.features.length > 0) {
           const id = e.features[0].properties?.id;
@@ -95,24 +97,24 @@ export function MapView() {
     return () => {
       map.current?.remove();
       map.current = null;
-      layersInitialized.current = false;
+      setLayersReady(false);
     };
   }, []);
 
-  // Update track layer when tracks change
+  // Update track layer when tracks change OR when layers become ready
   useEffect(() => {
-    if (!map.current || !layersInitialized.current) return;
+    if (!map.current || !layersReady) return;
     updateTrackLayer(map.current, tracks);
     updateTriangulationLayer(map.current, tracks, sensors);
-  }, [tracks, sensors]);
+  }, [tracks, sensors, layersReady]);
 
-  // Update sensor layers when sensors change
+  // Update sensor layers when sensors change OR when layers become ready
   useEffect(() => {
-    if (!map.current || !layersInitialized.current) return;
+    if (!map.current || !layersReady) return;
     updateSensorLayer(map.current, sensors);
     updateCoverageLayer(map.current, sensors);
     updateEoRayLayer(map.current, sensors);
-  }, [sensors]);
+  }, [sensors, layersReady]);
 
   return (
     <div
