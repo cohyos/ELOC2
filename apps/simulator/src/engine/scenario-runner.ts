@@ -64,10 +64,12 @@ export class ScenarioRunner {
     const events: SimulationEvent[] = [];
 
     // 1. Compute target positions
+    // Waypoint times are relative to the target's startTime, so subtract it
     const targetPositions = new Map<string, Position3D>();
     for (const target of this.scenario.targets) {
       if (!isTargetActive(target, this.currentTimeSec)) continue;
-      const pos = interpolatePosition(target.waypoints, this.currentTimeSec);
+      const relativeTime = this.currentTimeSec - target.startTime;
+      const pos = interpolatePosition(target.waypoints, relativeTime);
       if (pos) {
         targetPositions.set(target.targetId, pos);
       }
@@ -168,12 +170,15 @@ export class ScenarioRunner {
               tgtVel,
               this.currentTimeSec,
               this.baseTimestamp,
+              sensorFaults,
             );
-            events.push({
-              type: 'observation',
-              timeSec: this.currentTimeSec,
-              data: obs,
-            });
+            if (obs) {
+              events.push({
+                type: 'observation',
+                timeSec: this.currentTimeSec,
+                data: obs,
+              });
+            }
             break;
           }
         }
@@ -261,6 +266,7 @@ export class ScenarioRunner {
   private getTargetVelocity(targetId: string) {
     const target = this.scenario.targets.find((t) => t.targetId === targetId);
     if (!target) return undefined;
-    return interpolateVelocity(target.waypoints, this.currentTimeSec);
+    const relativeTime = this.currentTimeSec - target.startTime;
+    return interpolateVelocity(target.waypoints, relativeTime);
   }
 }

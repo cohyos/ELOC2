@@ -138,7 +138,7 @@ function fallbackResult(
       lon: (track.state.lon + observation.position.lon) / 2,
       alt: (track.state.alt + observation.position.alt) / 2,
     },
-    covariance: observation.covariance,
+    covariance: observation.covariance.map(row => [...row]) as Covariance3x3,
     confidence: Math.min(1, Math.max(0, track.confidence + 0.05)),
     method: 'centralized_information_matrix',
   };

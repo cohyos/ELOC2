@@ -11,28 +11,41 @@ export async function wsEventsRoute(app: FastifyInstance) {
     };
     socket.send(JSON.stringify(snapshot));
 
-    // Stream simulated events at interval
-    const interval = setInterval(() => {
-      if (!scenarioState.running) return;
+    let closed = false;
 
-      const event = generateSimEvent();
-      try {
-        socket.send(JSON.stringify({
-          type: 'event',
-          ...event,
-        }));
-      } catch {
-        // Socket may be closed
-        clearInterval(interval);
-      }
-    }, 2000 / scenarioState.speed);
+    // Stream simulated events using recursive setTimeout for dynamic speed
+    function scheduleNext() {
+      if (closed) return;
+
+      const delay = 2000 / scenarioState.speed;
+      setTimeout(() => {
+        if (closed || !scenarioState.running) {
+          if (!closed) scheduleNext(); // keep polling even when paused
+          return;
+        }
+
+        const event = generateSimEvent();
+        try {
+          socket.send(JSON.stringify({
+            type: 'event',
+            ...event,
+          }));
+        } catch {
+          closed = true;
+          return;
+        }
+        scheduleNext();
+      }, delay);
+    }
+
+    scheduleNext();
 
     socket.on('close', () => {
-      clearInterval(interval);
+      closed = true;
     });
 
     socket.on('error', () => {
-      clearInterval(interval);
+      closed = true;
     });
   });
 }

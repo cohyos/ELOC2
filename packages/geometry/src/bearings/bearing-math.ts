@@ -163,7 +163,13 @@ export function computeIntersectionAngle(
 
   // Clamp to [-1, 1] to handle numerical errors
   const cosAngle = Math.max(-1, Math.min(1, dotVal / (mag1 * mag2)));
-  const angleDeg = Math.acos(Math.abs(cosAngle)) * RAD_TO_DEG;
+  // Use abs(cosAngle) to always return the acute angle (0–90°) between rays.
+  // For triangulation, we want the acute intersection angle because obtuse
+  // crossings (>90°) are geometrically equivalent to their supplement.
+  // However, for nearly anti-parallel rays the supplement should be near 0°
+  // (poor geometry), so we use min(angle, 180 - angle).
+  const rawAngleDeg = Math.acos(cosAngle) * RAD_TO_DEG;
+  const angleDeg = rawAngleDeg > 90 ? 180 - rawAngleDeg : rawAngleDeg;
 
   return angleDeg;
 }

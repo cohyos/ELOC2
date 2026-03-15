@@ -58,10 +58,10 @@ export const useUiStore = create<UiState>((set) => ({
   eventLog: [],
 
   selectTrack: (id) =>
-    set({ selectedTrackId: id, selectedSensorId: null, detailView: id ? 'track' : 'none', detailPanelOpen: id ? true : undefined }),
+    set({ selectedTrackId: id, selectedSensorId: null, detailView: id ? 'track' : 'none', detailPanelOpen: !!id }),
 
   selectSensor: (id) =>
-    set({ selectedSensorId: id, selectedTrackId: null, detailView: id ? 'sensor' : 'none', detailPanelOpen: id ? true : undefined }),
+    set({ selectedSensorId: id, selectedTrackId: null, detailView: id ? 'sensor' : 'none', detailPanelOpen: !!id }),
 
   toggleDetailPanel: () =>
     set((s) => ({ detailPanelOpen: !s.detailPanelOpen })),

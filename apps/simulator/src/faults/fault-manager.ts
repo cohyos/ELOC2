@@ -14,7 +14,7 @@ export function getActiveFaults(
 ): FaultDefinition[] {
   return faults.filter((f) => {
     if (timeSec < f.startTime) return false;
-    if (f.endTime !== undefined && timeSec > f.endTime) return false;
+    if (f.endTime !== undefined && timeSec >= f.endTime) return false;
     return true;
   });
 }

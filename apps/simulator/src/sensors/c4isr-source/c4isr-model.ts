@@ -13,7 +13,8 @@ import type {
   Covariance3x3,
 } from '@eloc2/domain';
 import { generateId, DEG_TO_RAD } from '@eloc2/shared-utils';
-import type { SensorDefinition } from '../../types/scenario.js';
+import type { SensorDefinition, FaultDefinition } from '../../types/scenario.js';
+import { isSensorInOutage, applyClockDrift } from '../../faults/fault-manager.js';
 
 /** Add Gaussian noise using Box-Muller transform. */
 function gaussianNoise(stddev: number): number {
@@ -26,6 +27,7 @@ function gaussianNoise(stddev: number): number {
  * Generate a C4ISR observation for a target.
  * C4ISR sources always report (no coverage check), with moderate noise.
  * Noise: +/-200m position, +/-5m/s velocity.
+ * Returns undefined if the sensor is in outage.
  */
 export function generateC4isrObservation(
   sensor: SensorDefinition,
@@ -33,7 +35,12 @@ export function generateC4isrObservation(
   targetVel: Velocity3D | undefined,
   timeSec: number,
   baseTimestamp: number,
-): SourceObservation {
+  faults: FaultDefinition[] = [],
+): SourceObservation | undefined {
+  // Check for sensor outage
+  if (isSensorInOutage(sensor.sensorId, faults)) {
+    return undefined;
+  }
   // Position noise: +/-200m
   const posNoise = 200;
   const noisyPos: Position3D = {
@@ -60,7 +67,8 @@ export function generateC4isrObservation(
     [0, 0, baseCov],
   ];
 
-  const timestampMs = baseTimestamp + timeSec * 1000;
+  let timestampMs = baseTimestamp + timeSec * 1000;
+  timestampMs = applyClockDrift(timestampMs, faults);
 
   return {
     observationId: generateId(),

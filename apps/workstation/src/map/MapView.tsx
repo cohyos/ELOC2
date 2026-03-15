@@ -60,35 +60,35 @@ export function MapView() {
       initSensorLayer(map.current);
       initTrackLayer(map.current);
       layersInitialized.current = true;
-    });
 
-    // Click handlers
-    map.current.on('click', getTrackLayerId(), (e) => {
-      if (e.features && e.features.length > 0) {
-        const id = e.features[0].properties?.id;
-        if (id) selectTrack(id);
-      }
-    });
+      // Click handlers — must be registered after layers are initialized
+      map.current.on('click', getTrackLayerId(), (e) => {
+        if (e.features && e.features.length > 0) {
+          const id = e.features[0].properties?.id;
+          if (id) selectTrack(id);
+        }
+      });
 
-    map.current.on('click', getSensorLayerId(), (e) => {
-      if (e.features && e.features.length > 0) {
-        const id = e.features[0].properties?.id;
-        if (id) selectSensor(id);
-      }
-    });
+      map.current.on('click', getSensorLayerId(), (e) => {
+        if (e.features && e.features.length > 0) {
+          const id = e.features[0].properties?.id;
+          if (id) selectSensor(id);
+        }
+      });
 
-    // Cursor changes
-    map.current.on('mouseenter', getTrackLayerId(), () => {
-      if (map.current) map.current.getCanvas().style.cursor = 'pointer';
-    });
-    map.current.on('mouseleave', getTrackLayerId(), () => {
-      if (map.current) map.current.getCanvas().style.cursor = '';
-    });
-    map.current.on('mouseenter', getSensorLayerId(), () => {
-      if (map.current) map.current.getCanvas().style.cursor = 'pointer';
-    });
-    map.current.on('mouseleave', getSensorLayerId(), () => {
-      if (map.current) map.current.getCanvas().style.cursor = '';
+      // Cursor changes
+      map.current.on('mouseenter', getTrackLayerId(), () => {
+        if (map.current) map.current.getCanvas().style.cursor = 'pointer';
+      });
+      map.current.on('mouseleave', getTrackLayerId(), () => {
+        if (map.current) map.current.getCanvas().style.cursor = '';
+      });
+      map.current.on('mouseenter', getSensorLayerId(), () => {
+        if (map.current) map.current.getCanvas().style.cursor = 'pointer';
+      });
+      map.current.on('mouseleave', getSensorLayerId(), () => {
+        if (map.current) map.current.getCanvas().style.cursor = '';
+      });
     });
 
     return () => {

@@ -94,7 +94,7 @@ export function estimateBearingRate(
 ): BearingRate {
   const dtMs = (b2.timestamp as number) - (b1.timestamp as number);
 
-  if (Math.abs(dtMs) < 1e-6) {
+  if (Math.abs(dtMs) < 1) {
     return { azimuthRateDegPerS: 0, elevationRateDegPerS: 0 };
   }
 
