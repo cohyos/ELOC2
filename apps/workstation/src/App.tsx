@@ -176,6 +176,16 @@ export function App() {
   const [simRunning, setSimRunning] = useState(false);
   const [simSpeed, setSimSpeed] = useState(1);
   const [simElapsed, setSimElapsed] = useState(0);
+  const [currentScenarioId, setCurrentScenarioId] = useState('');
+  const [availableScenarios, setAvailableScenarios] = useState<Array<{ id: string; name: string; description: string }>>([]);
+
+  // Fetch available scenarios on mount
+  useEffect(() => {
+    fetch('/api/scenarios')
+      .then(r => r.json())
+      .then(data => setAvailableScenarios(data))
+      .catch(() => {});
+  }, []);
 
   // Poll scenario status
   useEffect(() => {
@@ -187,6 +197,7 @@ export function App() {
           setSimRunning(data.running);
           setSimSpeed(data.speed);
           setSimElapsed(data.elapsedSec);
+          setCurrentScenarioId(data.scenarioId || '');
         }
       } catch { /* ignore */ }
     }, 1000);
@@ -212,6 +223,17 @@ export function App() {
       body: JSON.stringify({}),
     });
   }, []);
+
+  const handleScenarioChange = useCallback(async (scenarioId: string) => {
+    await fetch('/api/scenario/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scenarioId }),
+    });
+    fetchRap();
+    fetchSensors();
+    fetchTasks();
+  }, [fetchRap, fetchSensors, fetchTasks]);
 
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -256,6 +278,29 @@ export function App() {
         <span style={{ color: colors.textDim, fontSize: '12px' }}>
           EO C2 Air Defense Demonstrator
         </span>
+
+        {/* Scenario selector */}
+        {availableScenarios.length > 0 && (
+          <select
+            value={currentScenarioId}
+            onChange={(e) => handleScenarioChange(e.target.value)}
+            title="Select scenario"
+            style={{
+              background: '#333',
+              color: '#e0e0e0',
+              border: '1px solid #555',
+              borderRadius: '3px',
+              padding: '2px 6px',
+              fontSize: '11px',
+              cursor: 'pointer',
+              maxWidth: '180px',
+            }}
+          >
+            {availableScenarios.map(s => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        )}
 
         {/* Track summary */}
         <div style={styles.trackSummary}>

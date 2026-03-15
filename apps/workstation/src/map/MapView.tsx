@@ -28,6 +28,7 @@ export function MapView() {
       container: mapContainer.current,
       style: {
         version: 8,
+        glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
         sources: {
           osm: {
             type: 'raster',
@@ -54,11 +55,11 @@ export function MapView() {
 
     map.current.on('load', () => {
       if (!map.current) return;
-      initCoverageLayer(map.current);
-      initTriangulationLayer(map.current);
-      initEoRayLayer(map.current);
-      initSensorLayer(map.current);
-      initTrackLayer(map.current);
+      try { initCoverageLayer(map.current); } catch (e) { console.warn('Coverage layer init failed:', e); }
+      try { initTriangulationLayer(map.current); } catch (e) { console.warn('Triangulation layer init failed:', e); }
+      try { initEoRayLayer(map.current); } catch (e) { console.warn('EO ray layer init failed:', e); }
+      try { initSensorLayer(map.current); } catch (e) { console.warn('Sensor layer init failed:', e); }
+      try { initTrackLayer(map.current); } catch (e) { console.warn('Track layer init failed:', e); }
       layersInitialized.current = true;
 
       // Click handlers — must be registered after layers are initialized
