@@ -3,8 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsup src/index.ts --format esm",
+    "build": "tsup src/index.ts --format esm --dts --tsconfig tsconfig.json",
     "dev": "tsx watch src/index.ts",
     "test": "vitest run",
     "clean": "rm -rf dist"
