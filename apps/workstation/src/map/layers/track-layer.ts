@@ -69,7 +69,7 @@ export function initTrackLayer(map: MaplibreMap) {
       'text-size': 11,
       'text-offset': [0, 1.5],
       'text-anchor': 'top',
-      'text-font': ['Open Sans Regular'],
+      'text-font': ['Noto Sans Bold'],
     },
     paint: {
       'text-color': '#ffffff',

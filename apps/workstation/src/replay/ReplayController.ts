@@ -1,5 +1,6 @@
 import { useUiStore } from '../stores/ui-store';
 import { useTrackStore } from '../stores/track-store';
+import { useSensorStore } from '../stores/sensor-store';
 
 /**
  * ReplayController manages the WebSocket connection for real-time event streaming
@@ -59,6 +60,9 @@ export class ReplayController {
       // Full or incremental RAP update
       if (data.tracks && Array.isArray(data.tracks)) {
         useTrackStore.getState().setTracks(data.tracks);
+      }
+      if (data.sensors && Array.isArray(data.sensors)) {
+        useSensorStore.getState().setSensors(data.sensors);
       }
     } else if (data.type === 'event') {
       // Individual event from simulation

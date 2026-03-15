@@ -29,6 +29,26 @@ export function clampAngle(deg: number): number {
   return r < 0 ? r + 360 : r;
 }
 
+/** Normalize longitude to the range (-180, 180]. */
+export function normalizeLon(lon: number): number {
+  const wrapped = ((lon + 180) % 360) - 180;
+  // JS modulo can return -0 or -360 for exact multiples; clamp to -180 → 180
+  return wrapped <= -180 ? wrapped + 360 : wrapped;
+}
+
+/**
+ * Compute the shortest signed angle difference between two angles in degrees.
+ * Result is in the range (-180, 180].
+ *
+ * Useful for azimuth delta calculations (gimbal slew, FOV containment).
+ */
+export function shortestAngleDelta(fromDeg: number, toDeg: number): number {
+  let d = toDeg - fromDeg;
+  if (d > 180) d -= 360;
+  if (d < -180) d += 360;
+  return d;
+}
+
 // ── Prime‑vertical radius of curvature ───────────────────────────────────────
 
 function primeVerticalRadius(sinLat: number): number {
@@ -104,7 +124,7 @@ export function ecefToGeodetic(x: number, y: number, z: number): GeodeticCoord {
 
   return {
     lat: lat * RAD_TO_DEG,
-    lon: lon * RAD_TO_DEG,
+    lon: normalizeLon(lon * RAD_TO_DEG),
     alt,
   };
 }

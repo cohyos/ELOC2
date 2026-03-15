@@ -174,11 +174,38 @@ export class LiveEngine {
     const result = this.runner.step(dtSec);
     this.state.elapsedSec = result.currentTimeSec;
 
-    // Process each simulation event
-    for (const simEvent of result.events) {
-      this.processSimEvent(simEvent);
-    }
+    // Process events in batches, yielding to the event loop between batches
+    // to prevent blocking I/O when the number of events per tick is large.
+    const BATCH_SIZE = 20;
+    const events = result.events;
 
+    const processBatch = (startIdx: number): void => {
+      const end = Math.min(startIdx + BATCH_SIZE, events.length);
+      for (let i = startIdx; i < end; i++) {
+        this.processSimEvent(events[i]);
+      }
+
+      if (end < events.length) {
+        // Yield to the event loop before processing the next batch
+        setImmediate(() => processBatch(end));
+      } else {
+        // All events processed — finalize the tick
+        this.finalizeTick(result);
+      }
+    };
+
+    if (events.length > BATCH_SIZE) {
+      processBatch(0);
+    } else {
+      // Small batch — process synchronously to avoid overhead
+      for (const simEvent of events) {
+        this.processSimEvent(simEvent);
+      }
+      this.finalizeTick(result);
+    }
+  }
+
+  private finalizeTick(result: { currentTimeSec: number; activeFaults: Array<{ sensorId: string; type: string }>; isComplete: boolean }): void {
     // Update sensor online status based on active faults
     this.updateSensorStatus(result.activeFaults);
 
@@ -208,7 +235,7 @@ export class LiveEngine {
         const tmResult = this.trackManager.processObservation(obs, health ?? undefined);
 
         // Push event to log
-        const decision = tmResult.correlationEvent.decision;
+        const decision = tmResult.correlationEvent.data.decision;
         const trackId = tmResult.track.systemTrackId;
         this.pushEvent(
           'source.observation.reported',
@@ -371,10 +398,12 @@ export class LiveEngine {
       type: 'rap.update',
       timestamp: Date.now(),
       simTimeSec: this.state.elapsedSec,
+      running: this.state.running,
       trackCount: tracks.length,
       confirmedCount: tracks.filter(t => t.status === 'confirmed').length,
       tentativeCount: tracks.filter(t => t.status === 'tentative').length,
       tracks,
+      sensors: this.state.sensors,
     });
   }
 

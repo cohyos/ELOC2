@@ -58,7 +58,7 @@ export function initSensorLayer(map: MaplibreMap) {
       'text-size': 10,
       'text-offset': [0, -1.5],
       'text-anchor': 'bottom',
-      'text-font': ['Open Sans Regular'],
+      'text-font': ['Noto Sans Bold'],
     },
     paint: {
       'text-color': ['get', 'color'],
