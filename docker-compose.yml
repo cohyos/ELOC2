@@ -1,0 +1,11 @@
+version: "3.9"
+
+services:
+  eloc2:
+    build: .
+    ports:
+      - "3000:3000"   # Workstation UI (static files via serve)
+      - "3001:3001"   # API + WebSocket server
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped

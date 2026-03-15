@@ -55,15 +55,15 @@ export class ReplayController {
   }
 
   private handleMessage(data: any) {
-    if (data.type === 'rap.snapshot') {
-      // Full RAP snapshot on connect
+    if (data.type === 'rap.snapshot' || data.type === 'rap.update') {
+      // Full or incremental RAP update
       if (data.tracks && Array.isArray(data.tracks)) {
         useTrackStore.getState().setTracks(data.tracks);
       }
     } else if (data.type === 'event') {
-      // Individual event
+      // Individual event from simulation
       useUiStore.getState().addEvent({
-        id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        id: data.id ?? `evt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         eventType: data.eventType ?? 'unknown',
         timestamp: data.timestamp ?? Date.now(),
         summary: data.summary ?? '',

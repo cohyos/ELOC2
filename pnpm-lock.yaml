@@ -26,9 +26,27 @@ importers:
       '@eloc2/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@eloc2/fusion-core':
+        specifier: workspace:*
+        version: link:../../packages/fusion-core
+      '@eloc2/geometry':
+        specifier: workspace:*
+        version: link:../../packages/geometry
       '@eloc2/projections':
         specifier: workspace:*
         version: link:../../packages/projections
+      '@eloc2/registration':
+        specifier: workspace:*
+        version: link:../../packages/registration
+      '@eloc2/scenario-library':
+        specifier: workspace:*
+        version: link:../../packages/scenario-library
+      '@eloc2/shared-utils':
+        specifier: workspace:*
+        version: link:../../packages/shared-utils
+      '@eloc2/simulator':
+        specifier: workspace:*
+        version: link:../simulator
       '@fastify/websocket':
         specifier: ^11.0.0
         version: 11.2.0

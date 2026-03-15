@@ -1,51 +1,33 @@
 import type { FastifyInstance } from 'fastify';
-import { mockTracks, generateSimEvent, scenarioState } from '../mock-data.js';
+import { engine } from '../simulation/live-engine.js';
 
 export async function wsEventsRoute(app: FastifyInstance) {
-  app.get('/ws/events', { websocket: true }, (socket, request) => {
-    // On connect: send current RAP snapshot
-    const snapshot = {
+  app.get('/ws/events', { websocket: true }, (socket) => {
+    // Register this WebSocket client with the live engine
+    engine.addWsClient(socket);
+
+    // On connect: send current state snapshot
+    const s = engine.getState();
+    socket.send(JSON.stringify({
       type: 'rap.snapshot',
       timestamp: Date.now(),
-      tracks: mockTracks,
-    };
-    socket.send(JSON.stringify(snapshot));
-
-    let closed = false;
-
-    // Stream simulated events using recursive setTimeout for dynamic speed
-    function scheduleNext() {
-      if (closed) return;
-
-      const delay = 2000 / scenarioState.speed;
-      setTimeout(() => {
-        if (closed || !scenarioState.running) {
-          if (!closed) scheduleNext(); // keep polling even when paused
-          return;
-        }
-
-        const event = generateSimEvent();
-        try {
-          socket.send(JSON.stringify({
-            type: 'event',
-            ...event,
-          }));
-        } catch {
-          closed = true;
-          return;
-        }
-        scheduleNext();
-      }, delay);
-    }
-
-    scheduleNext();
+      simTimeSec: s.elapsedSec,
+      scenarioId: s.scenarioId,
+      running: s.running,
+      speed: s.speed,
+      tracks: s.tracks,
+      sensors: s.sensors,
+      trackCount: s.tracks.length,
+      confirmedCount: s.tracks.filter(t => t.status === 'confirmed').length,
+      tentativeCount: s.tracks.filter(t => t.status === 'tentative').length,
+    }));
 
     socket.on('close', () => {
-      closed = true;
+      engine.removeWsClient(socket);
     });
 
     socket.on('error', () => {
-      closed = true;
+      engine.removeWsClient(socket);
     });
   });
 }

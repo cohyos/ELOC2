@@ -1,18 +1,44 @@
 import type { FastifyInstance } from 'fastify';
-import type { Timestamp } from '@eloc2/domain';
-import { scenarioState } from '../mock-data.js';
+import { engine } from '../simulation/live-engine.js';
+import { scenarios } from '@eloc2/scenario-library';
 
 export async function scenarioRoutes(app: FastifyInstance) {
+  // GET /api/scenarios — List all available scenarios
+  app.get('/api/scenarios', async () => {
+    return scenarios.map(s => ({
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      durationSec: s.durationSec,
+      sensorCount: s.sensors.length,
+      targetCount: s.targets.length,
+    }));
+  });
+
+  // GET /api/scenario/status — Current scenario state
+  app.get('/api/scenario/status', async () => {
+    const s = engine.getState();
+    return {
+      scenarioId: s.scenarioId,
+      running: s.running,
+      speed: s.speed,
+      elapsedSec: s.elapsedSec,
+      durationSec: s.durationSec,
+      trackCount: s.tracks.length,
+      eventCount: s.eventLog.length,
+    };
+  });
+
   // POST /api/scenario/start — Start the scenario
   app.post('/api/scenario/start', async () => {
-    scenarioState.running = true;
-    scenarioState.startedAt = Date.now() as Timestamp;
-    return { ok: true, running: true, speed: scenarioState.speed };
+    engine.start();
+    const s = engine.getState();
+    return { ok: true, running: s.running, speed: s.speed, scenarioId: s.scenarioId };
   });
 
   // POST /api/scenario/pause — Pause the scenario
   app.post('/api/scenario/pause', async () => {
-    scenarioState.running = false;
+    engine.pause();
     return { ok: true, running: false };
   });
 
@@ -20,9 +46,17 @@ export async function scenarioRoutes(app: FastifyInstance) {
   app.post<{ Body: { speed: number } }>('/api/scenario/speed', async (request, reply) => {
     const { speed } = request.body;
     if (typeof speed !== 'number' || speed < 0.1 || speed > 100) {
-      return reply.code(400).send({ error: 'Speed must be a number between 0.1 and 100' });
+      return reply.code(400).send({ error: 'Speed must be between 0.1 and 100' });
     }
-    scenarioState.speed = speed;
+    engine.setSpeed(speed);
     return { ok: true, speed };
+  });
+
+  // POST /api/scenario/reset — Reset and optionally switch scenario
+  app.post<{ Body: { scenarioId?: string } }>('/api/scenario/reset', async (request) => {
+    const scenarioId = request.body?.scenarioId;
+    engine.reset(scenarioId);
+    const s = engine.getState();
+    return { ok: true, scenarioId: s.scenarioId };
   });
 }

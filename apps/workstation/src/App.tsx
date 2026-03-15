@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { MapView } from './map/MapView';
 import { TrackDetailPanel } from './track-detail/TrackDetailPanel';
 import { SensorDetailPanel } from './sensor-detail/SensorDetailPanel';
@@ -173,6 +173,52 @@ export function App() {
   const fetchSensors = useSensorStore(s => s.fetchSensors);
   const fetchTasks = useTaskStore(s => s.fetchTasks);
 
+  const [simRunning, setSimRunning] = useState(false);
+  const [simSpeed, setSimSpeed] = useState(1);
+  const [simElapsed, setSimElapsed] = useState(0);
+
+  // Poll scenario status
+  useEffect(() => {
+    const poll = setInterval(async () => {
+      try {
+        const res = await fetch('/api/scenario/status');
+        if (res.ok) {
+          const data = await res.json();
+          setSimRunning(data.running);
+          setSimSpeed(data.speed);
+          setSimElapsed(data.elapsedSec);
+        }
+      } catch { /* ignore */ }
+    }, 1000);
+    return () => clearInterval(poll);
+  }, []);
+
+  const handleStartPause = useCallback(async () => {
+    await fetch(simRunning ? '/api/scenario/pause' : '/api/scenario/start', { method: 'POST' });
+  }, [simRunning]);
+
+  const handleSpeed = useCallback(async (speed: number) => {
+    await fetch('/api/scenario/speed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ speed }),
+    });
+  }, []);
+
+  const handleReset = useCallback(async () => {
+    await fetch('/api/scenario/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+  }, []);
+
+  const formatTime = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
   // Initial data fetch
   useEffect(() => {
     fetchRap();
@@ -221,6 +267,39 @@ export function App() {
           </span>
           <span style={{ color: colors.textDim }}>
             {trackCount} total
+          </span>
+        </div>
+
+        {/* Scenario controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '8px' }}>
+          <button
+            style={{
+              ...styles.toggleBtn,
+              background: simRunning ? '#cc3300' : '#00aa44',
+              color: '#fff',
+              fontWeight: 600,
+              padding: '3px 12px',
+            }}
+            onClick={handleStartPause}
+          >
+            {simRunning ? 'Pause' : 'Start'}
+          </button>
+          <button style={styles.toggleBtn} onClick={handleReset}>Reset</button>
+          {[1, 2, 5, 10].map(s => (
+            <button
+              key={s}
+              style={{
+                ...styles.toggleBtn,
+                background: simSpeed === s ? '#4a9eff' : '#333',
+                color: simSpeed === s ? '#fff' : '#aaa',
+              }}
+              onClick={() => handleSpeed(s)}
+            >
+              {s}x
+            </button>
+          ))}
+          <span style={{ fontSize: '11px', color: '#aaa', fontFamily: 'monospace', minWidth: '50px' }}>
+            T+{formatTime(simElapsed)}
           </span>
         </div>
 

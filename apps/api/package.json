@@ -15,7 +15,13 @@
     "@fastify/websocket": "^11.0.0",
     "@eloc2/domain": "workspace:*",
     "@eloc2/events": "workspace:*",
-    "@eloc2/projections": "workspace:*"
+    "@eloc2/projections": "workspace:*",
+    "@eloc2/simulator": "workspace:*",
+    "@eloc2/scenario-library": "workspace:*",
+    "@eloc2/fusion-core": "workspace:*",
+    "@eloc2/registration": "workspace:*",
+    "@eloc2/geometry": "workspace:*",
+    "@eloc2/shared-utils": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.3.0",
