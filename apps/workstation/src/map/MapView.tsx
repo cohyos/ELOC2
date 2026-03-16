@@ -9,6 +9,7 @@ import { initSensorLayer, updateSensorLayer, getSensorLayerId } from './layers/s
 import { initCoverageLayer, updateCoverageLayer } from './layers/coverage-layer';
 import { initEoRayLayer, updateEoRayLayer } from './layers/eo-ray-layer';
 import { initTriangulationLayer, updateTriangulationLayer } from './layers/triangulation-layer';
+import { DebugOverlay } from './DebugOverlay';
 
 export function MapView() {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -116,14 +117,32 @@ export function MapView() {
     updateEoRayLayer(map.current, sensors);
   }, [sensors, layersReady]);
 
+  // Expose map instance as state so DebugOverlay can use it
+  const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
+
+  // Sync ref → state when map loads
+  useEffect(() => {
+    if (layersReady && map.current) {
+      setMapInstance(map.current);
+    }
+  }, [layersReady]);
+
   return (
-    <div
-      ref={mapContainer}
-      style={{
-        width: '100%',
-        height: '100%',
-        filter: 'brightness(0.85) saturate(0.7)',
-      }}
-    />
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <div
+        ref={mapContainer}
+        style={{
+          width: '100%',
+          height: '100%',
+          filter: 'brightness(0.85) saturate(0.7)',
+        }}
+      />
+      <DebugOverlay
+        map={mapInstance}
+        tracks={tracks}
+        sensors={sensors}
+        layersReady={layersReady}
+      />
+    </div>
   );
 }
