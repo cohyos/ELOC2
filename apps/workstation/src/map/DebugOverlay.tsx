@@ -146,40 +146,33 @@ export function DebugOverlay({ map, tracks, sensors, layersReady }: DebugOverlay
         }}
       />
 
-      {/* Diagnostic info panel */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 8,
-          left: 8,
-          background: 'rgba(0,0,0,0.85)',
-          color: '#e0e0e0',
-          padding: '8px 12px',
-          borderRadius: '4px',
-          fontSize: '11px',
-          fontFamily: 'monospace',
-          zIndex: 30,
-          maxWidth: '300px',
-          pointerEvents: 'auto',
-        }}
-      >
-        <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#ff8800' }}>
-          DEBUG OVERLAY (HTML markers)
+      {/* Diagnostic info — only show when no GL layers or no data */}
+      {(!layersReady || (tracks.length === 0 && sensors.length === 0)) && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 8,
+            left: 8,
+            background: 'rgba(0,0,0,0.85)',
+            color: '#e0e0e0',
+            padding: '8px 12px',
+            borderRadius: '4px',
+            fontSize: '11px',
+            fontFamily: 'monospace',
+            zIndex: 30,
+            maxWidth: '300px',
+            pointerEvents: 'auto',
+          }}
+        >
+          <div>layersReady: <span style={{ color: layersReady ? '#0c0' : '#f33' }}>{String(layersReady)}</span></div>
+          <div>tracks: <strong>{tracks.length}</strong> | sensors: <strong>{sensors.length}</strong></div>
+          {tracks.length === 0 && sensors.length === 0 && (
+            <div style={{ marginTop: '4px', fontSize: '9px', color: '#ff8800' }}>
+              Waiting for data — start the scenario
+            </div>
+          )}
         </div>
-        <div>layersReady: <span style={{ color: layersReady ? '#0c0' : '#f33' }}>{String(layersReady)}</span></div>
-        <div>tracks in store: <strong>{tracks.length}</strong></div>
-        <div>sensors in store: <strong>{sensors.length}</strong></div>
-        {tracks.length > 0 && (
-          <div style={{ marginTop: '4px', fontSize: '9px', color: '#aaa' }}>
-            First track: {tracks[0].systemTrackId} @ {tracks[0].state.lat.toFixed(4)},{tracks[0].state.lon.toFixed(4)}
-          </div>
-        )}
-        {sensors.length > 0 && (
-          <div style={{ fontSize: '9px', color: '#aaa' }}>
-            First sensor: {sensors[0].sensorId} @ {sensors[0].position.lat.toFixed(4)},{sensors[0].position.lon.toFixed(4)}
-          </div>
-        )}
-      </div>
+      )}
     </>
   );
 }

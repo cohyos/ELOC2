@@ -848,6 +848,12 @@ export class LiveEngine {
 
   private broadcastRap(): void {
     const tracks = this.state.tracks;
+    // Strip lineage from broadcast to reduce WS payload size
+    // (lineage can grow to hundreds of entries per track)
+    const lightTracks = tracks.map(t => ({
+      ...t,
+      lineage: t.lineage.length > 3 ? t.lineage.slice(-3) : t.lineage,
+    }));
     this.broadcast({
       type: 'rap.update',
       timestamp: Date.now(),
@@ -856,7 +862,7 @@ export class LiveEngine {
       trackCount: tracks.length,
       confirmedCount: tracks.filter(t => t.status === 'confirmed').length,
       tentativeCount: tracks.filter(t => t.status === 'tentative').length,
-      tracks,
+      tracks: lightTracks,
       sensors: this.state.sensors,
     });
   }

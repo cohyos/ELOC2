@@ -51,6 +51,11 @@ export function MapView() {
       zoom: 8,
     });
 
+    // Log map errors for debugging
+    map.current.on('error', (e) => {
+      console.error('[MapView] MapLibre error:', e.error?.message || e);
+    });
+
     map.current.addControl(new maplibregl.NavigationControl(), 'top-right');
     map.current.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 

@@ -59,24 +59,30 @@ export function initTrackLayer(map: MaplibreMap) {
     },
   });
 
-  // Track labels
-  map.addLayer({
-    id: LABEL_LAYER_ID,
-    type: 'symbol',
-    source: SOURCE_ID,
-    layout: {
-      'text-field': ['get', 'label'],
-      'text-size': 11,
-      'text-offset': [0, 1.5],
-      'text-anchor': 'top',
-      'text-font': ['Noto Sans Bold'],
-    },
-    paint: {
-      'text-color': '#ffffff',
-      'text-halo-color': '#000000',
-      'text-halo-width': 1,
-    },
-  });
+  // Track labels — add in a separate try/catch so font issues don't break circles
+  try {
+    map.addLayer({
+      id: LABEL_LAYER_ID,
+      type: 'symbol',
+      source: SOURCE_ID,
+      layout: {
+        'text-field': ['get', 'label'],
+        'text-size': 11,
+        'text-offset': [0, 1.5],
+        'text-anchor': 'top',
+        'text-font': ['Open Sans Bold', 'Noto Sans Bold', 'Arial Unicode MS Bold'],
+      },
+      paint: {
+        'text-color': '#ffffff',
+        'text-halo-color': '#000000',
+        'text-halo-width': 1,
+      },
+    });
+  } catch (e) {
+    console.warn('[track-layer] Label layer failed (font issue?):', e);
+  }
+
+  console.log('[track-layer] Initialized successfully');
 }
 
 /**
@@ -128,9 +134,23 @@ function isValidCoord(track: SystemTrack): boolean {
 export function updateTrackLayer(map: MaplibreMap, tracks: SystemTrack[]) {
   const source = map.getSource(SOURCE_ID);
   const ellipseSource = map.getSource(ELLIPSE_SOURCE_ID);
-  if (!source || !ellipseSource) return;
+  if (!source || !ellipseSource) {
+    console.warn('[track-layer] Source not found — initTrackLayer may have failed. source:', !!source, 'ellipseSource:', !!ellipseSource);
+    return;
+  }
 
   const validTracks = tracks.filter(isValidCoord);
+
+  // Log rendering info periodically
+  if (tracks.length > 0 && validTracks.length === 0) {
+    console.error(
+      '[track-layer] ALL tracks filtered as invalid!',
+      'Sample track:',
+      JSON.stringify({ id: tracks[0].systemTrackId, state: tracks[0].state }),
+    );
+  } else if (validTracks.length > 0 && validTracks.length % 10 === 0) {
+    console.log(`[track-layer] Rendering ${validTracks.length}/${tracks.length} tracks`);
+  }
 
   if (validTracks.length !== tracks.length) {
     console.warn(
