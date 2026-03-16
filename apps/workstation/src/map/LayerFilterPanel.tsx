@@ -34,6 +34,7 @@ const LAYER_GROUPS: Array<{
       { key: 'eoRays', label: 'EO gimbal rays', color: '#ff8800' },
       { key: 'bearingLines', label: 'Bearing observations', color: '#ffaa33' },
       { key: 'triangulation', label: 'Triangulation rays', color: '#00cc44' },
+      { key: 'ambiguityMarkers', label: 'Ambiguity markers', color: '#ff6699' },
     ],
   },
 ];

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useTrackStore } from '../stores/track-store';
+import { useTaskStore } from '../stores/task-store';
 import { useUiStore } from '../stores/ui-store';
 import type { GeometryEstimate } from '@eloc2/domain';
 
@@ -97,16 +98,52 @@ function eoStatusColor(status: string): string {
   }
 }
 
+function fusionModeColor(mode: string): string {
+  switch (mode) {
+    case 'centralized_measurement_fusion': return '#00cc44';
+    case 'conservative_track_fusion': return '#ffcc00';
+    case 'confirmation_only': return '#ff8800';
+    default: return '#888888';
+  }
+}
+
+function fusionModeLabel(mode: string): string {
+  switch (mode) {
+    case 'centralized_measurement_fusion': return 'Centralized';
+    case 'conservative_track_fusion': return 'Conservative';
+    case 'confirmation_only': return 'Confirmation Only';
+    default: return mode;
+  }
+}
+
 export function TrackDetailPanel() {
   const selectedTrackId = useUiStore(s => s.selectedTrackId);
   const selectTrack = useUiStore(s => s.selectTrack);
   const tracksById = useTrackStore(s => s.tracksById);
+  const geometryEstimates = useTaskStore(s => s.geometryEstimates);
+  const eoTracks = useTaskStore(s => s.eoTracks);
+  const fusionModes = useTaskStore(s => s.fusionModes);
   const [geometry, setGeometry] = useState<GeometryEstimate | null>(null);
 
   const track = selectedTrackId ? tracksById.get(selectedTrackId) : null;
 
+  // Use WS geometry data if available, fall back to REST
+  const wsGeometry = selectedTrackId
+    ? geometryEstimates.find(g => g.trackId === selectedTrackId)
+    : null;
+
+  // Get EO tracks associated with this system track
+  const trackEoTracks = selectedTrackId
+    ? eoTracks.filter(t => t.associatedSystemTrackId === selectedTrackId)
+    : [];
+
+  // Get dominant fusion mode for this track's sensors
+  const trackFusionModes = track
+    ? track.sources.map(s => fusionModes[s as string]).filter(Boolean)
+    : [];
+
   useEffect(() => {
-    if (!selectedTrackId) {
+    if (!selectedTrackId || wsGeometry) {
       setGeometry(null);
       return;
     }
@@ -114,7 +151,7 @@ export function TrackDetailPanel() {
       .then(r => r.ok ? r.json() : null)
       .then(data => setGeometry(data))
       .catch(() => setGeometry(null));
-  }, [selectedTrackId]);
+  }, [selectedTrackId, wsGeometry]);
 
   if (!track) {
     return (
@@ -200,44 +237,104 @@ export function TrackDetailPanel() {
         </div>
       )}
 
+      {/* Fusion Mode */}
+      {trackFusionModes.length > 0 && (
+        <div style={styles.section}>
+          <div style={styles.sectionTitle}>Fusion Mode</div>
+          {[...new Set(trackFusionModes)].map(mode => (
+            <div key={mode} style={styles.row}>
+              <span style={styles.badge(fusionModeColor(mode))}>
+                {fusionModeLabel(mode)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Sources */}
       <div style={styles.section}>
         <div style={styles.sectionTitle}>Source Contributions</div>
-        {track.sources.map(sid => (
-          <div key={sid} style={{ ...styles.row, alignItems: 'center' }}>
-            <span style={styles.value}>{sid}</span>
-          </div>
-        ))}
+        {track.sources.map(sid => {
+          const mode = fusionModes[sid as string];
+          return (
+            <div key={sid} style={{ ...styles.row, alignItems: 'center' }}>
+              <span style={styles.value}>{sid}</span>
+              {mode && (
+                <span style={{ ...styles.label, fontSize: '10px' }}>
+                  {fusionModeLabel(mode)}
+                </span>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Geometry */}
-      {geometry && (
+      {(wsGeometry || geometry) && (() => {
+        const geo = wsGeometry ?? geometry!;
+        const q = ('quality' in geo) ? geo.quality : '';
+        const qColor = q === 'strong' ? '#00cc44' :
+          q === 'acceptable' ? '#ffcc00' :
+          q === 'weak' ? '#ff8800' : '#ff3333';
+        return (
+          <div style={styles.section}>
+            <div style={styles.sectionTitle}>Geometry Estimate</div>
+            <div style={styles.row}>
+              <span style={styles.label}>Quality</span>
+              <span style={styles.badge(qColor)}>{q}</span>
+            </div>
+            <div style={styles.row}>
+              <span style={styles.label}>Classification</span>
+              <span style={styles.value}>{geo.classification}</span>
+            </div>
+            <div style={styles.row}>
+              <span style={styles.label}>Intersection Angle</span>
+              <span style={styles.value}>{geo.intersectionAngleDeg.toFixed(1)} deg</span>
+            </div>
+            <div style={styles.row}>
+              <span style={styles.label}>Time Alignment</span>
+              <span style={styles.value}>{geo.timeAlignmentQualityMs} ms</span>
+            </div>
+            <div style={styles.row}>
+              <span style={styles.label}>Bearing Noise</span>
+              <span style={styles.value}>{geo.bearingNoiseDeg.toFixed(3)} deg</span>
+            </div>
+            {wsGeometry?.position3D && (
+              <div style={styles.row}>
+                <span style={styles.label}>3D Position</span>
+                <span style={styles.value}>
+                  {wsGeometry.position3D.lat.toFixed(4)}, {wsGeometry.position3D.lon.toFixed(4)}, {wsGeometry.position3D.alt.toFixed(0)}m
+                </span>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* EO Identification Support */}
+      {trackEoTracks.some(t => t.identificationSupport) && (
         <div style={styles.section}>
-          <div style={styles.sectionTitle}>Geometry Estimate</div>
-          <div style={styles.row}>
-            <span style={styles.label}>Quality</span>
-            <span style={styles.badge(
-              geometry.quality === 'strong' ? '#00cc44' :
-              geometry.quality === 'acceptable' ? '#ffcc00' :
-              geometry.quality === 'weak' ? '#ff8800' : '#ff3333'
-            )}>{geometry.quality}</span>
-          </div>
-          <div style={styles.row}>
-            <span style={styles.label}>Classification</span>
-            <span style={styles.value}>{geometry.classification}</span>
-          </div>
-          <div style={styles.row}>
-            <span style={styles.label}>Intersection Angle</span>
-            <span style={styles.value}>{geometry.intersectionAngleDeg.toFixed(1)} deg</span>
-          </div>
-          <div style={styles.row}>
-            <span style={styles.label}>Time Alignment</span>
-            <span style={styles.value}>{geometry.timeAlignmentQualityMs} ms</span>
-          </div>
-          <div style={styles.row}>
-            <span style={styles.label}>Bearing Noise</span>
-            <span style={styles.value}>{geometry.bearingNoiseDeg.toFixed(3)} deg</span>
-          </div>
+          <div style={styles.sectionTitle}>Identification Support</div>
+          {trackEoTracks.filter(t => t.identificationSupport).map(t => (
+            <div key={t.eoTrackId} style={{ ...styles.lineageItem, borderLeftColor: '#ff8800' }}>
+              <div style={{ color: '#aaa', fontSize: '10px' }}>
+                {t.sensorId} &middot; {t.status}
+              </div>
+              <div style={styles.row}>
+                <span style={styles.label}>Type</span>
+                <span style={styles.value}>{t.identificationSupport!.type}</span>
+              </div>
+              <div style={styles.row}>
+                <span style={styles.label}>Confidence</span>
+                <span style={styles.value}>{(t.identificationSupport!.confidence * 100).toFixed(0)}%</span>
+              </div>
+              {t.identificationSupport!.features.length > 0 && (
+                <div style={{ color: '#aaa', fontSize: '10px', marginTop: '2px' }}>
+                  Features: {t.identificationSupport!.features.join(', ')}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 

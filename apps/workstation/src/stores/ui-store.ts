@@ -14,6 +14,7 @@ export interface LayerVisibility {
   eoRays: boolean;
   triangulation: boolean;
   bearingLines: boolean;
+  ambiguityMarkers: boolean;
 }
 
 export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
@@ -28,6 +29,7 @@ export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
   eoRays: true,
   triangulation: true,
   bearingLines: true,
+  ambiguityMarkers: true,
 };
 
 interface UiState {
@@ -49,7 +51,8 @@ interface UiState {
   // Replay
   replayPlaying: boolean;
   replaySpeed: number;
-  replayTime: number; // ms since epoch, 0 = live
+  replayTime: number; // simulation elapsed seconds
+  scenarioDurationSec: number;
 
   // WebSocket
   wsConnected: boolean;
@@ -68,6 +71,7 @@ interface UiState {
   setReplayPlaying: (playing: boolean) => void;
   setReplaySpeed: (speed: number) => void;
   setReplayTime: (time: number) => void;
+  setScenarioDurationSec: (duration: number) => void;
   setWsConnected: (connected: boolean) => void;
   addEvent: (entry: EventLogEntry) => void;
   clearEvents: () => void;
@@ -93,6 +97,7 @@ export const useUiStore = create<UiState>((set) => ({
   replayPlaying: false,
   replaySpeed: 1,
   replayTime: 0,
+  scenarioDurationSec: 900,
   wsConnected: false,
   eventLog: [],
 
@@ -124,6 +129,7 @@ export const useUiStore = create<UiState>((set) => ({
   setReplayPlaying: (playing) => set({ replayPlaying: playing }),
   setReplaySpeed: (speed) => set({ replaySpeed: speed }),
   setReplayTime: (time) => set({ replayTime: time }),
+  setScenarioDurationSec: (duration) => set({ scenarioDurationSec: duration }),
   setWsConnected: (connected) => set({ wsConnected: connected }),
 
   addEvent: (entry) =>

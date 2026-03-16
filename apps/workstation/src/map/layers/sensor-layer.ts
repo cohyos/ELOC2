@@ -1,5 +1,6 @@
 import type { Map as MaplibreMap } from 'maplibre-gl';
 import type { SensorState } from '@eloc2/domain';
+import type { RegistrationStateWS } from '../../stores/task-store';
 
 const SOURCE_ID = 'sensors';
 const LAYER_ID = 'sensors-layer';
@@ -29,10 +30,30 @@ function sensorShape(type: string): string {
   }
 }
 
+const DEGRADED_LAYER_ID = 'sensors-degraded';
+
 export function initSensorLayer(map: MaplibreMap) {
   map.addSource(SOURCE_ID, {
     type: 'geojson',
     data: { type: 'FeatureCollection', features: [] },
+  });
+
+  // Degraded indicator ring (drawn below sensor circle)
+  map.addLayer({
+    id: DEGRADED_LAYER_ID,
+    type: 'circle',
+    source: SOURCE_ID,
+    filter: ['==', ['get', 'degraded'], true],
+    paint: {
+      'circle-radius': 12,
+      'circle-color': 'transparent',
+      'circle-stroke-width': 2.5,
+      'circle-stroke-color': ['case',
+        ['==', ['get', 'fusionSafe'], false], '#ff3333',
+        '#ffcc00',
+      ],
+      'circle-stroke-opacity': 0.8,
+    },
   });
 
   // Sensor markers
@@ -44,7 +65,10 @@ export function initSensorLayer(map: MaplibreMap) {
       'circle-radius': 7,
       'circle-color': ['get', 'color'],
       'circle-stroke-width': 2,
-      'circle-stroke-color': '#000000',
+      'circle-stroke-color': ['case',
+        ['==', ['get', 'online'], false], '#ff3333',
+        '#000000',
+      ],
     },
   });
 
@@ -72,25 +96,42 @@ export function initSensorLayer(map: MaplibreMap) {
   }
 }
 
-export function updateSensorLayer(map: MaplibreMap, sensors: SensorState[]) {
+export function updateSensorLayer(
+  map: MaplibreMap,
+  sensors: SensorState[],
+  registrationStates?: RegistrationStateWS[],
+) {
   const source = map.getSource(SOURCE_ID);
   if (!source) return;
 
-  const features: GeoJSON.Feature[] = sensors.map(sensor => ({
-    type: 'Feature',
-    properties: {
-      id: sensor.sensorId,
-      label: sensor.sensorId,
-      color: sensorColor(sensor.sensorType),
-      shape: sensorShape(sensor.sensorType),
-      sensorType: sensor.sensorType,
-      online: sensor.online,
-    },
-    geometry: {
-      type: 'Point',
-      coordinates: [sensor.position.lon, sensor.position.lat],
-    },
-  }));
+  const regMap = new Map(
+    (registrationStates ?? []).map(r => [r.sensorId, r]),
+  );
+
+  const features: GeoJSON.Feature[] = sensors.map(sensor => {
+    const reg = regMap.get(sensor.sensorId as string);
+    const degraded = reg
+      ? (reg.spatialQuality === 'degraded' || reg.spatialQuality === 'unsafe' ||
+         reg.timingQuality === 'degraded' || reg.timingQuality === 'unsafe')
+      : false;
+    return {
+      type: 'Feature',
+      properties: {
+        id: sensor.sensorId,
+        label: sensor.sensorId,
+        color: sensor.online ? sensorColor(sensor.sensorType) : '#555555',
+        shape: sensorShape(sensor.sensorType),
+        sensorType: sensor.sensorType,
+        online: sensor.online,
+        degraded,
+        fusionSafe: reg?.fusionSafe ?? true,
+      },
+      geometry: {
+        type: 'Point',
+        coordinates: [sensor.position.lon, sensor.position.lat],
+      },
+    };
+  });
 
   (source as any).setData({ type: 'FeatureCollection', features });
 }

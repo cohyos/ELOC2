@@ -74,6 +74,25 @@ export class ReplayController {
       if (data.eoTracks && Array.isArray(data.eoTracks)) {
         useTaskStore.getState().setEoTracks(data.eoTracks);
       }
+      if (data.geometryEstimates && Array.isArray(data.geometryEstimates)) {
+        useTaskStore.getState().setGeometryEstimates(data.geometryEstimates);
+      }
+      if (data.registrationStates && Array.isArray(data.registrationStates)) {
+        useTaskStore.getState().setRegistrationStates(data.registrationStates);
+      }
+      if (data.unresolvedGroups && Array.isArray(data.unresolvedGroups)) {
+        useTaskStore.getState().setUnresolvedGroups(data.unresolvedGroups);
+      }
+      if (data.fusionModes && typeof data.fusionModes === 'object') {
+        useTaskStore.getState().setFusionModes(data.fusionModes);
+      }
+      // Update replay time from simulation
+      if (typeof data.simTimeSec === 'number') {
+        useUiStore.getState().setReplayTime(data.simTimeSec);
+      }
+      if (typeof data.running === 'boolean') {
+        useUiStore.getState().setReplayPlaying(data.running);
+      }
     } else if (data.type === 'event') {
       // Individual event from simulation
       useUiStore.getState().addEvent({

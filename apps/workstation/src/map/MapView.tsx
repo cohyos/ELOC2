@@ -12,6 +12,7 @@ import { initEoRayLayer, updateEoRayLayer } from './layers/eo-ray-layer';
 import { initTriangulationLayer, updateTriangulationLayer } from './layers/triangulation-layer';
 import { initBearingLineLayer, updateBearingLineLayer, type BearingLine } from './layers/bearing-line-layer';
 import { initInvestigationRingLayer, updateInvestigationRingLayer } from './layers/investigation-ring-layer';
+import { initAmbiguityMarkerLayer, updateAmbiguityMarkerLayer, getAmbiguityMarkerLayerIds } from './layers/ambiguity-marker-layer';
 import { DebugOverlay } from './DebugOverlay';
 import { LayerFilterPanel } from './LayerFilterPanel';
 import type { LayerVisibility } from '../stores/ui-store';
@@ -27,6 +28,9 @@ export function MapView() {
   const selectTrack = useUiStore(s => s.selectTrack);
   const selectSensor = useUiStore(s => s.selectSensor);
   const eoTracks = useTaskStore(s => s.eoTracks);
+  const geometryEstimates = useTaskStore(s => s.geometryEstimates);
+  const unresolvedGroups = useTaskStore(s => s.unresolvedGroups);
+  const registrationStates = useTaskStore(s => s.registrationStates);
   const layerVisibility = useUiStore(s => s.layerVisibility);
   const trackStatusFilter = useUiStore(s => s.trackStatusFilter);
 
@@ -75,6 +79,7 @@ export function MapView() {
       try { initSensorLayer(map.current); } catch (e) { console.warn('Sensor layer init failed:', e); }
       try { initInvestigationRingLayer(map.current); } catch (e) { console.warn('Investigation ring layer init failed:', e); }
       try { initBearingLineLayer(map.current); } catch (e) { console.warn('Bearing line layer init failed:', e); }
+      try { initAmbiguityMarkerLayer(map.current); } catch (e) { console.warn('Ambiguity marker layer init failed:', e); }
       try { initTrackLayer(map.current); } catch (e) { console.warn('Track layer init failed:', e); }
 
       // Use setState to trigger re-render so data effects re-fire
@@ -124,17 +129,18 @@ export function MapView() {
       trackStatusFilter[t.status as keyof typeof trackStatusFilter] !== false
     );
     updateTrackLayer(map.current, filteredTracks);
-    updateTriangulationLayer(map.current, filteredTracks, sensors);
+    updateTriangulationLayer(map.current, filteredTracks, sensors, geometryEstimates);
     updateInvestigationRingLayer(map.current, filteredTracks);
-  }, [tracks, sensors, layersReady, trackStatusFilter]);
+    updateAmbiguityMarkerLayer(map.current, unresolvedGroups, filteredTracks);
+  }, [tracks, sensors, layersReady, trackStatusFilter, geometryEstimates, unresolvedGroups]);
 
   // Update sensor layers when sensors change OR when layers become ready
   useEffect(() => {
     if (!map.current || !layersReady) return;
-    updateSensorLayer(map.current, sensors);
+    updateSensorLayer(map.current, sensors, registrationStates);
     updateCoverageLayer(map.current, sensors);
     updateEoRayLayer(map.current, sensors);
-  }, [sensors, layersReady]);
+  }, [sensors, layersReady, registrationStates]);
 
   // Update bearing line layer from EO tracks
   useEffect(() => {
@@ -172,6 +178,7 @@ export function MapView() {
       ['eoRays', ['eo-rays-layer']],
       ['triangulation', ['triangulation-rays-layer']],
       ['bearingLines', ['bearing-lines-layer']],
+      ['ambiguityMarkers', ['ambiguity-markers-layer', 'ambiguity-markers-pulse']],
     ];
 
     for (const [key, layerIds] of layerMap) {

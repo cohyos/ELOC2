@@ -146,6 +146,8 @@ export function TimelinePanel() {
   const eventLog = useUiStore(s => s.eventLog);
   const replayPlaying = useUiStore(s => s.replayPlaying);
   const replaySpeed = useUiStore(s => s.replaySpeed);
+  const replayTime = useUiStore(s => s.replayTime);
+  const scenarioDurationSec = useUiStore(s => s.scenarioDurationSec);
   const setReplayPlaying = useUiStore(s => s.setReplayPlaying);
   const setReplaySpeed = useUiStore(s => s.setReplaySpeed);
 
@@ -235,8 +237,16 @@ export function TimelinePanel() {
       </div>
 
       {/* Scrubber */}
-      <div style={styles.scrubber}>
-        <div style={styles.scrubberFill(replayPlaying ? 50 : 0)} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexShrink: 0 }}>
+        <span style={{ fontSize: '10px', color: '#888', fontFamily: '"Fira Code", monospace', width: '50px' }}>
+          T+{Math.floor(replayTime / 60)}:{String(Math.floor(replayTime % 60)).padStart(2, '0')}
+        </span>
+        <div style={{ ...styles.scrubber, flex: 1, marginBottom: 0 }}>
+          <div style={styles.scrubberFill(scenarioDurationSec > 0 ? (replayTime / scenarioDurationSec) * 100 : 0)} />
+        </div>
+        <span style={{ fontSize: '10px', color: '#666', fontFamily: '"Fira Code", monospace', width: '50px', textAlign: 'right' }}>
+          {Math.floor(scenarioDurationSec / 60)}:{String(Math.floor(scenarioDurationSec % 60)).padStart(2, '0')}
+        </span>
       </div>
 
       {/* Event list */}
