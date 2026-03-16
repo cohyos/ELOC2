@@ -278,6 +278,9 @@ export function App() {
         <span style={{ color: colors.textDim, fontSize: '12px' }}>
           EO C2 Air Defense Demonstrator
         </span>
+        <span style={{ color: colors.accent, fontSize: '10px', fontFamily: 'monospace' }}>
+          rev:{__APP_REVISION__}
+        </span>
 
         {/* Scenario selector */}
         {availableScenarios.length > 0 && (
@@ -359,7 +362,7 @@ export function App() {
             <span style={styles.statusDot(wsConnected)} />
             {wsConnected ? 'Connected' : 'Disconnected'}
           </span>
-          <span style={{ fontSize: '10px', opacity: 0.5 }}>v0.1.0</span>
+          <span style={{ fontSize: '10px', opacity: 0.5 }}>v0.2.0</span>
         </div>
       </header>
 

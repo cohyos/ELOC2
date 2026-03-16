@@ -9,6 +9,9 @@ import { initSensorLayer, updateSensorLayer, getSensorLayerId } from './layers/s
 import { initCoverageLayer, updateCoverageLayer } from './layers/coverage-layer';
 import { initEoRayLayer, updateEoRayLayer } from './layers/eo-ray-layer';
 import { initTriangulationLayer, updateTriangulationLayer } from './layers/triangulation-layer';
+import { DebugOverlay } from './DebugOverlay';
+import { LayerFilterPanel } from './LayerFilterPanel';
+import type { LayerVisibility } from '../stores/ui-store';
 
 export function MapView() {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -20,6 +23,7 @@ export function MapView() {
   const sensors = useSensorStore(s => s.sensors);
   const selectTrack = useUiStore(s => s.selectTrack);
   const selectSensor = useUiStore(s => s.selectSensor);
+  const layerVisibility = useUiStore(s => s.layerVisibility);
 
   // Initialize map
   useEffect(() => {
@@ -48,6 +52,11 @@ export function MapView() {
       },
       center: [34.8, 31.5],
       zoom: 8,
+    });
+
+    // Log map errors for debugging
+    map.current.on('error', (e) => {
+      console.error('[MapView] MapLibre error:', e.error?.message || e);
     });
 
     map.current.addControl(new maplibregl.NavigationControl(), 'top-right');
@@ -116,14 +125,63 @@ export function MapView() {
     updateEoRayLayer(map.current, sensors);
   }, [sensors, layersReady]);
 
+  // Sync MapLibre layer visibility with store
+  useEffect(() => {
+    if (!map.current || !layersReady) return;
+    const m = map.current;
+
+    const layerMap: Array<[keyof LayerVisibility, string[]]> = [
+      ['tracks', ['system-tracks-layer']],
+      ['trackLabels', ['system-tracks-labels']],
+      ['trackEllipses', ['track-ellipses-layer']],
+      ['sensors', ['sensors-layer']],
+      ['sensorLabels', ['sensors-labels']],
+      ['radarCoverage', ['radar-coverage-layer']],
+      ['eoFor', ['eo-for-layer']],
+      ['eoFov', ['eo-fov-layer']],
+      ['eoRays', ['eo-rays-layer']],
+      ['triangulation', ['triangulation-rays-layer']],
+    ];
+
+    for (const [key, layerIds] of layerMap) {
+      const vis = layerVisibility[key] ? 'visible' : 'none';
+      for (const id of layerIds) {
+        try {
+          if (m.getLayer(id)) {
+            m.setLayoutProperty(id, 'visibility', vis);
+          }
+        } catch { /* layer may not exist */ }
+      }
+    }
+  }, [layerVisibility, layersReady]);
+
+  // Expose map instance as state so DebugOverlay can use it
+  const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
+
+  // Sync ref → state when map loads
+  useEffect(() => {
+    if (layersReady && map.current) {
+      setMapInstance(map.current);
+    }
+  }, [layersReady]);
+
   return (
-    <div
-      ref={mapContainer}
-      style={{
-        width: '100%',
-        height: '100%',
-        filter: 'brightness(0.85) saturate(0.7)',
-      }}
-    />
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <div
+        ref={mapContainer}
+        style={{
+          width: '100%',
+          height: '100%',
+          filter: 'brightness(0.85) saturate(0.7)',
+        }}
+      />
+      <LayerFilterPanel />
+      <DebugOverlay
+        map={mapInstance}
+        tracks={tracks}
+        sensors={sensors}
+        layersReady={layersReady}
+      />
+    </div>
   );
 }

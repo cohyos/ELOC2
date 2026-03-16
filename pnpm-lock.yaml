@@ -23,6 +23,12 @@ importers:
       '@eloc2/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@eloc2/eo-investigation':
+        specifier: workspace:*
+        version: link:../../packages/eo-investigation
+      '@eloc2/eo-tasking':
+        specifier: workspace:*
+        version: link:../../packages/eo-tasking
       '@eloc2/events':
         specifier: workspace:*
         version: link:../../packages/events
@@ -337,6 +343,9 @@ importers:
       '@eloc2/domain':
         specifier: workspace:*
         version: link:../domain
+      '@eloc2/shared-utils':
+        specifier: workspace:*
+        version: link:../shared-utils
     devDependencies:
       tsup:
         specifier: ^8.3.0

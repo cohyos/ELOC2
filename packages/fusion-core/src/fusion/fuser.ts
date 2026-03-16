@@ -5,7 +5,7 @@ import type {
   SourceObservation,
   SystemTrack,
 } from '@eloc2/domain';
-import { mat3x3Inverse, mat3x3Add } from '@eloc2/shared-utils';
+import { mat3x3Inverse, mat3x3Add, normalizeLon } from '@eloc2/shared-utils';
 
 // ---------------------------------------------------------------------------
 // Result type
@@ -88,7 +88,7 @@ export function fuseObservation(
   return {
     state: {
       lat: fusedState[0],
-      lon: fusedState[1],
+      lon: normalizeLon(fusedState[1]),
       alt: fusedState[2],
     },
     covariance: fusedCov,
@@ -107,7 +107,7 @@ function fallbackAverage(
   return {
     state: {
       lat: (track.state.lat + observation.position.lat) / 2,
-      lon: (track.state.lon + observation.position.lon) / 2,
+      lon: normalizeLon((track.state.lon + observation.position.lon) / 2),
       alt: (track.state.alt + observation.position.alt) / 2,
     },
     covariance: observation.covariance,

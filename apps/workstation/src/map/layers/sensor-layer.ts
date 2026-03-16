@@ -48,24 +48,28 @@ export function initSensorLayer(map: MaplibreMap) {
     },
   });
 
-  // Sensor labels
-  map.addLayer({
-    id: LABEL_LAYER_ID,
-    type: 'symbol',
-    source: SOURCE_ID,
-    layout: {
-      'text-field': ['get', 'label'],
-      'text-size': 10,
-      'text-offset': [0, -1.5],
-      'text-anchor': 'bottom',
-      'text-font': ['Open Sans Regular'],
-    },
-    paint: {
-      'text-color': ['get', 'color'],
-      'text-halo-color': '#000000',
-      'text-halo-width': 1,
-    },
-  });
+  // Sensor labels — separate try/catch so font issues don't break circles
+  try {
+    map.addLayer({
+      id: LABEL_LAYER_ID,
+      type: 'symbol',
+      source: SOURCE_ID,
+      layout: {
+        'text-field': ['get', 'label'],
+        'text-size': 10,
+        'text-offset': [0, -1.5],
+        'text-anchor': 'bottom',
+        'text-font': ['Open Sans Bold', 'Noto Sans Bold', 'Arial Unicode MS Bold'],
+      },
+      paint: {
+        'text-color': ['get', 'color'],
+        'text-halo-color': '#000000',
+        'text-halo-width': 1,
+      },
+    });
+  } catch (e) {
+    console.warn('[sensor-layer] Label layer failed:', e);
+  }
 }
 
 export function updateSensorLayer(map: MaplibreMap, sensors: SensorState[]) {

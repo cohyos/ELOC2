@@ -5,6 +5,8 @@ export {
   DEG_TO_RAD,
   RAD_TO_DEG,
   clampAngle,
+  normalizeLon,
+  shortestAngleDelta,
   geodeticToECEF,
   ecefToGeodetic,
   geodeticToENU,

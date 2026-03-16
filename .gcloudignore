@@ -1,0 +1,14 @@
+.git
+.gitignore
+node_modules
+**/node_modules
+**/dist
+**/__tests__
+**/tests
+*.test.ts
+*.spec.ts
+.claude
+docs
+Knowledge_Base_and_Agents_instructions
+HANDOVER.md
+README.md

@@ -7,6 +7,7 @@ import {
   haversineDistanceM,
   DEG_TO_RAD,
   RAD_TO_DEG,
+  shortestAngleDelta,
 } from '@eloc2/shared-utils';
 
 // ---------------------------------------------------------------------------
@@ -116,11 +117,7 @@ export function isTargetInFov(
   const altDiff = targetPosition.alt - sensorPosition.alt;
   const targetEl = Math.atan2(altDiff, horizontalDistM) * RAD_TO_DEG;
 
-  // Azimuth difference accounting for wrap-around
-  let deltaAz = targetAz - gimbalAz;
-  if (deltaAz > 180) deltaAz -= 360;
-  if (deltaAz < -180) deltaAz += 360;
-
+  const deltaAz = shortestAngleDelta(gimbalAz, targetAz);
   const deltaEl = targetEl - gimbalEl;
 
   return (

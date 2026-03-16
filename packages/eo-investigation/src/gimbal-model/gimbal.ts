@@ -9,6 +9,7 @@ import {
   RAD_TO_DEG,
   DEG_TO_RAD,
   clampAngle,
+  shortestAngleDelta,
 } from '@eloc2/shared-utils';
 
 // ---------------------------------------------------------------------------
@@ -53,10 +54,7 @@ export class GimbalController {
       targetEl >= MIN_ELEVATION_DEG && targetEl <= MAX_ELEVATION_DEG;
 
     // Compute shortest angular distance for azimuth (handles wrap-around)
-    let deltaAz = Math.abs(targetAz - this.state.azimuthDeg);
-    if (deltaAz > 180) {
-      deltaAz = 360 - deltaAz;
-    }
+    const deltaAz = Math.abs(shortestAngleDelta(this.state.azimuthDeg, targetAz));
     const deltaEl = Math.abs(targetEl - this.state.elevationDeg);
 
     const maxDelta = Math.max(deltaAz, deltaEl);
@@ -117,11 +115,7 @@ export class GimbalController {
    * @returns `true` if the target is within the FOV.
    */
   isInFov(targetAz: number, targetEl: number, fov: FieldOfView): boolean {
-    // Shortest azimuth difference (handles wrap-around)
-    let deltaAz = targetAz - this.state.azimuthDeg;
-    if (deltaAz > 180) deltaAz -= 360;
-    if (deltaAz < -180) deltaAz += 360;
-
+    const deltaAz = shortestAngleDelta(this.state.azimuthDeg, targetAz);
     const deltaEl = targetEl - this.state.elevationDeg;
 
     return (

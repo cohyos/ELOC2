@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@eloc2/domain": "workspace:*",
+    "@eloc2/eo-investigation": "workspace:*",
+    "@eloc2/eo-tasking": "workspace:*",
     "@eloc2/events": "workspace:*",
     "@eloc2/fusion-core": "workspace:*",
     "@eloc2/geometry": "workspace:*",

@@ -2,9 +2,12 @@ import { describe, it, expect } from "vitest";
 import {
   geodeticToECEF,
   ecefToGeodetic,
+  geodeticToENU,
+  enuToGeodetic,
   haversineDistanceM,
   bearingDeg,
   clampAngle,
+  normalizeLon,
   WGS84_A,
 } from "../geo-math.js";
 
@@ -72,6 +75,93 @@ describe("bearingDeg", () => {
   it("returns ~180 for a target due south", () => {
     const bearing = bearingDeg(41, -74, 40, -74);
     expect(bearing).toBeCloseTo(180, 0);
+  });
+});
+
+describe("normalizeLon", () => {
+  it("returns values already in (-180, 180] unchanged", () => {
+    expect(normalizeLon(34.78)).toBeCloseTo(34.78);
+    expect(normalizeLon(-74.0)).toBeCloseTo(-74.0);
+    expect(normalizeLon(180)).toBeCloseTo(180);
+  });
+
+  it("wraps 181 to -179", () => {
+    expect(normalizeLon(181)).toBeCloseTo(-179);
+  });
+
+  it("wraps -181 to 179", () => {
+    expect(normalizeLon(-181)).toBeCloseTo(179);
+  });
+
+  it("wraps 360 to 0", () => {
+    expect(normalizeLon(360)).toBeCloseTo(0);
+  });
+
+  it("wraps 540 to 180", () => {
+    expect(normalizeLon(540)).toBeCloseTo(180);
+  });
+
+  it("wraps -360 to 0", () => {
+    expect(normalizeLon(-360)).toBeCloseTo(0);
+  });
+});
+
+describe("longitude ±180° wrap-around", () => {
+  it("haversineDistanceM: short distance across antimeridian", () => {
+    // Two points 2° apart straddling the antimeridian
+    const dist = haversineDistanceM(0, 179, 0, -179);
+    const expected = haversineDistanceM(0, 0, 0, 2);
+    expect(dist).toBeCloseTo(expected, 0);
+  });
+
+  it("bearingDeg: eastward across antimeridian is ~90°", () => {
+    const bearing = bearingDeg(0, 179, 0, -179);
+    expect(bearing).toBeCloseTo(90, 0);
+  });
+
+  it("bearingDeg: westward across antimeridian is ~270°", () => {
+    const bearing = bearingDeg(0, -179, 0, 179);
+    expect(bearing).toBeCloseTo(270, 0);
+  });
+
+  it("geodeticToECEF → ecefToGeodetic round-trip near antimeridian", () => {
+    const lat = 10;
+    const lon = 179.5;
+    const alt = 500;
+    const ecef = geodeticToECEF(lat, lon, alt);
+    const back = ecefToGeodetic(ecef.x, ecef.y, ecef.z);
+    expect(back.lat).toBeCloseTo(lat, 6);
+    expect(back.lon).toBeCloseTo(lon, 6);
+    expect(back.alt).toBeCloseTo(alt, 2);
+  });
+
+  it("geodeticToECEF → ecefToGeodetic round-trip at -179.5°", () => {
+    const lat = -20;
+    const lon = -179.5;
+    const alt = 1000;
+    const ecef = geodeticToECEF(lat, lon, alt);
+    const back = ecefToGeodetic(ecef.x, ecef.y, ecef.z);
+    expect(back.lat).toBeCloseTo(lat, 6);
+    expect(back.lon).toBeCloseTo(lon, 6);
+    expect(back.alt).toBeCloseTo(alt, 2);
+  });
+
+  it("geodeticToENU handles points across the antimeridian", () => {
+    // Point at lon=179, reference at lon=-179 (2° apart)
+    const enu = geodeticToENU(0, -179, 0, 0, 179, 0);
+    // Should produce ~222 km east, not ~40000 km west
+    expect(enu.east).toBeGreaterThan(200_000);
+    expect(enu.east).toBeLessThan(250_000);
+    expect(Math.abs(enu.north)).toBeLessThan(1);
+  });
+
+  it("enuToGeodetic → geodeticToENU round-trip across antimeridian", () => {
+    const refLat = 0, refLon = 179.5, refAlt = 0;
+    const geo = enuToGeodetic(50000, 0, 0, refLat, refLon, refAlt);
+    // Result should be east of antimeridian (negative lon)
+    const back = geodeticToENU(geo.lat, geo.lon, geo.alt, refLat, refLon, refAlt);
+    expect(back.east).toBeCloseTo(50000, 0);
+    expect(Math.abs(back.north)).toBeLessThan(5);
   });
 });
 

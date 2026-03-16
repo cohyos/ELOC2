@@ -1,5 +1,5 @@
 import type { ScoreBreakdown } from '@eloc2/domain';
-import { bearingDeg } from '@eloc2/shared-utils';
+import { bearingDeg, shortestAngleDelta } from '@eloc2/shared-utils';
 import type { TaskCandidate } from '../candidate-generation/generator.js';
 
 // ---------------------------------------------------------------------------
@@ -88,10 +88,7 @@ export function scoreCandidate(
       systemTrack.state.lat,
       systemTrack.state.lon,
     );
-    let deltaAz = Math.abs(targetBearing - sensorState.gimbal.azimuthDeg);
-    if (deltaAz > 180) {
-      deltaAz = 360 - deltaAz;
-    }
+    const deltaAz = Math.abs(shortestAngleDelta(sensorState.gimbal.azimuthDeg, targetBearing));
     slewCost = deltaAz / 18; // normalize: 180° → 10
   }
 
