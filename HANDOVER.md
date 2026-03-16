@@ -8,69 +8,123 @@ A web-based demonstrator showing how electro-optical (EO) sensors integrated in 
 
 ---
 
-## Current State (as of commit 6c2e17a)
+## Current State (as of commit 1f2500f — 2026-03-16)
 
-### Completed Phases
+### Phase Completion Matrix
 
-| Phase | Description | Package(s) | Tests |
-|-------|-------------|------------|-------|
-| **0** | Bootstrap: monorepo scaffold, all 12 packages + 3 apps | All | Build passes |
-| **1** | Fusion core: correlation (Mahalanobis), fusion (info-matrix), track management (state machine), event store, RAP | `fusion-core`, `domain`, `events` | 29 |
-| **2** | Registration: bias estimation, clock health, fusion gating | `registration` | 23 |
-| **3** | EO cueing: cue issuance with state prediction, gimbal model, FOV model, EO report handling | `eo-investigation` | 50 |
-| **4** | Tasking: multi-criteria scoring, policy engine (3 modes), operator controls, sensor assignment | `eo-tasking` | 22 |
-| **5** | Multi-target resolution (partial): ambiguity handler, split/merge logic, identifier | `eo-investigation` | (included in 50) |
+| Phase | Description | Status | Tests |
+|-------|-------------|--------|-------|
+| **0** | Bootstrap: monorepo, 12 packages + 3 apps | **Complete** | Build passes |
+| **1** | Fusion core: correlation, fusion, track management, event store, RAP | **Complete** | 29 |
+| **2** | Registration: bias estimation, clock health, fusion gating | **Complete** | 23 |
+| **3** | EO cueing: cue issuance, gimbal/FOV models, EO reports | **Complete** | 50 |
+| **4** | Tasking: scoring, policy engine, operator controls, assignment | **Complete** | 22 |
+| **5** | Multi-target: ambiguity handler, split/merge, EoTrack | **Complete** | (in 50) |
+| **6** | Triangulation: bearing math, triangulator, quality scorer | **Packages complete, wired into live-engine** | 22 |
+| **7** | Advanced fusion: mode selector, conservative/centralized fusers | **Packages complete, wired into live-engine** | included |
+| **8** | Workstation UI: map, panels, layers, responsive layout | **~85% complete** | 0 (no frontend tests) |
+| **9** | Scenarios + validation: central-israel, simple scenarios | **Partial** | 0 (no integration tests) |
 
-**Total: 72 source files, 20 test files, 146 tests — all passing.**
+**Total: ~146+ unit tests passing across all packages. Build clean. 30 turbo tasks pass.**
 
-### Remaining Phases
+### What Was Done in This Session
 
-| Phase | Description | Status | Key Work |
-|-------|-------------|--------|----------|
-| **5** | EO multi-target — **mostly done** | ~90% | May need integration tests with Phase 4 tasking |
-| **6** | Triangulation and 3D geometry | **Not started** | `packages/geometry/`: bearing math, time alignment, triangulator, quality scorer. Stubs exist. |
-| **7** | Advanced radar-EO fusion | **Not started** | `packages/fusion-core/`: fusion mode selector, conservative fuser (covariance intersection), centralized fuser, async handler |
-| **8** | Workstation UI | **Not started** | `apps/workstation/`: React + MapLibre GL JS three-pane layout, all map overlays, detail panel, timeline, replay, WebSocket streaming. Shell exists (blank map). `apps/api/`: Fastify REST + WebSocket routes. |
-| **9** | Scenario library + validation | **Not started** | `apps/simulator/`: scenario runner, synthetic radar/EO models, target generator. `packages/scenario-library/`: default Central Israel scenario + 8 named scenarios. `packages/validation/`: regression assertions. |
-
----
-
-## Tech Stack
-
-- **Language:** TypeScript 5.9 (strict), ESM
-- **Monorepo:** pnpm 9.15 + Turborepo 2.8
-- **Frontend:** React 19 + Vite 6 + MapLibre GL JS (workstation app)
-- **Backend:** Fastify (api app)
-- **Testing:** Vitest 3.2
-- **Package bundler:** tsup (esbuild)
-- **Map tiles:** OpenStreetMap via MapLibre GL JS
+1. **Geometry wired into live-engine** (Gap 1 closed) — `@eloc2/geometry` triangulation called after bearing processing, results stored and broadcast via WS
+2. **Advanced fusion wired** (Gap 2 closed) — fusion-mode-selector integrated, conservative/centralized modes active based on registration health
+3. **Validation framework** connected — assertion runner wired to live-engine output
+4. **Task panel** — full EO tasking panel with approve/reject/reserve controls
+5. **Layer filter panel** — toggleable visibility for tracks, sensors, coverage, EO rays, triangulation
+6. **Mobile responsive layout** — iPhone single-pane with bottom sheet, iPad two-pane collapsible
+7. **Map symbol rendering fixes** — font fallback, DebugOverlay HTML markers, try/catch isolation
+8. **WS payload optimization** — lineage capped to last 3 entries per track
 
 ---
 
-## Repository Structure
+## Remaining Gaps (Priority Order)
+
+### HIGH Priority
+
+| Gap | Description | Files to Change |
+|-----|-------------|----------------|
+| **Map symbols blank** | Header shows 95 tracks but map is blank. MapLibre v5 font/glyph loading likely failing. DebugOverlay fallback exists but needs verification on deploy. | `apps/workstation/src/map/MapView.tsx`, `track-layer.ts`, `sensor-layer.ts` |
+| **Deploy to Cloud Run** | Changes not yet deployed. Need merge to master → Cloud Build trigger. | `cloudbuild.yaml`, manual: `gcloud builds submit` |
+
+### MEDIUM Priority
+
+| Gap | Description | Files to Change |
+|-----|-------------|----------------|
+| **Replay/timeline scrubbing** | Timeline scrubber hardcoded at 50%. No server-side seek. `replayTime` unused. | `TimelinePanel.tsx`, `ui-store.ts`, new `replay-routes.ts` |
+| **Ambiguity markers on map** | Unresolved groups exist in backend but no map visualization | New `ambiguity-marker-layer.ts`, `MapView.tsx` |
+| **Per-sensor degraded indicators** | Only global banner exists, no per-sensor visual on map | `sensor-layer.ts`, `live-engine.ts` (broadcast reg states) |
+| **Integration tests** | `tests/integration/`, `tests/regression/` empty. No pipeline test. | `tests/integration/`, `packages/validation/src/runner.ts` |
+| **Missing API endpoints** | No replay seek, no EO cue details, no unresolved groups endpoint | `apps/api/src/routes/` |
+
+### LOW Priority
+
+| Gap | Description | Files to Change |
+|-----|-------------|----------------|
+| **Additional named scenarios** | Only central-israel + simple-scenarios. Plan calls for 8. | `packages/scenario-library/src/scenarios/` |
+| **TrackDetail enhancements** | Fusion mode, ID support, split history not shown | `TrackDetailPanel.tsx` |
+| **Playwright E2E tests** | Phase 8 requirement, not started | New `tests/e2e/` |
+
+---
+
+## Architecture Quick Reference
 
 ```
 ELOC2/
 ├── apps/
-│   ├── workstation/     React + MapLibre (shell only, needs Phase 8)
-│   ├── simulator/       Scenario engine (stubs, needs Phase 9)
-│   └── api/             Fastify server (shell, needs Phase 8)
+│   ├── api/             Fastify + WebSocket, live simulation engine
+│   ├── workstation/     React 19 + MapLibre GL JS 5 + Zustand 5
+│   └── simulator/       ScenarioRunner generates observations
 ├── packages/
-│   ├── domain/          ✅ All entity types: SystemTrack, SourceObservation, EoTrack, etc.
-│   ├── events/          ✅ All event types: 14 canonical events with envelope
+│   ├── domain/          ✅ Branded types, SystemTrack, Position3D, etc.
+│   ├── events/          ✅ 14 canonical events with envelope
 │   ├── schemas/         ✅ Runtime validators
-│   ├── shared-utils/    ✅ geo-math (WGS84), matrix (3x3), SimulationClock, UUID
-│   ├── fusion-core/     ✅ Correlator, fuser, TrackManager, EventStore, RAP builder
+│   ├── shared-utils/    ✅ geo-math, matrix, SimulationClock, UUID
+│   ├── fusion-core/     ✅ Correlator, fuser, TrackManager, EventStore, RAP
 │   ├── registration/    ✅ BiasEstimator, ClockHealth, HealthService
-│   ├── eo-investigation/✅ CueIssuer, GimbalController, FOV, ReportHandler, Ambiguity, Split/Merge
-│   ├── eo-tasking/      ✅ Scorer, Generator, PolicyEngine, Assigner, OperatorControls
-│   ├── geometry/        ⬜ Stubs only (needs Phase 6)
-│   ├── projections/     ✅ Partial: EoCueView, AmbiguityView, SensorHealthView
-│   ├── scenario-library/⬜ Stub (needs Phase 9)
-│   └── validation/      ⬜ Stub (needs Phase 9)
-├── Knowledge_Base_and_Agents_instructions/  15 reference docs
-├── docs/plans/implementation-plan.md        Full plan
-└── HANDOVER.md                              This file
+│   ├── eo-investigation/✅ CueIssuer, Gimbal, FOV, Report, Ambiguity, Split/Merge
+│   ├── eo-tasking/      ✅ Scorer, Generator, PolicyEngine, Assigner
+│   ├── geometry/        ✅ Triangulator, bearing-math, quality-scorer, time-aligner
+│   ├── projections/     ✅ View builders (RAP, sensor health, EO cues, geometry)
+│   ├── scenario-library/✅ central-israel + simple-scenarios
+│   └── validation/      ✅ Assertion framework (needs integration runner)
+├── Knowledge_Base_and_Agents_instructions/  15 design docs (SOURCE OF TRUTH)
+│   ├── EO_C2_demo_for_air_defense.md        High-level concept & requirements
+│   ├── EO_C2_build_roadmap.md               Phase sequence & acceptance criteria
+│   ├── EO_C2_demo_build_knowledge_base.md   Research-grounded design decisions
+│   ├── EO_C2_repo_scaffold_spec.md          Monorepo structure & package boundaries
+│   ├── EO_C2_search_outcome_report.md       Technology evaluation rationale
+│   ├── RAP_fusion_architecture.md           Correlation, fusion, track mgmt (Ph 1,7)
+│   ├── Radar_EO_cueing_and_fusion.md        Radar→EO cueing, fusion modes (Ph 3,7)
+│   ├── Sensor_registration_and_timing.md    Bias estimation, clock health (Ph 2,7)
+│   ├── EO_sensor_tasking.md                 Scoring, policy engine (Ph 4)
+│   ├── EO_multi_target_resolution.md        Ambiguity, split/merge (Ph 5)
+│   ├── EO_triangulation_geometry.md         Bearing math, triangulation (Ph 6)
+│   ├── Map_simulation_and_workstation.md    UI layout, map layers (Ph 8)
+│   ├── Claude_code_prompt_templates.md      Agent execution prompts
+│   ├── Claude_agent_build_prompts.md        Detailed agent prompts + done criteria
+│   └── Chunk_index.md                       Index of all KB chunks
+├── docs/plans/
+│   ├── implementation-plan.md    Full 10-phase plan
+│   └── gap-completion-plan.md    Gap analysis with fix steps
+├── Dockerfile                    2-stage build, serves UI from API on :3001
+├── cloudbuild.yaml               GCP Cloud Build CI/CD
+└── HANDOVER.md                   This file
+```
+
+### Data Flow
+
+```
+ScenarioRunner.step() → SimulationEvent[]
+  → LiveEngine.processSimEvent() → TrackManager.processObservation()
+    → fusionModeSelector → conservative/centralized/basic fusion
+    → triangulate() when ≥2 EO bearings exist
+  → LiveEngine.broadcastRap() → WebSocket "rap.update"
+    → ReplayController → Zustand stores (tracks, sensors, tasks, geometry)
+      → MapView effects → updateTrackLayer/updateSensorLayer/etc.
+      → DebugOverlay → HTML markers (MapLibre bypass fallback)
 ```
 
 ---
@@ -79,84 +133,47 @@ ELOC2/
 
 ```bash
 pnpm install          # Install all dependencies
-pnpm build            # Build all 15 packages (turbo cached)
-pnpm test             # Run all tests (146 passing)
-pnpm dev              # Start workstation (port 3000) + api (port 3001) — NOT FULLY WIRED YET
+pnpm build            # Build all packages (turbo cached)
+pnpm test             # Run all tests (~146 passing)
+pnpm dev              # workstation (:3000) + api (:3001)
+```
+
+### Deploy
+
+```bash
+# Auto: merge to master → Cloud Build triggers
+git checkout master && git merge claude/eloc2-development-ElpmM
+# Manual:
+gcloud builds submit --config=cloudbuild.yaml \
+  --substitutions=SHORT_SHA=$(git rev-parse --short HEAD) \
+  --project=eloc2demo
 ```
 
 ---
 
-## Implementation Plan Location
+## Design Decisions (Locked In)
 
-The full detailed plan with per-phase file lists, algorithms, acceptance criteria, agent parallelization strategy, default scenario spec, and 50-commit sequence is at:
-
-- **`docs/plans/implementation-plan.md`** (in-repo copy)
-- **`.claude/plans/cosmic-swinging-codd.md`** (Claude Code plan file)
-
----
-
-## Agent Execution Strategy for Remaining Phases
-
-Per the plan's dependency graph and parallelization schedule:
-
-### Slot 5 (next): Run in parallel
-- **Agent A:** Phase 6 (Triangulation) — `packages/geometry/`
-- **Agent B:** Phase 7 (Advanced Fusion) — `packages/fusion-core/` additions
-- **Agent C:** Phase 8a (UI shell + basic map overlays) — `apps/workstation/`
-
-### Slot 6 (after slot 5):
-- **Agent A:** Phase 9 (Scenarios + Validation) — `apps/simulator/`, `packages/scenario-library/`, `packages/validation/`
-- **Agent B:** Phase 8b (polish + replay) — `apps/workstation/`, `apps/api/`
-- **Agent C:** Integration review across all packages
-
-### Agent Prompt Templates
-Pre-written prompts for each phase are in:
-- `Knowledge_Base_and_Agents_instructions/Claude_code_prompt_templates.md` — copy-paste prompts with shared prefix
-- `Knowledge_Base_and_Agents_instructions/Claude_agent_build_prompts.md` — detailed prompts with scope, constraints, done criteria
-
-### Key Reference Documents Per Phase
-| Phase | Primary Reference |
-|-------|------------------|
-| 6 | `EO_triangulation_geometry.md` |
-| 7 | `Radar_EO_cueing_and_fusion.md` + `Sensor_registration_and_timing.md` |
-| 8 | `Map_simulation_and_workstation.md` |
-| 9 | `EO_C2_build_roadmap.md` + all chunks |
+1. **Event-sourced**: All state via EventStore. Replay reconstructs from events.
+2. **Track state machine**: tentative → confirmed (3 updates) → dropped (8 misses)
+3. **Correlation**: Mahalanobis distance, chi-squared gate 9.21 (2-DoF 99%)
+4. **Fusion**: Information-matrix weighted. Conservative (covariance intersection) when degraded.
+5. **Registration gating**: `fusionSafe === false` → confirmation-only mode
+6. **EO cueing**: Carries predicted state, covariance, uncertainty gate, priority, validity window
+7. **Tasking scoring**: `total = w1*threat + w2*uncertainty + w3*geometry + w4*operator - w5*slew - w6*occupancy`
+8. **Policy modes**: recommended_only, auto_with_veto, manual
+9. **Multi-target**: Delayed association via UnresolvedGroup, not forced 1:1
+10. **3D geometry honesty**: bearing_only | candidate_3d | confirmed_3d — never overstate
+11. **Responsive UI**: PC (3-pane), iPad (2-pane), iPhone (single + bottom sheet)
+12. **Colors**: confirmed=#00cc44, tentative=#ffcc00, dropped=#ff3333; radar=#4488ff, eo=#ff8800, c4isr=#aa44ff
 
 ---
 
-## Important Design Decisions Already Made
+## Reference Documents Per Task
 
-1. **Event-sourced architecture:** All state changes go through events in the EventStore. Replay reconstructs state from events.
-2. **Track state machine:** tentative → confirmed (after 3 updates) → dropped (after 5 misses). All transitions emit events with lineage.
-3. **Correlation:** Mahalanobis distance in ENU frame with chi-squared gate (default 9.21, 2-DoF 99%).
-4. **Fusion:** Information-matrix weighted fusion. Falls back to simple averaging if covariance is singular.
-5. **Registration gating:** When `fusionSafe === false`, fuser falls back to confirmation-only mode.
-6. **EO cueing:** Cues carry predicted state, covariance, uncertainty gate, priority, validity window.
-7. **Tasking scoring:** `total = w1*threat + w2*uncertainty + w3*geometry + w4*operator - w5*slew - w6*occupancy`
-8. **Policy modes:** recommended_only, auto_with_veto, manual.
-9. **Multi-target:** Delayed association via UnresolvedGroup entities, not forced 1:1 mapping.
-10. **3D geometry honesty:** Never present weak geometry as confirmed 3D. Three output classes: bearing_only, candidate_3d, confirmed_3d.
-11. **Responsive UI:** PC (3-pane), iPad (2-pane), iPhone (single pane + bottom sheet).
-12. **Default scenario:** Central Israel defense sector, 6 sensors (2 radar + 3 EO + 1 C4ISR), 8 targets over 15 minutes, injected faults, operator interactions.
-
----
-
-## Known Issues / Watch Points
-
-1. **No git remote yet.** Repo is local only. User needs to `git remote add origin <url>` and push.
-2. **Phase 5 integration:** The ambiguity/split-merge logic is implemented but not yet wired end-to-end with Phase 4 tasking. Need integration tests.
-3. **Workstation is shell only:** Just a blank MapLibre map. All overlays, panels, and WebSocket wiring are Phase 8.
-4. **API is shell only:** Basic Fastify server, no routes implemented yet. Phase 8 adds all REST + WS endpoints.
-5. **Simulator has no logic yet:** Just stubs. Phase 9 builds the full scenario engine.
-6. **CRLF warnings on Windows:** Git shows LF→CRLF warnings. Consider adding `.gitattributes` with `* text=auto`.
-
----
-
-## How to Resume
-
-```
-claude --resume
-```
-
-Or start a new session and say:
-> "Continue building ELOC2. Read HANDOVER.md and docs/plans/implementation-plan.md for context. Phases 0-4 are complete (plus partial Phase 5). Next: implement Phases 6, 7, 8 in parallel, then Phase 9."
+| Task Area | Primary Reference |
+|-----------|------------------|
+| Triangulation | `EO_triangulation_geometry.md` |
+| Fusion modes | `Radar_EO_cueing_and_fusion.md` + `Sensor_registration_and_timing.md` |
+| Workstation UI | `Map_simulation_and_workstation.md` |
+| Scenarios | `EO_C2_build_roadmap.md` |
+| Agent prompts | `Claude_code_prompt_templates.md` + `Claude_agent_build_prompts.md` |

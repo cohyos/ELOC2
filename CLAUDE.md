@@ -6,28 +6,88 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 
 ## Architecture
 - **Backend**: `apps/api` — Fastify server, WebSocket events, live simulation engine
-- **Frontend**: `apps/workstation` — React + MapLibre GL + Zustand stores
+- **Frontend**: `apps/workstation` — React 19 + MapLibre GL JS 5 + Zustand 5 stores
 - **Simulator**: `apps/simulator` — ScenarioRunner generates radar/EO observations
 - **Fusion**: `packages/fusion-core` — TrackManager, correlator, information-matrix fuser
+- **Geometry**: `packages/geometry` — Bearing-math, triangulator, quality-scorer, time-aligner
 - **Domain types**: `packages/domain` — SystemTrack, SensorState, Position3D, etc.
 
 ## Key Files
-- `apps/api/src/simulation/live-engine.ts` — Main simulation loop, WS broadcast
+- `apps/api/src/simulation/live-engine.ts` — Main simulation loop, WS broadcast, geometry & fusion integration
 - `apps/workstation/src/map/MapView.tsx` — Map component, layer init
 - `apps/workstation/src/map/layers/track-layer.ts` — Track circle + label layers
 - `apps/workstation/src/map/layers/sensor-layer.ts` — Sensor circle + label layers
+- `apps/workstation/src/map/layers/triangulation-layer.ts` — EO bearing rays + intersection points
 - `apps/workstation/src/map/DebugOverlay.tsx` — HTML marker fallback (bypasses MapLibre)
 - `apps/workstation/src/replay/ReplayController.ts` — WebSocket client, feeds stores
 - `apps/workstation/src/stores/track-store.ts` — Zustand track state
+- `apps/workstation/src/stores/ui-store.ts` — UI state (selected track, panels, replay time)
 - `apps/workstation/src/App.tsx` — Main layout, header, scenario controls
 
 ## Data Flow
 1. `ScenarioRunner.step()` generates `SimulationEvent[]` (observations, bearings, faults)
 2. `LiveEngine.processSimEvent()` feeds observations through `TrackManager.processObservation()`
-3. `LiveEngine.broadcastRap()` sends tracks/sensors via WebSocket as `rap.update`
-4. `ReplayController.handleMessage()` calls `setTracks()`/`setSensors()` on Zustand stores
-5. `MapView` effects call `updateTrackLayer()`/`updateSensorLayer()` when data changes
-6. `DebugOverlay` renders HTML markers using `map.project()` as a fallback
+3. Fusion-mode-selector picks basic/conservative/centralized based on registration health
+4. When ≥2 EO bearings exist for a track, `@eloc2/geometry` triangulation is called
+5. `LiveEngine.broadcastRap()` sends tracks/sensors/geometry via WebSocket as `rap.update`
+6. `ReplayController.handleMessage()` calls `setTracks()`/`setSensors()` on Zustand stores
+7. `MapView` effects call `updateTrackLayer()`/`updateSensorLayer()` when data changes
+8. `DebugOverlay` renders HTML markers using `map.project()` as a fallback
+
+## Knowledge Base — Source of Truth
+
+The `Knowledge_Base_and_Agents_instructions/` folder contains **15 foundational design documents** that define ALL domain logic, algorithms, and UI requirements. **Always consult the relevant document before implementing or debugging a feature.**
+
+| File | Purpose | Phases |
+|------|---------|--------|
+| `EO_C2_demo_for_air_defense.md` | High-level concept and requirements | All |
+| `EO_C2_build_roadmap.md` | Phase sequence, acceptance criteria, scenario specs | Planning, 9 |
+| `EO_C2_demo_build_knowledge_base.md` | Research-grounded design decisions | All |
+| `EO_C2_repo_scaffold_spec.md` | Monorepo structure, package boundaries | Phase 0 |
+| `EO_C2_search_outcome_report.md` | Technology evaluation rationale | Architecture |
+| `RAP_fusion_architecture.md` | Correlation, fusion, track management, event store | Phases 1, 7 |
+| `Radar_EO_cueing_and_fusion.md` | Radar-to-EO cueing, fusion modes, EO reports | Phases 3, 7 |
+| `Sensor_registration_and_timing.md` | Bias estimation, clock health, registration gating | Phases 2, 7 |
+| `EO_sensor_tasking.md` | Scoring formula, policy engine, operator controls | Phase 4 |
+| `EO_multi_target_resolution.md` | Ambiguity handling, split/merge, identification | Phase 5 |
+| `EO_triangulation_geometry.md` | Bearing math, triangulation, quality scoring | Phase 6 |
+| `Map_simulation_and_workstation.md` | UI layout, map layers, panels, responsive design | Phase 8 |
+| `Claude_code_prompt_templates.md` | Copy-paste agent prompts with shared prefix | Agent execution |
+| `Claude_agent_build_prompts.md` | Detailed agent prompts with scope + done criteria | Agent execution |
+| `Chunk_index.md` | Index of all knowledge base chunks for retrieval | Reference |
+
+## Current Completion (as of 1f2500f — 2026-03-16)
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| 0: Bootstrap | **Complete** | Monorepo builds, dev server works |
+| 1: Fusion Core | **Complete** | TrackManager, correlator, fuser, event-store, RAP (29 tests) |
+| 2: Registration | **Complete** | BiasEstimator, ClockHealth, HealthService (23 tests) |
+| 3: EO Cueing | **Complete** | CueIssuer, gimbal/FOV, EO reports (50 tests) |
+| 4: Tasking | **Complete** | Scoring, policy engine, assigner (22 tests) |
+| 5: Multi-Target | **Complete** | Ambiguity, split/merge, EoTrack |
+| 6: Triangulation | **Wired** | Integrated in live-engine, geometry broadcast via WS |
+| 7: Advanced Fusion | **Wired** | fusion-mode-selector active, conservative/centralized modes |
+| 8: Workstation | **~85%** | Map, panels, layers, responsive layout done |
+| 9: Scenarios | **Partial** | central-israel exists; no integration tests |
+
+## Gap Completion Plan (Ordered)
+
+### HIGH — Must fix for demo
+1. **Map symbols blank on deploy** — MapLibre v5 glyph/font loading fails silently. DebugOverlay fallback exists. Fix: verify font loading or use circle-only layers. Files: `MapView.tsx`, `track-layer.ts`, `sensor-layer.ts`
+2. **Deploy to Cloud Run** — Merge dev→master triggers Cloud Build. Or manual `gcloud builds submit`.
+
+### MEDIUM — Feature completeness
+3. **Replay/timeline scrubbing** — Wire scrubber to `elapsedSec`/`durationSec`. Add `/api/replay/seek`. Files: `TimelinePanel.tsx`, `ui-store.ts`, new route
+4. **Ambiguity map markers** — Visualize unresolved groups. New `ambiguity-marker-layer.ts`
+5. **Per-sensor degraded indicators** — Show on individual sensor icons. Broadcast reg states via WS. Files: `sensor-layer.ts`, `live-engine.ts`
+6. **Integration tests** — Full pipeline: scenario → live-engine → validation assertions. Files: `tests/integration/`, `validation/src/runner.ts`
+7. **Missing API endpoints** — Replay seek, EO cue details, unresolved groups. Files: `apps/api/src/routes/`
+
+### LOW — Polish
+8. **Named scenarios** — Add remaining 6 of 8 planned. Files: `packages/scenario-library/`
+9. **TrackDetail enhancements** — Fusion mode, ID support, split history. Files: `TrackDetailPanel.tsx`
+10. **Playwright E2E** — Smoke browser test. New `tests/e2e/`
 
 ## Known Issues
 
@@ -44,8 +104,8 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 
 ### Deployment (ACTIVE)
 - Cloud Run service: `eloc2-820514480393.me-west1.run.app`
-- Cloud Build trigger is active — merging to master triggers automatic deploy
-- Manual deploy if needed:
+- Cloud Build trigger active — merging to master triggers auto deploy
+- Manual deploy:
   ```bash
   gcloud auth login
   git checkout master && git merge claude/eloc2-development-ElpmM
@@ -57,6 +117,7 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 ## Development
 - Package manager: pnpm (v9.15.0) with workspaces
 - Build: `pnpm build` (uses Turbo)
+- Test: `pnpm test` (146+ tests, all passing)
 - Dev branch: `claude/eloc2-development-ElpmM`
 - Dockerfile: 2-stage build, serves workstation static files from API on port 3001
 - Vite dev server on port 3000 proxies `/api` and `/ws` to 3001
@@ -66,3 +127,5 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 - Track status: tentative → confirmed (after 3 updates) → dropped (after 8 misses)
 - Colors: confirmed=#00cc44, tentative=#ffcc00, dropped=#ff3333
 - Sensor colors: radar=#4488ff, eo=#ff8800, c4isr=#aa44ff
+- Event-sourced: all state changes through EventStore
+- 3D honesty: bearing_only | candidate_3d | confirmed_3d — never overstate geometry
