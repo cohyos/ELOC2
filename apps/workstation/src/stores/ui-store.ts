@@ -2,6 +2,32 @@ import { create } from 'zustand';
 
 export type DetailView = 'track' | 'sensor' | 'none';
 
+export interface LayerVisibility {
+  tracks: boolean;
+  trackLabels: boolean;
+  trackEllipses: boolean;
+  sensors: boolean;
+  sensorLabels: boolean;
+  radarCoverage: boolean;
+  eoFor: boolean;
+  eoFov: boolean;
+  eoRays: boolean;
+  triangulation: boolean;
+}
+
+export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
+  tracks: true,
+  trackLabels: true,
+  trackEllipses: true,
+  sensors: true,
+  sensorLabels: true,
+  radarCoverage: true,
+  eoFor: true,
+  eoFov: true,
+  eoRays: true,
+  triangulation: true,
+};
+
 interface UiState {
   // Selection
   selectedTrackId: string | null;
@@ -11,6 +37,9 @@ interface UiState {
   // Panel visibility
   detailPanelOpen: boolean;
   timelinePanelOpen: boolean;
+
+  // Layer visibility
+  layerVisibility: LayerVisibility;
 
   // Replay
   replayPlaying: boolean;
@@ -28,6 +57,7 @@ interface UiState {
   selectSensor: (id: string | null) => void;
   toggleDetailPanel: () => void;
   toggleTimelinePanel: () => void;
+  toggleLayer: (layer: keyof LayerVisibility) => void;
   setReplayPlaying: (playing: boolean) => void;
   setReplaySpeed: (speed: number) => void;
   setReplayTime: (time: number) => void;
@@ -51,6 +81,7 @@ export const useUiStore = create<UiState>((set) => ({
   detailView: 'none',
   detailPanelOpen: true,
   timelinePanelOpen: true,
+  layerVisibility: { ...DEFAULT_LAYER_VISIBILITY },
   replayPlaying: false,
   replaySpeed: 1,
   replayTime: 0,
@@ -68,6 +99,11 @@ export const useUiStore = create<UiState>((set) => ({
 
   toggleTimelinePanel: () =>
     set((s) => ({ timelinePanelOpen: !s.timelinePanelOpen })),
+
+  toggleLayer: (layer) =>
+    set((s) => ({
+      layerVisibility: { ...s.layerVisibility, [layer]: !s.layerVisibility[layer] },
+    })),
 
   setReplayPlaying: (playing) => set({ replayPlaying: playing }),
   setReplaySpeed: (speed) => set({ replaySpeed: speed }),
