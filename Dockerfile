@@ -25,6 +25,10 @@ COPY apps/workstation/package.json       apps/workstation/
 
 RUN pnpm install --frozen-lockfile
 
+# Pass git revision for the UI version display
+ARG BUILD_REVISION=dev
+ENV BUILD_REVISION=${BUILD_REVISION}
+
 # Copy all source
 COPY packages/ packages/
 COPY apps/ apps/

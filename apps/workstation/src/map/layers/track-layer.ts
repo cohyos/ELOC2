@@ -116,12 +116,30 @@ function covarianceToEllipse(
   };
 }
 
+function isValidCoord(track: SystemTrack): boolean {
+  const { lat, lon } = track.state;
+  return (
+    typeof lat === 'number' && typeof lon === 'number' &&
+    Number.isFinite(lat) && Number.isFinite(lon) &&
+    lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180
+  );
+}
+
 export function updateTrackLayer(map: MaplibreMap, tracks: SystemTrack[]) {
   const source = map.getSource(SOURCE_ID);
   const ellipseSource = map.getSource(ELLIPSE_SOURCE_ID);
   if (!source || !ellipseSource) return;
 
-  const features: GeoJSON.Feature[] = tracks.map(track => ({
+  const validTracks = tracks.filter(isValidCoord);
+
+  if (validTracks.length !== tracks.length) {
+    console.warn(
+      `[track-layer] Filtered out ${tracks.length - validTracks.length} tracks with invalid coordinates`,
+      tracks.filter(t => !isValidCoord(t)).map(t => ({ id: t.systemTrackId, state: t.state })),
+    );
+  }
+
+  const features: GeoJSON.Feature[] = validTracks.map(track => ({
     type: 'Feature',
     properties: {
       id: track.systemTrackId,
@@ -136,7 +154,7 @@ export function updateTrackLayer(map: MaplibreMap, tracks: SystemTrack[]) {
     },
   }));
 
-  const ellipseFeatures: GeoJSON.Feature[] = tracks
+  const ellipseFeatures: GeoJSON.Feature[] = validTracks
     .filter(t => t.status !== 'dropped')
     .map(track =>
       covarianceToEllipse(
