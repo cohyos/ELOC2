@@ -3,12 +3,15 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useTrackStore } from '../stores/track-store';
 import { useSensorStore } from '../stores/sensor-store';
+import { useTaskStore } from '../stores/task-store';
 import { useUiStore } from '../stores/ui-store';
 import { initTrackLayer, updateTrackLayer, getTrackLayerId } from './layers/track-layer';
 import { initSensorLayer, updateSensorLayer, getSensorLayerId } from './layers/sensor-layer';
 import { initCoverageLayer, updateCoverageLayer } from './layers/coverage-layer';
 import { initEoRayLayer, updateEoRayLayer } from './layers/eo-ray-layer';
 import { initTriangulationLayer, updateTriangulationLayer } from './layers/triangulation-layer';
+import { initBearingLineLayer, updateBearingLineLayer, type BearingLine } from './layers/bearing-line-layer';
+import { initInvestigationRingLayer, updateInvestigationRingLayer } from './layers/investigation-ring-layer';
 import { DebugOverlay } from './DebugOverlay';
 import { LayerFilterPanel } from './LayerFilterPanel';
 import type { LayerVisibility } from '../stores/ui-store';
@@ -23,7 +26,9 @@ export function MapView() {
   const sensors = useSensorStore(s => s.sensors);
   const selectTrack = useUiStore(s => s.selectTrack);
   const selectSensor = useUiStore(s => s.selectSensor);
+  const eoTracks = useTaskStore(s => s.eoTracks);
   const layerVisibility = useUiStore(s => s.layerVisibility);
+  const trackStatusFilter = useUiStore(s => s.trackStatusFilter);
 
   // Initialize map
   useEffect(() => {
@@ -68,6 +73,8 @@ export function MapView() {
       try { initTriangulationLayer(map.current); } catch (e) { console.warn('Triangulation layer init failed:', e); }
       try { initEoRayLayer(map.current); } catch (e) { console.warn('EO ray layer init failed:', e); }
       try { initSensorLayer(map.current); } catch (e) { console.warn('Sensor layer init failed:', e); }
+      try { initInvestigationRingLayer(map.current); } catch (e) { console.warn('Investigation ring layer init failed:', e); }
+      try { initBearingLineLayer(map.current); } catch (e) { console.warn('Bearing line layer init failed:', e); }
       try { initTrackLayer(map.current); } catch (e) { console.warn('Track layer init failed:', e); }
 
       // Use setState to trigger re-render so data effects re-fire
@@ -113,9 +120,13 @@ export function MapView() {
   // Update track layer when tracks change OR when layers become ready
   useEffect(() => {
     if (!map.current || !layersReady) return;
-    updateTrackLayer(map.current, tracks);
-    updateTriangulationLayer(map.current, tracks, sensors);
-  }, [tracks, sensors, layersReady]);
+    const filteredTracks = tracks.filter(t =>
+      trackStatusFilter[t.status as keyof typeof trackStatusFilter] !== false
+    );
+    updateTrackLayer(map.current, filteredTracks);
+    updateTriangulationLayer(map.current, filteredTracks, sensors);
+    updateInvestigationRingLayer(map.current, filteredTracks);
+  }, [tracks, sensors, layersReady, trackStatusFilter]);
 
   // Update sensor layers when sensors change OR when layers become ready
   useEffect(() => {
@@ -124,6 +135,25 @@ export function MapView() {
     updateCoverageLayer(map.current, sensors);
     updateEoRayLayer(map.current, sensors);
   }, [sensors, layersReady]);
+
+  // Update bearing line layer from EO tracks
+  useEffect(() => {
+    if (!map.current || !layersReady) return;
+    const sensorMap = new Map(sensors.map(s => [s.sensorId, s]));
+    const bearingLines: BearingLine[] = eoTracks
+      .filter(t => t.bearing && sensorMap.has(t.sensorId))
+      .map(t => {
+        const sensor = sensorMap.get(t.sensorId)!;
+        return {
+          sensorId: t.sensorId,
+          azimuthDeg: t.bearing.azimuthDeg,
+          sensorLon: sensor.position.lon,
+          sensorLat: sensor.position.lat,
+          color: t.status === 'confirmed' ? '#00cc44' : '#ffaa33',
+        };
+      });
+    updateBearingLineLayer(map.current, bearingLines);
+  }, [eoTracks, sensors, layersReady]);
 
   // Sync MapLibre layer visibility with store
   useEffect(() => {
@@ -141,6 +171,7 @@ export function MapView() {
       ['eoFov', ['eo-fov-layer']],
       ['eoRays', ['eo-rays-layer']],
       ['triangulation', ['triangulation-rays-layer']],
+      ['bearingLines', ['bearing-lines-layer']],
     ];
 
     for (const [key, layerIds] of layerMap) {

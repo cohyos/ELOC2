@@ -4,6 +4,7 @@ import type { SystemTrack } from '@eloc2/domain';
 const SOURCE_ID = 'system-tracks';
 const LAYER_ID = 'system-tracks-layer';
 const LABEL_LAYER_ID = 'system-tracks-labels';
+const EO_BADGE_LAYER_ID = 'track-eo-badge';
 const ELLIPSE_SOURCE_ID = 'track-ellipses';
 const ELLIPSE_LAYER_ID = 'track-ellipses-layer';
 
@@ -19,6 +20,16 @@ function statusColor(status: string): string {
     case 'tentative': return '#ffcc00';
     case 'dropped': return '#ff3333';
     default: return '#888888';
+  }
+}
+
+function eoStatusColor(status: string): string {
+  switch (status) {
+    case 'in_progress': return '#4a9eff';
+    case 'confirmed': return '#00cc44';
+    case 'split_detected': return '#ff3333';
+    case 'no_support': return '#ff8800';
+    default: return 'transparent';
   }
 }
 
@@ -81,6 +92,21 @@ export function initTrackLayer(map: MaplibreMap) {
   } catch (e) {
     console.warn('[track-layer] Label layer failed (font issue?):', e);
   }
+
+  // EO investigation status badge — small dot offset to top-right of track circle
+  map.addLayer({
+    id: EO_BADGE_LAYER_ID,
+    type: 'circle',
+    source: SOURCE_ID,
+    filter: ['!=', ['get', 'eoStatus'], 'none'],
+    paint: {
+      'circle-radius': 4,
+      'circle-color': ['get', 'eoColor'],
+      'circle-stroke-width': 1,
+      'circle-stroke-color': '#000',
+      'circle-translate': [7, -7],
+    },
+  });
 
   console.log('[track-layer] Initialized successfully');
 }
@@ -167,6 +193,8 @@ export function updateTrackLayer(map: MaplibreMap, tracks: SystemTrack[]) {
       color: statusColor(track.status),
       status: track.status,
       confidence: track.confidence,
+      eoStatus: track.eoInvestigationStatus ?? 'none',
+      eoColor: eoStatusColor(track.eoInvestigationStatus ?? 'none'),
     },
     geometry: {
       type: 'Point',

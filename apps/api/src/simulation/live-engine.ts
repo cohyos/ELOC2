@@ -854,6 +854,31 @@ export class LiveEngine {
       ...t,
       lineage: t.lineage.length > 3 ? t.lineage.slice(-3) : t.lineage,
     }));
+    // Prepare lightweight active cues (strip covariance for payload size)
+    const lightCues = this.state.activeCues.map(c => ({
+      cueId: c.cueId,
+      systemTrackId: c.systemTrackId,
+      predictedState: c.predictedState,
+      uncertaintyGateDeg: c.uncertaintyGateDeg,
+      priority: c.priority,
+      validFrom: c.validFrom,
+      validTo: c.validTo,
+    }));
+
+    // Lightweight tasks — only active/recent ones
+    const lightTasks = this.state.tasks
+      .filter(t => t.status === 'executing' || t.status === 'proposed')
+      .map(t => ({
+        taskId: t.taskId,
+        cueId: t.cueId,
+        sensorId: t.sensorId,
+        systemTrackId: t.systemTrackId,
+        status: t.status,
+        scoreBreakdown: t.scoreBreakdown,
+        policyMode: t.policyMode,
+        createdAt: t.createdAt,
+      }));
+
     this.broadcast({
       type: 'rap.update',
       timestamp: Date.now(),
@@ -864,6 +889,17 @@ export class LiveEngine {
       tentativeCount: tracks.filter(t => t.status === 'tentative').length,
       tracks: lightTracks,
       sensors: this.state.sensors,
+      activeCues: lightCues,
+      tasks: lightTasks,
+      // Recent EO bearing observations (from EO tracks created this cycle)
+      eoTracks: this.state.eoTracks.slice(-20).map(t => ({
+        eoTrackId: t.eoTrackId,
+        sensorId: t.sensorId,
+        bearing: t.bearing,
+        imageQuality: t.imageQuality,
+        status: t.status,
+        associatedSystemTrackId: t.associatedSystemTrackId,
+      })),
     });
   }
 

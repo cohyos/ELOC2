@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type DetailView = 'track' | 'sensor' | 'none';
+export type DetailView = 'track' | 'sensor' | 'tasks' | 'none';
 
 export interface LayerVisibility {
   tracks: boolean;
@@ -13,6 +13,7 @@ export interface LayerVisibility {
   eoFov: boolean;
   eoRays: boolean;
   triangulation: boolean;
+  bearingLines: boolean;
 }
 
 export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
@@ -26,6 +27,7 @@ export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
   eoFov: true,
   eoRays: true,
   triangulation: true,
+  bearingLines: true,
 };
 
 interface UiState {
@@ -40,6 +42,9 @@ interface UiState {
 
   // Layer visibility
   layerVisibility: LayerVisibility;
+
+  // Track status filter (which statuses to show on map)
+  trackStatusFilter: { confirmed: boolean; tentative: boolean; dropped: boolean };
 
   // Replay
   replayPlaying: boolean;
@@ -58,6 +63,8 @@ interface UiState {
   toggleDetailPanel: () => void;
   toggleTimelinePanel: () => void;
   toggleLayer: (layer: keyof LayerVisibility) => void;
+  toggleTrackStatus: (status: 'confirmed' | 'tentative' | 'dropped') => void;
+  setDetailView: (view: DetailView) => void;
   setReplayPlaying: (playing: boolean) => void;
   setReplaySpeed: (speed: number) => void;
   setReplayTime: (time: number) => void;
@@ -82,6 +89,7 @@ export const useUiStore = create<UiState>((set) => ({
   detailPanelOpen: true,
   timelinePanelOpen: true,
   layerVisibility: { ...DEFAULT_LAYER_VISIBILITY },
+  trackStatusFilter: { confirmed: true, tentative: true, dropped: false },
   replayPlaying: false,
   replaySpeed: 1,
   replayTime: 0,
@@ -104,6 +112,14 @@ export const useUiStore = create<UiState>((set) => ({
     set((s) => ({
       layerVisibility: { ...s.layerVisibility, [layer]: !s.layerVisibility[layer] },
     })),
+
+  toggleTrackStatus: (status) =>
+    set((s) => ({
+      trackStatusFilter: { ...s.trackStatusFilter, [status]: !s.trackStatusFilter[status] },
+    })),
+
+  setDetailView: (view) =>
+    set({ detailView: view, detailPanelOpen: true }),
 
   setReplayPlaying: (playing) => set({ replayPlaying: playing }),
   setReplaySpeed: (speed) => set({ replaySpeed: speed }),

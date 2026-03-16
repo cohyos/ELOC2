@@ -32,6 +32,7 @@ const LAYER_GROUPS: Array<{
     label: 'EO',
     items: [
       { key: 'eoRays', label: 'EO gimbal rays', color: '#ff8800' },
+      { key: 'bearingLines', label: 'Bearing observations', color: '#ffaa33' },
       { key: 'triangulation', label: 'Triangulation rays', color: '#00cc44' },
     ],
   },

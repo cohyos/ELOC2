@@ -9,6 +9,7 @@ import { useTrackStore } from './stores/track-store';
 import { useSensorStore } from './stores/sensor-store';
 import { useTaskStore } from './stores/task-store';
 import { useUiStore } from './stores/ui-store';
+import { TaskPanel } from './task-panel/TaskPanel';
 
 // ---------------------------------------------------------------------------
 // Styles
@@ -155,6 +156,76 @@ const styles = {
 };
 
 // ---------------------------------------------------------------------------
+// Default Panel (shown when nothing is selected)
+// ---------------------------------------------------------------------------
+
+function DefaultPanel() {
+  const trackCount = useTrackStore(s => s.trackCount);
+  const confirmedCount = useTrackStore(s => s.confirmedCount);
+  const tentativeCount = useTrackStore(s => s.tentativeCount);
+  const sensors = useSensorStore(s => s.sensors);
+  const tasks = useTaskStore(s => s.tasks);
+  const selectView = useUiStore(s => s.setDetailView);
+
+  const radarCount = sensors.filter(s => s.sensorType === 'radar').length;
+  const eoCount = sensors.filter(s => s.sensorType === 'eo').length;
+  const activeTasks = tasks.filter(t => t.status === 'executing' || t.status === 'proposed').length;
+
+  return (
+    <div style={{ padding: '12px', color: '#e0e0e0', fontSize: '13px' }}>
+      <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#fff', margin: '0 0 16px' }}>
+        Overview
+      </h3>
+      <div style={{ marginBottom: '16px' }}>
+        <div style={{ fontSize: '11px', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', borderBottom: '1px solid #333', paddingBottom: '3px' }}>
+          Tracks
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+          <span style={{ color: '#888', fontSize: '12px' }}>Total</span>
+          <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{trackCount}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+          <span style={{ color: '#00cc44', fontSize: '12px' }}>Confirmed</span>
+          <span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#00cc44' }}>{confirmedCount}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+          <span style={{ color: '#ffcc00', fontSize: '12px' }}>Tentative</span>
+          <span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#ffcc00' }}>{tentativeCount}</span>
+        </div>
+      </div>
+      <div style={{ marginBottom: '16px' }}>
+        <div style={{ fontSize: '11px', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', borderBottom: '1px solid #333', paddingBottom: '3px' }}>
+          Sensors
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+          <span style={{ color: '#4488ff', fontSize: '12px' }}>Radar</span>
+          <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{radarCount}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+          <span style={{ color: '#ff8800', fontSize: '12px' }}>EO</span>
+          <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{eoCount}</span>
+        </div>
+      </div>
+      <div style={{ marginBottom: '16px' }}>
+        <div style={{ fontSize: '11px', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', borderBottom: '1px solid #333', paddingBottom: '3px' }}>
+          EO Tasking
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+          <span style={{ color: '#888', fontSize: '12px' }}>Active Tasks</span>
+          <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{activeTasks}</span>
+        </div>
+        <button
+          onClick={() => selectView('tasks')}
+          style={{ marginTop: '6px', background: '#333', color: '#aaa', border: 'none', padding: '4px 12px', borderRadius: '3px', cursor: 'pointer', fontSize: '11px', width: '100%' }}
+        >
+          View Tasks
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -168,6 +239,8 @@ export function App() {
   const trackCount = useTrackStore(s => s.trackCount);
   const confirmedCount = useTrackStore(s => s.confirmedCount);
   const tentativeCount = useTrackStore(s => s.tentativeCount);
+  const trackStatusFilter = useUiStore(s => s.trackStatusFilter);
+  const toggleTrackStatus = useUiStore(s => s.toggleTrackStatus);
 
   const fetchRap = useTrackStore(s => s.fetchRap);
   const fetchSensors = useSensorStore(s => s.fetchSensors);
@@ -263,7 +336,7 @@ export function App() {
     return () => clearInterval(interval);
   }, []);
 
-  const showDetail = detailPanelOpen && detailView !== 'none';
+  const showDetail = detailPanelOpen;
 
   const rootStyle: React.CSSProperties = {
     ...styles.root,
@@ -305,13 +378,28 @@ export function App() {
           </select>
         )}
 
-        {/* Track summary */}
+        {/* Track summary with filter toggles */}
         <div style={styles.trackSummary}>
-          <span style={styles.summaryBadge('#00cc44')}>
+          <span
+            style={{ ...styles.summaryBadge('#00cc44'), cursor: 'pointer', opacity: trackStatusFilter.confirmed ? 1 : 0.35 }}
+            onClick={() => toggleTrackStatus('confirmed')}
+            title="Toggle confirmed tracks"
+          >
             {confirmedCount} confirmed
           </span>
-          <span style={styles.summaryBadge('#ffcc00')}>
+          <span
+            style={{ ...styles.summaryBadge('#ffcc00'), cursor: 'pointer', opacity: trackStatusFilter.tentative ? 1 : 0.35 }}
+            onClick={() => toggleTrackStatus('tentative')}
+            title="Toggle tentative tracks"
+          >
             {tentativeCount} tentative
+          </span>
+          <span
+            style={{ ...styles.summaryBadge('#ff3333'), cursor: 'pointer', opacity: trackStatusFilter.dropped ? 1 : 0.35 }}
+            onClick={() => toggleTrackStatus('dropped')}
+            title="Toggle dropped tracks"
+          >
+            dropped
           </span>
           <span style={{ color: colors.textDim }}>
             {trackCount} total
@@ -352,6 +440,12 @@ export function App() {
         </div>
 
         <div style={styles.statusBar}>
+          <button
+            style={{ ...styles.toggleBtn, background: detailView === 'tasks' ? '#4a9eff' : '#333', color: detailView === 'tasks' ? '#fff' : '#aaa' }}
+            onClick={() => useUiStore.getState().setDetailView('tasks')}
+          >
+            Tasks
+          </button>
           <button style={styles.toggleBtn} onClick={toggleDetailPanel}>
             {showDetail ? 'Hide Panel' : 'Show Panel'}
           </button>
@@ -377,6 +471,8 @@ export function App() {
         <div style={styles.detailPanel}>
           {detailView === 'track' && <TrackDetailPanel />}
           {detailView === 'sensor' && <SensorDetailPanel />}
+          {detailView === 'tasks' && <TaskPanel />}
+          {detailView === 'none' && <DefaultPanel />}
         </div>
       )}
 

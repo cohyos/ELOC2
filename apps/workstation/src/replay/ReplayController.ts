@@ -1,6 +1,7 @@
 import { useUiStore } from '../stores/ui-store';
 import { useTrackStore } from '../stores/track-store';
 import { useSensorStore } from '../stores/sensor-store';
+import { useTaskStore } from '../stores/task-store';
 
 /**
  * ReplayController manages the WebSocket connection for real-time event streaming
@@ -63,6 +64,15 @@ export class ReplayController {
       }
       if (data.sensors && Array.isArray(data.sensors)) {
         useSensorStore.getState().setSensors(data.sensors);
+      }
+      if (data.tasks && Array.isArray(data.tasks)) {
+        useTaskStore.getState().setTasks(data.tasks);
+      }
+      if (data.activeCues && Array.isArray(data.activeCues)) {
+        useTaskStore.getState().setActiveCues(data.activeCues);
+      }
+      if (data.eoTracks && Array.isArray(data.eoTracks)) {
+        useTaskStore.getState().setEoTracks(data.eoTracks);
       }
     } else if (data.type === 'event') {
       // Individual event from simulation

@@ -3,9 +3,29 @@ import type { Task } from '@eloc2/domain';
 
 interface TaskStoreState {
   tasks: Task[];
+  eoTracks: Array<{
+    eoTrackId: string;
+    sensorId: string;
+    bearing: { azimuthDeg: number; elevationDeg: number; timestamp: number; sensorId: string };
+    imageQuality: number;
+    status: string;
+    associatedSystemTrackId: string | undefined;
+  }>;
+  activeCues: Array<{
+    cueId: string;
+    systemTrackId: string;
+    predictedState: { lat: number; lon: number; alt: number };
+    uncertaintyGateDeg: number;
+    priority: number;
+    validFrom: number;
+    validTo: number;
+  }>;
   loading: boolean;
   error: string | null;
 
+  setTasks: (tasks: Task[]) => void;
+  setActiveCues: (cues: TaskStoreState['activeCues']) => void;
+  setEoTracks: (eoTracks: TaskStoreState['eoTracks']) => void;
   fetchTasks: () => Promise<void>;
   approveTask: (taskId: string) => Promise<void>;
   rejectTask: (taskId: string) => Promise<void>;
@@ -13,8 +33,14 @@ interface TaskStoreState {
 
 export const useTaskStore = create<TaskStoreState>((set, get) => ({
   tasks: [],
+  activeCues: [],
+  eoTracks: [],
   loading: false,
   error: null,
+
+  setTasks: (tasks) => set({ tasks }),
+  setActiveCues: (cues) => set({ activeCues: cues }),
+  setEoTracks: (eoTracks) => set({ eoTracks }),
 
   fetchTasks: async () => {
     set({ loading: true, error: null });
