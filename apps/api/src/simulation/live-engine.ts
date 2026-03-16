@@ -182,6 +182,64 @@ export class LiveEngine {
       const s = getScenarioById(scenarioId);
       if (s) this.scenario = s;
     }
+    this.resetInternalState();
+    this.pushEvent('scenario.reset', 'Scenario reset');
+  }
+
+  /**
+   * Seek to a specific simulation time (in seconds).
+   * Replays the scenario from the start up to the target time,
+   * then pauses at that point. Resumes playing if wasRunning.
+   */
+  seek(toSec: number): void {
+    const wasRunning = this.state.running;
+    this.pause();
+
+    // Clamp to valid range
+    toSec = Math.max(0, Math.min(toSec, this.scenario.durationSec));
+
+    // Reset all state and replay up to target time
+    this.resetInternalState();
+
+    // Fast-forward by stepping 1 second at a time
+    for (let t = 0; t < toSec; t++) {
+      const result = this.runner.step(1);
+      this.state.elapsedSec = result.currentTimeSec;
+
+      // Process all events synchronously (no batching during seek)
+      for (const simEvent of result.events) {
+        this.processSimEvent(simEvent);
+      }
+
+      // Update sensor status
+      this.updateSensorStatus(result.activeFaults);
+      this.state.tracks = this.trackManager.getAllTracks().filter(tr => tr.status !== 'dropped');
+      this.processAccumulatedBearings();
+      this.expireStaleEoCues();
+      this.computeGeometryEstimates();
+
+      if (result.currentTimeSec - this.lastEoTaskingSec >= EO_TASKING_INTERVAL_SEC) {
+        this.runEoTaskingCycle();
+        this.lastEoTaskingSec = result.currentTimeSec;
+      }
+    }
+
+    // Sync Phase 5 state to LiveState
+    this.state.eoTracks = [...this.eoTracksById.values()];
+    this.state.unresolvedGroups = [...this.unresolvedGroupsById.values()].filter(g => g.status === 'active');
+    this.state.activeCues = [...this.activeCuesById.values()];
+
+    // Broadcast current state
+    this.broadcastRap();
+    this.pushEvent('scenario.seeked', `Seeked to T+${toSec}s`);
+
+    // Resume if was running
+    if (wasRunning) {
+      this.start();
+    }
+  }
+
+  private resetInternalState(): void {
     this.runner = new ScenarioRunner(this.scenario);
     this.trackManager = new TrackManager({ confirmAfter: 3, dropAfterMisses: 8 });
     this.registrationService = new RegistrationHealthService();
@@ -197,7 +255,6 @@ export class LiveEngine {
     this.eventEnvelopes = [];
 
     this.state = this.buildInitialState();
-    this.pushEvent('scenario.reset', 'Scenario reset');
   }
 
   addWsClient(client: WsClient): void {

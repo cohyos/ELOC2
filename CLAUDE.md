@@ -78,15 +78,15 @@ The `Knowledge_Base_and_Agents_instructions/` folder contains **15 foundational 
 2. **Deploy to Cloud Run** — Merge dev→master triggers Cloud Build. Or manual `gcloud builds submit`.
 
 ### MEDIUM — Feature completeness
-3. **Replay/timeline scrubbing** — Wire scrubber to `elapsedSec`/`durationSec`. Add `/api/replay/seek`. Files: `TimelinePanel.tsx`, `ui-store.ts`, new route
-4. **Ambiguity map markers** — Visualize unresolved groups. New `ambiguity-marker-layer.ts`
-5. **Per-sensor degraded indicators** — Show on individual sensor icons. Broadcast reg states via WS. Files: `sensor-layer.ts`, `live-engine.ts`
+3. ~~**Replay/timeline scrubbing**~~ — **DONE**: `/api/replay/seek` endpoint, click+drag scrubber, keyboard shortcuts (Space=play/pause, Left/Right=seek +-10s)
+4. ~~**Ambiguity map markers**~~ — **DONE**: `ambiguity-marker-layer.ts` renders pink rings on split_detected tracks
+5. ~~**Per-sensor degraded indicators**~~ — **DONE**: Yellow/red degraded ring on sensor icons based on registration state
 6. **Integration tests** — Full pipeline: scenario → live-engine → validation assertions. Files: `tests/integration/`, `validation/src/runner.ts`
-7. **Missing API endpoints** — Replay seek, EO cue details, unresolved groups. Files: `apps/api/src/routes/`
+7. ~~**Missing API endpoints**~~ — **DONE**: Replay seek, EO cues, unresolved groups, EO tracks all served via routes + WS
 
 ### LOW — Polish
-8. **Named scenarios** — Add remaining 6 of 8 planned. Files: `packages/scenario-library/`
-9. **TrackDetail enhancements** — Fusion mode, ID support, split history. Files: `TrackDetailPanel.tsx`
+8. ~~**Named scenarios**~~ — **DONE**: All 9 scenarios implemented (8 simple + 1 complex central-israel)
+9. ~~**TrackDetail enhancements**~~ — **DONE**: Shows fusion mode, geometry, identification support, lineage
 10. **Playwright E2E** — Smoke browser test. New `tests/e2e/`
 
 ## Known Issues

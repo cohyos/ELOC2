@@ -176,6 +176,40 @@ export function App() {
   // WebSocket connection
   useEffect(() => { replayController.connect(); return () => replayController.disconnect(); }, []);
 
+  // Keyboard shortcuts for playback control
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input/select
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      switch (e.key) {
+        case ' ':
+          e.preventDefault();
+          handleStartPause();
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          fetch('/api/replay/seek', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ timeSec: Math.max(0, simElapsed - 10) }),
+          }).catch(() => {});
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          fetch('/api/replay/seek', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ timeSec: simElapsed + 10 }),
+          }).catch(() => {});
+          break;
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [handleStartPause, simElapsed]);
+
   // Periodic refresh (every 10s)
   useEffect(() => {
     const interval = setInterval(() => { fetchRap(); fetchSensors(); }, 10000);

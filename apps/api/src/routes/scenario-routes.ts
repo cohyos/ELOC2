@@ -59,4 +59,15 @@ export async function scenarioRoutes(app: FastifyInstance) {
     const s = engine.getState();
     return { ok: true, scenarioId: s.scenarioId };
   });
+
+  // POST /api/replay/seek — Seek to a specific simulation time
+  app.post<{ Body: { timeSec: number } }>('/api/replay/seek', async (request, reply) => {
+    const { timeSec } = request.body;
+    if (typeof timeSec !== 'number' || timeSec < 0) {
+      return reply.code(400).send({ error: 'timeSec must be a non-negative number' });
+    }
+    engine.seek(timeSec);
+    const s = engine.getState();
+    return { ok: true, elapsedSec: s.elapsedSec, running: s.running };
+  });
 }

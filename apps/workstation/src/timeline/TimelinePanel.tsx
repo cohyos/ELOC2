@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { useUiStore, type EventLogEntry } from '../stores/ui-store';
 import { useTaskStore } from '../stores/task-store';
 
@@ -84,17 +84,32 @@ const styles = {
   } as React.CSSProperties),
   scrubber: {
     background: '#333',
-    height: '4px',
-    borderRadius: '2px',
+    height: '6px',
+    borderRadius: '3px',
     marginBottom: '6px',
     position: 'relative' as const,
     flexShrink: 0,
+    cursor: 'pointer',
   },
   scrubberFill: (pct: number) => ({
     background: '#4a9eff',
     height: '100%',
     width: `${pct}%`,
-    borderRadius: '2px',
+    borderRadius: '3px',
+    pointerEvents: 'none' as const,
+  } as React.CSSProperties),
+  scrubberThumb: (pct: number) => ({
+    position: 'absolute' as const,
+    left: `${pct}%`,
+    top: '50%',
+    transform: 'translate(-50%, -50%)',
+    width: '12px',
+    height: '12px',
+    borderRadius: '50%',
+    background: '#4a9eff',
+    border: '2px solid #fff',
+    boxShadow: '0 0 4px rgba(0,0,0,0.5)',
+    pointerEvents: 'none' as const,
   } as React.CSSProperties),
   eventList: {
     flex: 1,
@@ -185,6 +200,36 @@ export function TimelinePanel() {
     }).catch(() => {});
   };
 
+  const scrubberRef = useRef<HTMLDivElement>(null);
+  const [isSeeking, setIsSeeking] = useState(false);
+
+  const seekToPosition = useCallback((clientX: number) => {
+    const bar = scrubberRef.current;
+    if (!bar || scenarioDurationSec <= 0) return;
+    const rect = bar.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const timeSec = Math.round(pct * scenarioDurationSec);
+    fetch('/api/replay/seek', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ timeSec }),
+    }).catch(() => {});
+  }, [scenarioDurationSec]);
+
+  const handleScrubberMouseDown = useCallback((e: React.MouseEvent) => {
+    setIsSeeking(true);
+    seekToPosition(e.clientX);
+
+    const handleMouseMove = (ev: MouseEvent) => seekToPosition(ev.clientX);
+    const handleMouseUp = () => {
+      setIsSeeking(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [seekToPosition]);
+
   return (
     <div style={styles.container}>
       {/* Controls row */}
@@ -241,8 +286,14 @@ export function TimelinePanel() {
         <span style={{ fontSize: '10px', color: '#888', fontFamily: '"Fira Code", monospace', width: '50px' }}>
           T+{Math.floor(replayTime / 60)}:{String(Math.floor(replayTime % 60)).padStart(2, '0')}
         </span>
-        <div style={{ ...styles.scrubber, flex: 1, marginBottom: 0 }}>
-          <div style={styles.scrubberFill(scenarioDurationSec > 0 ? (replayTime / scenarioDurationSec) * 100 : 0)} />
+        <div
+          ref={scrubberRef}
+          style={{ ...styles.scrubber, flex: 1, marginBottom: 0, height: '10px', padding: '3px 0' }}
+          onMouseDown={handleScrubberMouseDown}
+          title="Click or drag to seek"
+        >
+          <div style={{ ...styles.scrubberFill(scenarioDurationSec > 0 ? (replayTime / scenarioDurationSec) * 100 : 0), height: '4px', position: 'relative', top: '50%', transform: 'translateY(-50%)' }} />
+          <div style={styles.scrubberThumb(scenarioDurationSec > 0 ? (replayTime / scenarioDurationSec) * 100 : 0)} />
         </div>
         <span style={{ fontSize: '10px', color: '#666', fontFamily: '"Fira Code", monospace', width: '50px', textAlign: 'right' }}>
           {Math.floor(scenarioDurationSec / 60)}:{String(Math.floor(scenarioDurationSec % 60)).padStart(2, '0')}
