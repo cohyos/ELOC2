@@ -269,7 +269,10 @@ export class LiveEngine {
   private processSimEvent(simEvent: SimulationEvent): void {
     switch (simEvent.type) {
       case 'observation': {
-        const obs = simEvent.data as SourceObservation;
+        // RadarObservation wraps SourceObservation in .observation;
+        // unwrap if needed so the fusion pipeline gets the right shape.
+        const raw = simEvent.data as any;
+        const obs: SourceObservation = raw?.observation ?? raw;
         if (!obs || !obs.position) break;
 
         // Get registration health for this sensor
