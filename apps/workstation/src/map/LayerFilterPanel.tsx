@@ -85,12 +85,15 @@ const groupLabelStyle: React.CSSProperties = {
   letterSpacing: '0.5px',
 };
 
+const isMobileView = () => window.innerWidth < 768;
+
 const itemStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: '6px',
-  padding: '3px 10px',
+  padding: isMobileView() ? '6px 10px' : '3px 10px',
   cursor: 'pointer',
+  touchAction: 'manipulation',
 };
 
 const checkboxStyle = (checked: boolean, color: string): React.CSSProperties => ({
@@ -104,7 +107,7 @@ const checkboxStyle = (checked: boolean, color: string): React.CSSProperties => 
 });
 
 export function LayerFilterPanel() {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(() => window.innerWidth >= 768);
   const layerVisibility = useUiStore(s => s.layerVisibility);
   const toggleLayer = useUiStore(s => s.toggleLayer);
 

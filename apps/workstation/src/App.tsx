@@ -12,7 +12,7 @@ import { useUiStore } from './stores/ui-store';
 import { TaskPanel } from './task-panel/TaskPanel';
 
 // ---------------------------------------------------------------------------
-// Styles
+// Colors
 // ---------------------------------------------------------------------------
 
 const colors = {
@@ -25,135 +25,19 @@ const colors = {
   accent: '#4a9eff',
 };
 
-const styles = {
-  root: {
-    display: 'grid',
-    height: '100vh',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    background: colors.bg,
-    color: colors.text,
-    overflow: 'hidden',
-  } as React.CSSProperties,
+// ---------------------------------------------------------------------------
+// Mobile detection hook
+// ---------------------------------------------------------------------------
 
-  // PC layout: header | (map + detail) | timeline
-  pcLayout: {
-    gridTemplateRows: '40px 1fr auto',
-    gridTemplateColumns: '1fr 380px',
-    gridTemplateAreas: `
-      "header header"
-      "map detail"
-      "timeline timeline"
-    `,
-  } as React.CSSProperties,
-
-  // PC layout when detail panel is closed
-  pcLayoutNoDetail: {
-    gridTemplateRows: '40px 1fr auto',
-    gridTemplateColumns: '1fr',
-    gridTemplateAreas: `
-      "header"
-      "map"
-      "timeline"
-    `,
-  } as React.CSSProperties,
-
-  header: {
-    gridArea: 'header',
-    background: colors.headerBg,
-    display: 'flex',
-    alignItems: 'center',
-    padding: '0 16px',
-    gap: '12px',
-    fontSize: '13px',
-    borderBottom: `1px solid ${colors.border}`,
-    zIndex: 10,
-  } as React.CSSProperties,
-
-  logo: {
-    fontSize: '15px',
-    fontWeight: 700,
-    color: '#fff',
-    letterSpacing: '1px',
-  } as React.CSSProperties,
-
-  statusBar: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    marginLeft: 'auto',
-    fontSize: '11px',
-    color: colors.textDim,
-  } as React.CSSProperties,
-
-  statusDot: (connected: boolean) => ({
-    display: 'inline-block',
-    width: '6px',
-    height: '6px',
-    borderRadius: '50%',
-    background: connected ? '#00cc44' : '#ff3333',
-    marginRight: '4px',
-  } as React.CSSProperties),
-
-  mapArea: {
-    gridArea: 'map',
-    position: 'relative' as const,
-    overflow: 'hidden',
-  } as React.CSSProperties,
-
-  detailPanel: {
-    gridArea: 'detail',
-    background: colors.panelBg,
-    borderLeft: `1px solid ${colors.border}`,
-    overflowY: 'auto' as const,
-    overflowX: 'hidden' as const,
-  } as React.CSSProperties,
-
-  timelineArea: (open: boolean) => ({
-    gridArea: 'timeline',
-    background: colors.headerBg,
-    borderTop: `1px solid ${colors.border}`,
-    height: open ? '150px' : '32px',
-    transition: 'height 0.2s ease',
-    overflow: 'hidden',
-  } as React.CSSProperties),
-
-  timelineToggle: {
-    position: 'absolute' as const,
-    right: '8px',
-    top: '4px',
-    background: 'none',
-    border: 'none',
-    color: '#666',
-    cursor: 'pointer',
-    fontSize: '10px',
-  } as React.CSSProperties,
-
-  trackSummary: {
-    display: 'flex',
-    gap: '16px',
-    alignItems: 'center',
-    fontSize: '11px',
-  } as React.CSSProperties,
-
-  summaryBadge: (color: string) => ({
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '4px',
-    color,
-    fontWeight: 600,
-    fontSize: '11px',
-  } as React.CSSProperties),
-
-  toggleBtn: {
-    background: '#333',
-    color: '#aaa',
-    border: 'none',
-    padding: '2px 8px',
-    borderRadius: '3px',
-    cursor: 'pointer',
-    fontSize: '11px',
-  } as React.CSSProperties,
-};
+function useIsMobile(breakpoint = 768): boolean {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < breakpoint);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < breakpoint);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [breakpoint]);
+  return isMobile;
+}
 
 // ---------------------------------------------------------------------------
 // Default Panel (shown when nothing is selected)
@@ -171,65 +55,54 @@ function DefaultPanel() {
   const eoCount = sensors.filter(s => s.sensorType === 'eo').length;
   const activeTasks = tasks.filter(t => t.status === 'executing' || t.status === 'proposed').length;
 
+  const sectionTitle: React.CSSProperties = { fontSize: '11px', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', borderBottom: '1px solid #333', paddingBottom: '3px' };
+  const row: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', padding: '2px 0' };
+
   return (
     <div style={{ padding: '12px', color: '#e0e0e0', fontSize: '13px' }}>
-      <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#fff', margin: '0 0 16px' }}>
-        Overview
-      </h3>
+      <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#fff', margin: '0 0 16px' }}>Overview</h3>
       <div style={{ marginBottom: '16px' }}>
-        <div style={{ fontSize: '11px', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', borderBottom: '1px solid #333', paddingBottom: '3px' }}>
-          Tracks
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-          <span style={{ color: '#888', fontSize: '12px' }}>Total</span>
-          <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{trackCount}</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-          <span style={{ color: '#00cc44', fontSize: '12px' }}>Confirmed</span>
-          <span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#00cc44' }}>{confirmedCount}</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-          <span style={{ color: '#ffcc00', fontSize: '12px' }}>Tentative</span>
-          <span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#ffcc00' }}>{tentativeCount}</span>
-        </div>
+        <div style={sectionTitle}>Tracks</div>
+        <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Total</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{trackCount}</span></div>
+        <div style={row}><span style={{ color: '#00cc44', fontSize: '12px' }}>Confirmed</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#00cc44' }}>{confirmedCount}</span></div>
+        <div style={row}><span style={{ color: '#ffcc00', fontSize: '12px' }}>Tentative</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#ffcc00' }}>{tentativeCount}</span></div>
       </div>
       <div style={{ marginBottom: '16px' }}>
-        <div style={{ fontSize: '11px', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', borderBottom: '1px solid #333', paddingBottom: '3px' }}>
-          Sensors
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-          <span style={{ color: '#4488ff', fontSize: '12px' }}>Radar</span>
-          <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{radarCount}</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-          <span style={{ color: '#ff8800', fontSize: '12px' }}>EO</span>
-          <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{eoCount}</span>
-        </div>
+        <div style={sectionTitle}>Sensors</div>
+        <div style={row}><span style={{ color: '#4488ff', fontSize: '12px' }}>Radar</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{radarCount}</span></div>
+        <div style={row}><span style={{ color: '#ff8800', fontSize: '12px' }}>EO</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{eoCount}</span></div>
       </div>
       <div style={{ marginBottom: '16px' }}>
-        <div style={{ fontSize: '11px', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', borderBottom: '1px solid #333', paddingBottom: '3px' }}>
-          EO Tasking
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-          <span style={{ color: '#888', fontSize: '12px' }}>Active Tasks</span>
-          <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{activeTasks}</span>
-        </div>
-        <button
-          onClick={() => selectView('tasks')}
-          style={{ marginTop: '6px', background: '#333', color: '#aaa', border: 'none', padding: '4px 12px', borderRadius: '3px', cursor: 'pointer', fontSize: '11px', width: '100%' }}
-        >
-          View Tasks
-        </button>
+        <div style={sectionTitle}>EO Tasking</div>
+        <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Active Tasks</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{activeTasks}</span></div>
+        <button onClick={() => selectView('tasks')} style={{ marginTop: '6px', background: '#333', color: '#aaa', border: 'none', padding: '4px 12px', borderRadius: '3px', cursor: 'pointer', fontSize: '11px', width: '100%' }}>View Tasks</button>
       </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
+// Shared button style
+// ---------------------------------------------------------------------------
+
+const btnBase = (isMobile: boolean): React.CSSProperties => ({
+  background: '#333',
+  color: '#aaa',
+  border: 'none',
+  padding: isMobile ? '6px 10px' : '2px 8px',
+  borderRadius: '3px',
+  cursor: 'pointer',
+  fontSize: isMobile ? '12px' : '11px',
+  touchAction: 'manipulation',
+  WebkitTapHighlightColor: 'transparent',
+});
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 export function App() {
+  const isMobile = useIsMobile();
   const detailView = useUiStore(s => s.detailView);
   const detailPanelOpen = useUiStore(s => s.detailPanelOpen);
   const timelinePanelOpen = useUiStore(s => s.timelinePanelOpen);
@@ -254,10 +127,7 @@ export function App() {
 
   // Fetch available scenarios on mount
   useEffect(() => {
-    fetch('/api/scenarios')
-      .then(r => r.json())
-      .then(data => setAvailableScenarios(data))
-      .catch(() => {});
+    fetch('/api/scenarios').then(r => r.json()).then(data => setAvailableScenarios(data)).catch(() => {});
   }, []);
 
   // Poll scenario status
@@ -282,30 +152,16 @@ export function App() {
   }, [simRunning]);
 
   const handleSpeed = useCallback(async (speed: number) => {
-    await fetch('/api/scenario/speed', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ speed }),
-    });
+    await fetch('/api/scenario/speed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ speed }) });
   }, []);
 
   const handleReset = useCallback(async () => {
-    await fetch('/api/scenario/reset', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    });
+    await fetch('/api/scenario/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
   }, []);
 
   const handleScenarioChange = useCallback(async (scenarioId: string) => {
-    await fetch('/api/scenario/reset', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scenarioId }),
-    });
-    fetchRap();
-    fetchSensors();
-    fetchTasks();
+    await fetch('/api/scenario/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scenarioId }) });
+    fetchRap(); fetchSensors(); fetchTasks();
   }, [fetchRap, fetchSensors, fetchTasks]);
 
   const formatTime = (sec: number) => {
@@ -315,160 +171,97 @@ export function App() {
   };
 
   // Initial data fetch
-  useEffect(() => {
-    fetchRap();
-    fetchSensors();
-    fetchTasks();
-  }, []);
+  useEffect(() => { fetchRap(); fetchSensors(); fetchTasks(); }, []);
 
   // WebSocket connection
-  useEffect(() => {
-    replayController.connect();
-    return () => replayController.disconnect();
-  }, []);
+  useEffect(() => { replayController.connect(); return () => replayController.disconnect(); }, []);
 
   // Periodic refresh (every 10s)
   useEffect(() => {
-    const interval = setInterval(() => {
-      fetchRap();
-      fetchSensors();
-    }, 10000);
+    const interval = setInterval(() => { fetchRap(); fetchSensors(); }, 10000);
     return () => clearInterval(interval);
   }, []);
 
-  const showDetail = detailPanelOpen;
+  if (isMobile) return <MobileLayout />;
 
-  const rootStyle: React.CSSProperties = {
-    ...styles.root,
-    ...(showDetail ? styles.pcLayout : styles.pcLayoutNoDetail),
-  };
+  // ─── Desktop Layout ───────────────────────────────────────────────────
+  const showDetail = detailPanelOpen;
+  const btn = btnBase(false);
 
   return (
-    <div style={rootStyle}>
+    <div style={{
+      display: 'grid',
+      height: '100vh',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      background: colors.bg,
+      color: colors.text,
+      overflow: 'hidden',
+      gridTemplateRows: '40px 1fr auto',
+      gridTemplateColumns: showDetail ? '1fr 380px' : '1fr',
+      gridTemplateAreas: showDetail
+        ? `"header header" "map detail" "timeline timeline"`
+        : `"header" "map" "timeline"`,
+    }}>
       {/* Header */}
-      <header style={styles.header}>
-        <span style={styles.logo}>ELOC2</span>
-        <span style={{ color: colors.textDim, fontSize: '12px' }}>
-          EO C2 Air Defense Demonstrator
-        </span>
-        <span style={{ color: colors.accent, fontSize: '10px', fontFamily: 'monospace' }}>
-          rev:{__APP_REVISION__}
-        </span>
+      <header style={{ gridArea: 'header', background: colors.headerBg, display: 'flex', alignItems: 'center', padding: '0 16px', gap: '12px', fontSize: '13px', borderBottom: `1px solid ${colors.border}`, zIndex: 10 }}>
+        <span style={{ fontSize: '15px', fontWeight: 700, color: '#fff', letterSpacing: '1px' }}>ELOC2</span>
+        <span style={{ color: colors.textDim, fontSize: '12px' }}>EO C2 Air Defense Demonstrator</span>
+        <span style={{ color: colors.accent, fontSize: '10px', fontFamily: 'monospace' }}>rev:{__APP_REVISION__}</span>
 
         {/* Scenario selector */}
         {availableScenarios.length > 0 && (
-          <select
-            value={currentScenarioId}
-            onChange={(e) => handleScenarioChange(e.target.value)}
-            title="Select scenario"
-            style={{
-              background: '#333',
-              color: '#e0e0e0',
-              border: '1px solid #555',
-              borderRadius: '3px',
-              padding: '2px 6px',
-              fontSize: '11px',
-              cursor: 'pointer',
-              maxWidth: '180px',
-            }}
-          >
-            {availableScenarios.map(s => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
+          <select value={currentScenarioId} onChange={(e) => handleScenarioChange(e.target.value)} title="Select scenario"
+            style={{ background: '#333', color: '#e0e0e0', border: '1px solid #555', borderRadius: '3px', padding: '2px 6px', fontSize: '11px', cursor: 'pointer', maxWidth: '180px' }}>
+            {availableScenarios.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         )}
 
         {/* Track summary with filter toggles */}
-        <div style={styles.trackSummary}>
-          <span
-            style={{ ...styles.summaryBadge('#00cc44'), cursor: 'pointer', opacity: trackStatusFilter.confirmed ? 1 : 0.35 }}
-            onClick={() => toggleTrackStatus('confirmed')}
-            title="Toggle confirmed tracks"
-          >
-            {confirmedCount} confirmed
-          </span>
-          <span
-            style={{ ...styles.summaryBadge('#ffcc00'), cursor: 'pointer', opacity: trackStatusFilter.tentative ? 1 : 0.35 }}
-            onClick={() => toggleTrackStatus('tentative')}
-            title="Toggle tentative tracks"
-          >
-            {tentativeCount} tentative
-          </span>
-          <span
-            style={{ ...styles.summaryBadge('#ff3333'), cursor: 'pointer', opacity: trackStatusFilter.dropped ? 1 : 0.35 }}
-            onClick={() => toggleTrackStatus('dropped')}
-            title="Toggle dropped tracks"
-          >
-            dropped
-          </span>
-          <span style={{ color: colors.textDim }}>
-            {trackCount} total
-          </span>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', fontSize: '11px' }}>
+          {[
+            { status: 'confirmed' as const, color: '#00cc44', count: confirmedCount, label: 'confirmed' },
+            { status: 'tentative' as const, color: '#ffcc00', count: tentativeCount, label: 'tentative' },
+            { status: 'dropped' as const, color: '#ff3333', count: undefined, label: 'dropped' },
+          ].map(f => (
+            <span key={f.status} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: f.color, fontWeight: 600, fontSize: '11px', cursor: 'pointer', opacity: trackStatusFilter[f.status] ? 1 : 0.35 }}
+              onClick={() => toggleTrackStatus(f.status)} title={`Toggle ${f.label} tracks`}>
+              {f.count !== undefined ? `${f.count} ` : ''}{f.label}
+            </span>
+          ))}
+          <span style={{ color: colors.textDim }}>{trackCount} total</span>
         </div>
 
         {/* Scenario controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '8px' }}>
-          <button
-            style={{
-              ...styles.toggleBtn,
-              background: simRunning ? '#cc3300' : '#00aa44',
-              color: '#fff',
-              fontWeight: 600,
-              padding: '3px 12px',
-            }}
-            onClick={handleStartPause}
-          >
+          <button style={{ ...btn, background: simRunning ? '#cc3300' : '#00aa44', color: '#fff', fontWeight: 600, padding: '3px 12px' }} onClick={handleStartPause}>
             {simRunning ? 'Pause' : 'Start'}
           </button>
-          <button style={styles.toggleBtn} onClick={handleReset}>Reset</button>
+          <button style={btn} onClick={handleReset}>Reset</button>
           {[1, 2, 5, 10].map(s => (
-            <button
-              key={s}
-              style={{
-                ...styles.toggleBtn,
-                background: simSpeed === s ? '#4a9eff' : '#333',
-                color: simSpeed === s ? '#fff' : '#aaa',
-              }}
-              onClick={() => handleSpeed(s)}
-            >
-              {s}x
-            </button>
+            <button key={s} style={{ ...btn, background: simSpeed === s ? '#4a9eff' : '#333', color: simSpeed === s ? '#fff' : '#aaa' }} onClick={() => handleSpeed(s)}>{s}x</button>
           ))}
-          <span style={{ fontSize: '11px', color: '#aaa', fontFamily: 'monospace', minWidth: '50px' }}>
-            T+{formatTime(simElapsed)}
-          </span>
+          <span style={{ fontSize: '11px', color: '#aaa', fontFamily: 'monospace', minWidth: '50px' }}>T+{formatTime(simElapsed)}</span>
         </div>
 
-        <div style={styles.statusBar}>
-          <button
-            style={{ ...styles.toggleBtn, background: detailView === 'tasks' ? '#4a9eff' : '#333', color: detailView === 'tasks' ? '#fff' : '#aaa' }}
-            onClick={() => useUiStore.getState().setDetailView('tasks')}
-          >
-            Tasks
-          </button>
-          <button style={styles.toggleBtn} onClick={toggleDetailPanel}>
-            {showDetail ? 'Hide Panel' : 'Show Panel'}
-          </button>
-          <button style={styles.toggleBtn} onClick={toggleTimelinePanel}>
-            {timelinePanelOpen ? 'Hide Timeline' : 'Show Timeline'}
-          </button>
-          <span>
-            <span style={styles.statusDot(wsConnected)} />
-            {wsConnected ? 'Connected' : 'Disconnected'}
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginLeft: 'auto', fontSize: '11px', color: colors.textDim }}>
+          <button style={{ ...btn, background: detailView === 'tasks' ? '#4a9eff' : '#333', color: detailView === 'tasks' ? '#fff' : '#aaa' }}
+            onClick={() => useUiStore.getState().setDetailView('tasks')}>Tasks</button>
+          <button style={btn} onClick={toggleDetailPanel}>{showDetail ? 'Hide Panel' : 'Show Panel'}</button>
+          <button style={btn} onClick={toggleTimelinePanel}>{timelinePanelOpen ? 'Hide Timeline' : 'Show Timeline'}</button>
+          <span><span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: wsConnected ? '#00cc44' : '#ff3333', marginRight: '4px' }} />{wsConnected ? 'Connected' : 'Disconnected'}</span>
           <span style={{ fontSize: '10px', opacity: 0.5 }}>v0.2.0</span>
         </div>
       </header>
 
       {/* Map */}
-      <div style={styles.mapArea}>
+      <div style={{ gridArea: 'map', position: 'relative', overflow: 'hidden' }}>
         <DegradedModeOverlay />
         <MapView />
       </div>
 
       {/* Detail Panel */}
       {showDetail && (
-        <div style={styles.detailPanel}>
+        <div style={{ gridArea: 'detail', background: colors.panelBg, borderLeft: `1px solid ${colors.border}`, overflowY: 'auto', overflowX: 'hidden' }}>
           {detailView === 'track' && <TrackDetailPanel />}
           {detailView === 'sensor' && <SensorDetailPanel />}
           {detailView === 'tasks' && <TaskPanel />}
@@ -477,14 +270,257 @@ export function App() {
       )}
 
       {/* Timeline */}
-      <div style={styles.timelineArea(timelinePanelOpen)}>
-        {timelinePanelOpen ? (
-          <TimelinePanel />
-        ) : (
-          <div style={{ padding: '6px 16px', fontSize: '12px', color: '#666' }}>
-            Timeline (collapsed) — click Show Timeline to expand
+      <div style={{ gridArea: 'timeline', background: colors.headerBg, borderTop: `1px solid ${colors.border}`, height: timelinePanelOpen ? '150px' : '32px', transition: 'height 0.2s ease', overflow: 'hidden' }}>
+        {timelinePanelOpen ? <TimelinePanel /> : (
+          <div style={{ padding: '6px 16px', fontSize: '12px', color: '#666' }}>Timeline (collapsed) — click Show Timeline to expand</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Mobile Layout
+// ---------------------------------------------------------------------------
+
+function MobileLayout() {
+  const detailView = useUiStore(s => s.detailView);
+  const detailPanelOpen = useUiStore(s => s.detailPanelOpen);
+  const toggleDetailPanel = useUiStore(s => s.toggleDetailPanel);
+  const wsConnected = useUiStore(s => s.wsConnected);
+  const trackCount = useTrackStore(s => s.trackCount);
+  const confirmedCount = useTrackStore(s => s.confirmedCount);
+  const tentativeCount = useTrackStore(s => s.tentativeCount);
+  const trackStatusFilter = useUiStore(s => s.trackStatusFilter);
+  const toggleTrackStatus = useUiStore(s => s.toggleTrackStatus);
+  const setDetailView = useUiStore(s => s.setDetailView);
+  const timelinePanelOpen = useUiStore(s => s.timelinePanelOpen);
+  const toggleTimelinePanel = useUiStore(s => s.toggleTimelinePanel);
+
+  const [simRunning, setSimRunning] = useState(false);
+  const [simSpeed, setSimSpeed] = useState(1);
+  const [simElapsed, setSimElapsed] = useState(0);
+  const [currentScenarioId, setCurrentScenarioId] = useState('');
+  const [availableScenarios, setAvailableScenarios] = useState<Array<{ id: string; name: string; description: string }>>([]);
+  const [showControls, setShowControls] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/scenarios').then(r => r.json()).then(data => setAvailableScenarios(data)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const poll = setInterval(async () => {
+      try {
+        const res = await fetch('/api/scenario/status');
+        if (res.ok) {
+          const data = await res.json();
+          setSimRunning(data.running);
+          setSimSpeed(data.speed);
+          setSimElapsed(data.elapsedSec);
+          setCurrentScenarioId(data.scenarioId || '');
+        }
+      } catch { /* ignore */ }
+    }, 1000);
+    return () => clearInterval(poll);
+  }, []);
+
+  const handleStartPause = useCallback(async () => {
+    await fetch(simRunning ? '/api/scenario/pause' : '/api/scenario/start', { method: 'POST' });
+  }, [simRunning]);
+
+  const handleSpeed = useCallback(async (speed: number) => {
+    await fetch('/api/scenario/speed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ speed }) });
+  }, []);
+
+  const handleReset = useCallback(async () => {
+    await fetch('/api/scenario/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+  }, []);
+
+  const handleScenarioChange = useCallback(async (scenarioId: string) => {
+    await fetch('/api/scenario/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scenarioId }) });
+  }, []);
+
+  const formatTime = (sec: number) => `${Math.floor(sec / 60)}:${Math.floor(sec % 60).toString().padStart(2, '0')}`;
+
+  const btn = btnBase(true);
+
+  const showPanel = detailPanelOpen && (detailView !== 'none' || true);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: colors.bg, color: colors.text, fontFamily: 'system-ui, -apple-system, sans-serif', overflow: 'hidden' }}>
+
+      {/* ── Mobile Header ─────────────────────────────────────── */}
+      <header style={{ background: colors.headerBg, borderBottom: `1px solid ${colors.border}`, padding: '6px 10px', flexShrink: 0, zIndex: 10 }}>
+        {/* Row 1: Logo + status + controls toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+          <span style={{ fontSize: '14px', fontWeight: 700, color: '#fff', letterSpacing: '1px' }}>ELOC2</span>
+          <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: wsConnected ? '#00cc44' : '#ff3333' }} />
+          <span style={{ fontSize: '11px', color: '#aaa', fontFamily: 'monospace' }}>T+{formatTime(simElapsed)}</span>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
+            <button style={{ ...btn, background: simRunning ? '#cc3300' : '#00aa44', color: '#fff', fontWeight: 600 }} onClick={handleStartPause}>
+              {simRunning ? 'Pause' : 'Start'}
+            </button>
+            <button style={btn} onClick={() => setShowControls(!showControls)}>
+              {showControls ? 'Less' : 'More'}
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2: Track filter badges */}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '11px' }}>
+          {[
+            { status: 'confirmed' as const, color: '#00cc44', count: confirmedCount },
+            { status: 'tentative' as const, color: '#ffcc00', count: tentativeCount },
+            { status: 'dropped' as const, color: '#ff3333', count: undefined },
+          ].map(f => (
+            <span key={f.status}
+              onClick={() => toggleTrackStatus(f.status)}
+              style={{ color: f.color, fontWeight: 600, opacity: trackStatusFilter[f.status] ? 1 : 0.3, cursor: 'pointer', padding: '2px 6px', borderRadius: '3px', background: trackStatusFilter[f.status] ? f.color + '15' : 'transparent', touchAction: 'manipulation' }}>
+              {f.count !== undefined ? `${f.count} ` : ''}{f.status}
+            </span>
+          ))}
+          <span style={{ color: colors.textDim, fontSize: '10px' }}>{trackCount} total</span>
+        </div>
+
+        {/* Row 3: Expanded controls (shown when 'More' tapped) */}
+        {showControls && (
+          <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {/* Speed + reset */}
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button style={btn} onClick={handleReset}>Reset</button>
+              {[1, 2, 5, 10].map(s => (
+                <button key={s} style={{ ...btn, background: simSpeed === s ? '#4a9eff' : '#333', color: simSpeed === s ? '#fff' : '#aaa', minWidth: '36px' }} onClick={() => handleSpeed(s)}>{s}x</button>
+              ))}
+            </div>
+            {/* Scenario selector */}
+            {availableScenarios.length > 0 && (
+              <select value={currentScenarioId} onChange={(e) => handleScenarioChange(e.target.value)}
+                style={{ background: '#333', color: '#e0e0e0', border: '1px solid #555', borderRadius: '3px', padding: '6px 8px', fontSize: '12px', width: '100%' }}>
+                {availableScenarios.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            )}
           </div>
         )}
+      </header>
+
+      {/* ── Map (fills remaining space) ───────────────────────── */}
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+        <DegradedModeOverlay />
+        <MapView />
+
+        {/* Detail panel as overlay on mobile */}
+        {showPanel && (
+          <div style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            maxHeight: '55vh',
+            background: colors.panelBg,
+            borderTop: `2px solid ${colors.border}`,
+            overflowY: 'auto',
+            zIndex: 20,
+            borderRadius: '12px 12px 0 0',
+            boxShadow: '0 -4px 20px rgba(0,0,0,0.5)',
+          }}>
+            {/* Drag handle + close */}
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '8px', position: 'sticky', top: 0, background: colors.panelBg, zIndex: 1 }}>
+              <div style={{ width: '32px', height: '4px', borderRadius: '2px', background: '#555' }} />
+              <button onClick={toggleDetailPanel} style={{ position: 'absolute', right: '10px', top: '6px', background: 'none', border: 'none', color: '#888', fontSize: '18px', cursor: 'pointer', padding: '4px 8px', touchAction: 'manipulation' }}>
+                &times;
+              </button>
+            </div>
+            {detailView === 'track' && <TrackDetailPanel />}
+            {detailView === 'sensor' && <SensorDetailPanel />}
+            {detailView === 'tasks' && <TaskPanel />}
+            {detailView === 'none' && <DefaultPanel />}
+          </div>
+        )}
+
+        {/* Timeline overlay on mobile */}
+        {timelinePanelOpen && (
+          <div style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: '200px',
+            background: colors.headerBg,
+            borderTop: `2px solid ${colors.border}`,
+            zIndex: 25,
+            borderRadius: '12px 12px 0 0',
+            boxShadow: '0 -4px 20px rgba(0,0,0,0.5)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '6px', position: 'sticky', top: 0 }}>
+              <div style={{ width: '32px', height: '4px', borderRadius: '2px', background: '#555' }} />
+              <button onClick={toggleTimelinePanel} style={{ position: 'absolute', right: '10px', top: '4px', background: 'none', border: 'none', color: '#888', fontSize: '18px', cursor: 'pointer', padding: '4px 8px', touchAction: 'manipulation' }}>
+                &times;
+              </button>
+            </div>
+            <TimelinePanel />
+          </div>
+        )}
+      </div>
+
+      {/* ── Bottom Toolbar ────────────────────────────────────── */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-around',
+        background: colors.headerBg,
+        borderTop: `1px solid ${colors.border}`,
+        padding: '6px 0',
+        paddingBottom: 'max(6px, env(safe-area-inset-bottom))',
+        flexShrink: 0,
+        zIndex: 30,
+      }}>
+        {[
+          { label: 'Overview', view: 'none' as const, icon: '\u2302' },
+          { label: 'Tasks', view: 'tasks' as const, icon: '\u2611' },
+          { label: 'Timeline', view: '__timeline__' as const, icon: '\u23F1' },
+        ].map(item => {
+          const isTimeline = item.view === '__timeline__';
+          const active = isTimeline ? timelinePanelOpen : (detailPanelOpen && detailView === item.view);
+          return (
+            <button
+              key={item.label}
+              onClick={() => {
+                if (isTimeline) {
+                  toggleTimelinePanel();
+                  // Close detail panel if timeline opens
+                  if (!timelinePanelOpen && detailPanelOpen) {
+                    toggleDetailPanel();
+                  }
+                } else {
+                  // Close timeline if detail opens
+                  if (timelinePanelOpen) toggleTimelinePanel();
+                  if (detailPanelOpen && detailView === item.view) {
+                    toggleDetailPanel();
+                  } else {
+                    setDetailView(item.view);
+                  }
+                }
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: active ? colors.accent : '#666',
+                fontSize: '10px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '2px',
+                cursor: 'pointer',
+                padding: '4px 16px',
+                touchAction: 'manipulation',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+            >
+              <span style={{ fontSize: '18px' }}>{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

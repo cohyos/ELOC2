@@ -44,8 +44,8 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 
 ### Deployment (ACTIVE)
 - Cloud Run service: `eloc2-820514480393.me-west1.run.app`
-- Cloud Build trigger was deleted/missing — needs recreation or manual deploy
-- Deploy manually:
+- Cloud Build trigger is active — merging to master triggers automatic deploy
+- Manual deploy if needed:
   ```bash
   gcloud auth login
   git checkout master && git merge claude/eloc2-development-ElpmM
