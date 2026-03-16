@@ -170,7 +170,7 @@ export function MapView() {
       ['tracks', ['system-tracks-layer']],
       ['trackLabels', ['system-tracks-labels']],
       ['trackEllipses', ['track-ellipses-layer']],
-      ['sensors', ['sensors-layer']],
+      ['sensors', ['sensors-layer', 'sensors-degraded']],
       ['sensorLabels', ['sensors-labels']],
       ['radarCoverage', ['radar-coverage-layer']],
       ['eoFor', ['eo-for-layer']],
@@ -219,6 +219,10 @@ export function MapView() {
         tracks={tracks}
         sensors={sensors}
         layersReady={layersReady}
+        showTracks={layerVisibility.tracks}
+        showTrackLabels={layerVisibility.trackLabels}
+        showSensors={layerVisibility.sensors}
+        showSensorLabels={layerVisibility.sensorLabels}
       />
     </div>
   );

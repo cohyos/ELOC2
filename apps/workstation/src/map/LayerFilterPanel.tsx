@@ -112,6 +112,21 @@ export function LayerFilterPanel() {
   const layerVisibility = useUiStore(s => s.layerVisibility);
   const toggleLayer = useUiStore(s => s.toggleLayer);
 
+  const allKeys = LAYER_GROUPS.flatMap(g => g.items.map(i => i.key));
+  const allOn = allKeys.every(k => layerVisibility[k]);
+  const allOff = allKeys.every(k => !layerVisibility[k]);
+
+  const handleToggleAll = () => {
+    const store = useUiStore.getState();
+    // If all on or some on → turn all off.  If all off → turn all on.
+    const targetValue = allOff;
+    const next = { ...store.layerVisibility } as any;
+    for (const k of allKeys) {
+      next[k] = targetValue;
+    }
+    useUiStore.setState({ layerVisibility: next });
+  };
+
   if (!expanded) {
     return (
       <div style={collapsedStyle} onClick={() => setExpanded(true)}>
@@ -127,6 +142,16 @@ export function LayerFilterPanel() {
         <span style={{ fontSize: '10px', color: '#555' }}>&#x25B2;</span>
       </div>
       <div style={{ padding: '4px 0 6px' }}>
+        {/* Master on/off toggle */}
+        <div
+          style={{ ...itemStyle, borderBottom: '1px solid #2a2a3e', paddingBottom: '6px', marginBottom: '2px' }}
+          onClick={handleToggleAll}
+        >
+          <div style={checkboxStyle(!allOff, '#4a9eff')} />
+          <span style={{ fontWeight: 600, opacity: allOff ? 0.5 : 1 }}>
+            {allOff ? 'Show all' : 'Hide all'}
+          </span>
+        </div>
         {LAYER_GROUPS.map(group => (
           <div key={group.label}>
             <div style={groupLabelStyle}>{group.label}</div>

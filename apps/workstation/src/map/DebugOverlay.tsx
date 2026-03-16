@@ -35,9 +35,13 @@ interface DebugOverlayProps {
   tracks: SystemTrack[];
   sensors: SensorState[];
   layersReady: boolean;
+  showTracks?: boolean;
+  showTrackLabels?: boolean;
+  showSensors?: boolean;
+  showSensorLabels?: boolean;
 }
 
-export function DebugOverlay({ map, tracks, sensors, layersReady }: DebugOverlayProps) {
+export function DebugOverlay({ map, tracks, sensors, layersReady, showTracks = true, showTrackLabels = true, showSensors = true, showSensorLabels = true }: DebugOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<number>(0);
 
@@ -48,62 +52,75 @@ export function DebugOverlay({ map, tracks, sensors, layersReady }: DebugOverlay
     // Clear previous markers
     container.innerHTML = '';
 
+    if (!showSensors && !showSensorLabels && !showTracks && !showTrackLabels) return;
+
     // Draw sensors as squares
     for (const sensor of sensors) {
+      if (!showSensors && !showSensorLabels) continue;
       const { lon, lat } = sensor.position;
       const px = map.project([lon, lat]);
       const color = sensorColor(sensor.sensorType);
 
-      const el = document.createElement('div');
-      el.style.cssText = `
-        position:absolute; left:${px.x - 7}px; top:${px.y - 7}px;
-        width:14px; height:14px; background:${color};
-        border:2px solid #000; z-index:20; pointer-events:none;
-      `;
-      el.title = `${sensor.sensorId} (${sensor.sensorType})`;
-      container.appendChild(el);
+      if (showSensors) {
+        const el = document.createElement('div');
+        el.style.cssText = `
+          position:absolute; left:${px.x - 7}px; top:${px.y - 7}px;
+          width:14px; height:14px; background:${color};
+          border:2px solid #000; z-index:20; pointer-events:none;
+        `;
+        el.title = `${sensor.sensorId} (${sensor.sensorType})`;
+        container.appendChild(el);
+      }
 
       // Label
-      const lbl = document.createElement('div');
-      lbl.style.cssText = `
-        position:absolute; left:${px.x + 10}px; top:${px.y - 8}px;
-        font-size:10px; color:${color}; white-space:nowrap;
-        text-shadow:0 0 3px #000, 0 0 3px #000; z-index:21;
-        pointer-events:none; font-family:monospace; font-weight:bold;
-      `;
-      lbl.textContent = sensor.sensorId;
-      container.appendChild(lbl);
+      if (showSensorLabels) {
+        const lbl = document.createElement('div');
+        lbl.style.cssText = `
+          position:absolute; left:${px.x + 10}px; top:${px.y - 8}px;
+          font-size:10px; color:${color}; white-space:nowrap;
+          text-shadow:0 0 3px #000, 0 0 3px #000; z-index:21;
+          pointer-events:none; font-family:monospace; font-weight:bold;
+        `;
+        lbl.textContent = sensor.sensorId;
+        container.appendChild(lbl);
+      }
     }
 
     // Draw tracks as circles
     for (const track of tracks) {
+      if (!showTracks && !showTrackLabels) continue;
+
       const { lon, lat } = track.state;
       if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
 
       const px = map.project([lon, lat]);
       const color = statusColor(track.status);
 
-      const el = document.createElement('div');
-      el.style.cssText = `
-        position:absolute; left:${px.x - 6}px; top:${px.y - 6}px;
-        width:12px; height:12px; border-radius:50%; background:${color};
-        border:2px solid #fff; z-index:22; pointer-events:none;
-      `;
-      el.title = `${track.systemTrackId} (${track.status}) ${lat.toFixed(4)},${lon.toFixed(4)}`;
-      container.appendChild(el);
+      if (showTracks) {
+        const el = document.createElement('div');
+        el.style.cssText = `
+          position:absolute; left:${px.x - 6}px; top:${px.y - 6}px;
+          width:12px; height:12px; border-radius:50%; background:${color};
+          border:2px solid #fff; z-index:22; pointer-events:none;
+        `;
+        el.title = `${track.systemTrackId} (${track.status}) ${lat.toFixed(4)},${lon.toFixed(4)}`;
+        container.appendChild(el);
+      }
 
       // Label
-      const lbl = document.createElement('div');
-      lbl.style.cssText = `
-        position:absolute; left:${px.x + 9}px; top:${px.y - 7}px;
-        font-size:9px; color:#fff; white-space:nowrap;
-        text-shadow:0 0 3px #000, 0 0 3px #000; z-index:23;
-        pointer-events:none; font-family:monospace;
-      `;
-      lbl.textContent = track.systemTrackId;
-      container.appendChild(lbl);
+      if (showTrackLabels) {
+        const lbl = document.createElement('div');
+        lbl.style.cssText = `
+          position:absolute; left:${px.x + 9}px; top:${px.y - 7}px;
+          font-size:9px; color:#fff; white-space:nowrap;
+          text-shadow:0 0 3px #000, 0 0 3px #000; z-index:23;
+          pointer-events:none; font-family:monospace;
+        `;
+        lbl.textContent = track.systemTrackId;
+        container.appendChild(lbl);
+      }
     }
-  }, [map, tracks, sensors]);
+  }, [map, tracks, sensors, showTracks, showTrackLabels, showSensors, showSensorLabels]);
 
   // Re-render on map move/zoom
   useEffect(() => {

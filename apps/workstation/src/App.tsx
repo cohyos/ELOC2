@@ -244,8 +244,15 @@ export function App() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginLeft: 'auto', fontSize: '11px', color: colors.textDim }}>
-          <button style={{ ...btn, background: detailView === 'tasks' ? '#4a9eff' : '#333', color: detailView === 'tasks' ? '#fff' : '#aaa' }}
-            onClick={() => useUiStore.getState().setDetailView('tasks')}>Tasks</button>
+          <button style={{ ...btn, background: detailView === 'tasks' && detailPanelOpen ? '#4a9eff' : '#333', color: detailView === 'tasks' && detailPanelOpen ? '#fff' : '#aaa' }}
+            onClick={() => {
+              const store = useUiStore.getState();
+              if (store.detailView === 'tasks' && store.detailPanelOpen) {
+                store.toggleDetailPanel();
+              } else {
+                store.setDetailView('tasks');
+              }
+            }}>Tasks</button>
           <button style={btn} onClick={toggleDetailPanel}>{showDetail ? 'Hide Panel' : 'Show Panel'}</button>
           <button style={btn} onClick={toggleTimelinePanel}>{timelinePanelOpen ? 'Hide Timeline' : 'Show Timeline'}</button>
           <span><span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: wsConnected ? '#00cc44' : '#ff3333', marginRight: '4px' }} />{wsConnected ? 'Connected' : 'Disconnected'}</span>
