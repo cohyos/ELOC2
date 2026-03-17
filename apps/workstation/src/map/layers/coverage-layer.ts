@@ -87,7 +87,19 @@ export function initCoverageLayer(map: MaplibreMap) {
     source: RADAR_COV_SOURCE,
     paint: {
       'fill-color': '#4488ff',
-      'fill-opacity': 0.06,
+      'fill-opacity': 0.08,
+    },
+  });
+  // Radar coverage outline for visibility
+  map.addLayer({
+    id: 'radar-coverage-outline',
+    type: 'line',
+    source: RADAR_COV_SOURCE,
+    paint: {
+      'line-color': '#4488ff',
+      'line-opacity': 0.35,
+      'line-width': 1.5,
+      'line-dasharray': [6, 4],
     },
   });
 
@@ -102,8 +114,8 @@ export function initCoverageLayer(map: MaplibreMap) {
     source: EO_FOR_SOURCE,
     paint: {
       'line-color': '#ff8800',
-      'line-opacity': 0.3,
-      'line-width': 1,
+      'line-opacity': 0.5,
+      'line-width': 1.5,
       'line-dasharray': [4, 4],
     },
   });
@@ -119,7 +131,7 @@ export function initCoverageLayer(map: MaplibreMap) {
     source: EO_FOV_SOURCE,
     paint: {
       'fill-color': '#ff8800',
-      'fill-opacity': 0.15,
+      'fill-opacity': 0.25,
     },
   });
 }
@@ -138,6 +150,7 @@ export function updateCoverageLayer(map: MaplibreMap, sensors: SensorState[]) {
     if (!sensor.online) continue;
     const { lon, lat } = sensor.position;
     const cov = sensor.coverage;
+    if (!cov || !Number.isFinite(cov.maxRangeM) || cov.maxRangeM <= 0) continue;
 
     if (sensor.sensorType === 'radar') {
       radarFeatures.push({

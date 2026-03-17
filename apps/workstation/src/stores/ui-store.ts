@@ -19,10 +19,10 @@ export interface LayerVisibility {
 
 export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
   tracks: true,
-  trackLabels: true,
+  trackLabels: false,
   trackEllipses: true,
   sensors: true,
-  sensorLabels: true,
+  sensorLabels: false,
   radarCoverage: true,
   eoFor: true,
   eoFov: true,

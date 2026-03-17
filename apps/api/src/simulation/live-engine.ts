@@ -167,6 +167,9 @@ export class LiveEngine {
   private trackManager: TrackManager;
   private registrationService: RegistrationHealthService;
   private state: LiveState;
+  /** Throttle broadcastRap: minimum ms between broadcasts */
+  private lastBroadcastTime = 0;
+  private static readonly MIN_BROADCAST_INTERVAL_MS = 250;
   private timer: ReturnType<typeof setInterval> | null = null;
   private wsClients = new Set<WsClient>();
 
@@ -206,6 +209,89 @@ export class LiveEngine {
 
   getState(): LiveState {
     return this.state;
+  }
+
+  /** Build a full snapshot payload identical to broadcastRap() format. */
+  getFullSnapshot(): Record<string, unknown> {
+    const tracks = this.state.tracks;
+    const lightTracks = tracks.map(t => ({
+      ...t,
+      lineage: t.lineage.length > 3 ? t.lineage.slice(-3) : t.lineage,
+    }));
+    const lightCues = this.state.activeCues.map(c => ({
+      cueId: c.cueId,
+      systemTrackId: c.systemTrackId,
+      predictedState: c.predictedState,
+      uncertaintyGateDeg: c.uncertaintyGateDeg,
+      priority: c.priority,
+      validFrom: c.validFrom,
+      validTo: c.validTo,
+    }));
+    const lightTasks = this.state.tasks
+      .filter(t => t.status === 'executing' || t.status === 'proposed')
+      .map(t => ({
+        taskId: t.taskId,
+        cueId: t.cueId,
+        sensorId: t.sensorId,
+        systemTrackId: t.systemTrackId,
+        status: t.status,
+        scoreBreakdown: t.scoreBreakdown,
+        policyMode: t.policyMode,
+        createdAt: t.createdAt,
+      }));
+    return {
+      type: 'rap.snapshot',
+      timestamp: Date.now(),
+      simTimeSec: this.state.elapsedSec,
+      scenarioId: this.scenario.id,
+      running: this.state.running,
+      speed: this.state.speed,
+      trackCount: tracks.length,
+      confirmedCount: tracks.filter(t => t.status === 'confirmed').length,
+      tentativeCount: tracks.filter(t => t.status === 'tentative').length,
+      tracks: lightTracks,
+      sensors: this.state.sensors,
+      activeCues: lightCues,
+      tasks: lightTasks,
+      eoTracks: this.state.eoTracks.slice(-20).map(t => ({
+        eoTrackId: t.eoTrackId,
+        sensorId: t.sensorId,
+        bearing: t.bearing,
+        imageQuality: t.imageQuality,
+        status: t.status,
+        associatedSystemTrackId: t.associatedSystemTrackId,
+        identificationSupport: t.identificationSupport,
+      })),
+      geometryEstimates: [...this.state.geometryEstimates.entries()].map(([trackId, est]) => ({
+        trackId,
+        estimateId: est.estimateId,
+        position3D: est.position3D,
+        quality: est.quality,
+        classification: est.classification,
+        intersectionAngleDeg: est.intersectionAngleDeg,
+        timeAlignmentQualityMs: est.timeAlignmentQualityMs,
+        bearingNoiseDeg: est.bearingNoiseDeg,
+        eoTrackIds: est.eoTrackIds,
+      })),
+      registrationStates: this.state.registrationStates.map(r => ({
+        sensorId: r.sensorId,
+        spatialQuality: r.spatialQuality,
+        timingQuality: r.timingQuality,
+        fusionSafe: r.fusionSafe,
+        azimuthBiasDeg: r.spatialBias?.azimuthBiasDeg ?? 0,
+        elevationBiasDeg: r.spatialBias?.elevationBiasDeg ?? 0,
+        clockOffsetMs: r.clockBias?.offsetMs ?? 0,
+      })),
+      unresolvedGroups: this.state.unresolvedGroups.map(g => ({
+        groupId: g.groupId,
+        eoTrackIds: g.eoTrackIds,
+        status: g.status,
+        parentCueId: g.parentCueId,
+        reason: g.reason,
+      })),
+      fusionModes: Object.fromEntries(this.fusionModePerSensor),
+      investigationSummaries: this.getActiveInvestigations(),
+    };
   }
 
   // ── Investigation Parameters API ─────────────────────────────────────
@@ -408,8 +494,8 @@ export class LiveEngine {
     this.state.unresolvedGroups = [...this.unresolvedGroupsById.values()].filter(g => g.status === 'active');
     this.state.activeCues = [...this.activeCuesById.values()];
 
-    // Broadcast current state
-    this.broadcastRap();
+    // Broadcast current state (force: user-initiated seek)
+    this.broadcastRap(true);
     this.pushEvent('scenario.seeked', `Seeked to T+${toSec}s`);
 
     // Resume if was running
@@ -465,11 +551,11 @@ export class LiveEngine {
           endTime: this.state.elapsedSec,
         },
       });
-      this.broadcastRap();
+      this.broadcastRap(true);
     }, intervalMs);
 
-    // Broadcast the updated state immediately
-    this.broadcastRap();
+    // Broadcast the updated state immediately (force: user-initiated injection)
+    this.broadcastRap(true);
 
     return injectionId;
   }
@@ -1625,7 +1711,14 @@ export class LiveEngine {
     });
   }
 
-  private broadcastRap(): void {
+  private broadcastRap(force = false): void {
+    // Throttle: at high speeds, cap broadcasts to ~4/sec (250ms interval)
+    const now = Date.now();
+    if (!force && this.state.speed > 2 && (now - this.lastBroadcastTime) < LiveEngine.MIN_BROADCAST_INTERVAL_MS) {
+      return;
+    }
+    this.lastBroadcastTime = now;
+
     const tracks = this.state.tracks;
     // Strip lineage from broadcast to reduce WS payload size
     // (lineage can grow to hundreds of entries per track)

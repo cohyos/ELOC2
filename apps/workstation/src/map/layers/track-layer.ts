@@ -148,6 +148,29 @@ function covarianceToEllipse(
   };
 }
 
+/**
+ * Generate a short label for a track.
+ * Format: <type-prefix><number> [<id-type>]
+ * e.g. "R1", "E2 hostile", "T3"
+ * Extracts the numeric portion from systemTrackId (e.g., "ST-003-abc" → "3").
+ */
+function shortLabel(track: SystemTrack): string {
+  // Determine prefix from primary source type
+  const id = track.systemTrackId as string;
+  // Extract number from ID pattern like "ST-001-..." or just use index
+  const numMatch = id.match(/(\d+)/);
+  const num = numMatch ? parseInt(numMatch[1], 10) : 0;
+  // Prefix: first source sensor type or fallback to 'T'
+  const prefix = 'T';
+  let label = `${prefix}${num}`;
+  // Append short identification type if available
+  const idSupport = (track as any).identificationSupport;
+  if (idSupport && idSupport !== 'unknown' && idSupport !== 'none') {
+    label += ` ${idSupport}`;
+  }
+  return label;
+}
+
 function isValidCoord(track: SystemTrack): boolean {
   const { lat, lon } = track.state;
   return (
@@ -189,7 +212,7 @@ export function updateTrackLayer(map: MaplibreMap, tracks: SystemTrack[], select
     type: 'Feature',
     properties: {
       id: track.systemTrackId,
-      label: track.systemTrackId,
+      label: shortLabel(track),
       color: statusColor(track.status),
       status: track.status,
       confidence: track.confidence,

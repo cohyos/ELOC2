@@ -134,11 +134,14 @@ export function updateSensorLayer(
       ? (reg.spatialQuality === 'degraded' || reg.spatialQuality === 'unsafe' ||
          reg.timingQuality === 'degraded' || reg.timingQuality === 'unsafe')
       : false;
+    // Short label: type prefix + number, e.g. "R1", "E2", "C1"
+    const typePrefix = sensor.sensorType === 'radar' ? 'R' : sensor.sensorType === 'eo' ? 'E' : 'C';
+    const idNum = (sensor.sensorId as string).match(/(\d+)/)?.[1] ?? '?';
     return {
       type: 'Feature',
       properties: {
         id: sensor.sensorId,
-        label: sensor.sensorId,
+        label: `${typePrefix}${idNum}`,
         color: sensor.online ? sensorColor(sensor.sensorType) : '#555555',
         shape: sensorShape(sensor.sensorType),
         sensorType: sensor.sensorType,

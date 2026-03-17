@@ -321,12 +321,12 @@ export function MapView() {
     const m = map.current;
 
     const layerMap: Array<[keyof LayerVisibility, string[]]> = [
-      ['tracks', ['system-tracks-layer']],
+      ['tracks', ['system-tracks-layer', 'track-eo-badge', 'investigation-rings-layer', 'investigation-rings-outer']],
       ['trackLabels', ['system-tracks-labels']],
       ['trackEllipses', ['track-ellipses-layer']],
-      ['sensors', ['sensors-layer', 'sensors-degraded']],
+      ['sensors', ['sensors-layer', 'sensors-degraded', 'sensors-highlight-ring']],
       ['sensorLabels', ['sensors-labels']],
-      ['radarCoverage', ['radar-coverage-layer']],
+      ['radarCoverage', ['radar-coverage-layer', 'radar-coverage-outline']],
       ['eoFor', ['eo-for-layer']],
       ['eoFov', ['eo-fov-layer']],
       ['eoRays', ['eo-rays-layer']],
@@ -411,10 +411,10 @@ export function MapView() {
     }
   }, [spawnTargetPosition]);
 
-  // Expose map instance as state so DebugOverlay can use it
+  // DebugOverlay: only show when ?debug=1 URL param is set
+  const showDebugOverlay = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
   const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
 
-  // Sync ref → state when map loads
   useEffect(() => {
     if (layersReady && map.current) {
       setMapInstance(map.current);
@@ -432,16 +432,18 @@ export function MapView() {
         }}
       />
       <LayerFilterPanel />
-      <DebugOverlay
-        map={mapInstance}
-        tracks={tracks}
-        sensors={sensors}
-        layersReady={layersReady}
-        showTracks={layerVisibility.tracks}
-        showTrackLabels={layerVisibility.trackLabels}
-        showSensors={layerVisibility.sensors}
-        showSensorLabels={layerVisibility.sensorLabels}
-      />
+      {showDebugOverlay && (
+        <DebugOverlay
+          map={mapInstance}
+          tracks={tracks}
+          sensors={sensors}
+          layersReady={layersReady}
+          showTracks={layerVisibility.tracks}
+          showTrackLabels={layerVisibility.trackLabels}
+          showSensors={layerVisibility.sensors}
+          showSensorLabels={layerVisibility.sensorLabels}
+        />
+      )}
     </div>
   );
 }
