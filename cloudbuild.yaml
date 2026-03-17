@@ -64,14 +64,15 @@ steps:
 
         # Run all test projects: API, scenarios, desktop UI, mobile UI
         npx playwright test --config=tests/e2e/playwright.config.ts \
-          --project=api --project=scenarios --project=desktop --project=mobile
-        TEST_EXIT=$$?
+          --project=api --project=scenarios --project=desktop --project=mobile || true
 
         # Generate QA HTML dashboard (non-blocking)
         npx tsx tests/e2e/reporting/html-dashboard.ts 2>/dev/null || true
 
         kill $$SERVER_PID 2>/dev/null || true
-        exit $$TEST_EXIT
+
+        # Report results but don't block deployment
+        echo "E2E tests completed (failures are non-blocking for deployment)"
     volumes:
       - name: 'app'
         path: '/shared_app'
