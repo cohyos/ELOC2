@@ -6,7 +6,7 @@ test.describe('Visual Verification', () => {
   });
 
   test('PW-27: Take full-page screenshot after scenario stable (15s at 10x)', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
 
     // Wait for page to fully load
     await expect(page.locator('canvas').first()).toBeVisible({ timeout: 15000 });

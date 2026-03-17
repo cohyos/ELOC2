@@ -6,11 +6,11 @@ test.describe('Playback Controls', () => {
   });
 
   test('PW-11: Click speed button (5x) -> button highlighted', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
 
     // Find the 5x speed button in the header
     const speedBtn = page.getByRole('button', { name: '5x' }).first();
-    await expect(speedBtn).toBeVisible();
+    await expect(speedBtn).toBeVisible({ timeout: 10000 });
 
     // Click 5x
     await speedBtn.click();
@@ -20,7 +20,7 @@ test.describe('Playback Controls', () => {
   });
 
   test('PW-12: Open layer filter panel -> toggles visible', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
 
     // The LayerFilterPanel shows "Layers" text on the map
     // It may start expanded or collapsed depending on viewport
@@ -44,7 +44,7 @@ test.describe('Playback Controls', () => {
   });
 
   test('PW-13: Click on timeline scrubber -> time display changes', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
 
     // Open timeline if not open
     const timelineBtn = page.getByRole('button', { name: /show timeline/i }).first();
@@ -85,11 +85,11 @@ test.describe('Playback Controls', () => {
   });
 
   test('PW-14: Press Space key -> play/pause toggles', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
 
     // Verify we start with Start button
     const startBtn = page.getByRole('button', { name: /start/i }).first();
-    await expect(startBtn).toBeVisible();
+    await expect(startBtn).toBeVisible({ timeout: 10000 });
 
     // Press Space to start
     await page.keyboard.press('Space');
@@ -105,7 +105,7 @@ test.describe('Playback Controls', () => {
   });
 
   test('PW-15: Press arrow keys -> time changes', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
 
     // Start scenario so there is elapsed time
     await page.evaluate(async () => {

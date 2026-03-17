@@ -2,10 +2,10 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Panel Visibility', () => {
   test('PW-09: Click panel toggle -> panel appears/disappears', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
 
     const panelBtn = page.getByRole('button', { name: /show panel|hide panel/i }).first();
-    await expect(panelBtn).toBeVisible();
+    await expect(panelBtn).toBeVisible({ timeout: 10000 });
 
     // Get current state
     const initialText = await panelBtn.textContent();
@@ -35,10 +35,10 @@ test.describe('Panel Visibility', () => {
   });
 
   test('PW-10: Click timeline toggle -> timeline section expands/collapses', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
 
     const timelineBtn = page.getByRole('button', { name: /show timeline|hide timeline/i }).first();
-    await expect(timelineBtn).toBeVisible();
+    await expect(timelineBtn).toBeVisible({ timeout: 10000 });
 
     const initialText = await timelineBtn.textContent();
     const isTimelineOpen = initialText?.toLowerCase().includes('hide');

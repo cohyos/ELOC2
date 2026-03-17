@@ -2,11 +2,11 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Task Panel', () => {
   test('PW-16: Click Tasks button -> task panel visible with content', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
 
     // Find the Tasks button in the header
     const tasksBtn = page.getByRole('button', { name: 'Tasks' }).first();
-    await expect(tasksBtn).toBeVisible();
+    await expect(tasksBtn).toBeVisible({ timeout: 10000 });
 
     // Click Tasks to open task panel
     await tasksBtn.click();
@@ -18,7 +18,7 @@ test.describe('Task Panel', () => {
   });
 
   test('PW-17: Task panel shows score breakdown sections', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
 
     // Start scenario so tasks get generated
     await page.evaluate(async () => {

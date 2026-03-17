@@ -7,7 +7,7 @@ test.describe('Track Display', () => {
   });
 
   test('PW-06: Start scenario, wait 5s -> track count in header > 0', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
 
     // Start the scenario at 10x speed
     await page.evaluate(async () => {
@@ -31,7 +31,7 @@ test.describe('Track Display', () => {
   });
 
   test('PW-07: Track summary badges are clickable (filter toggle)', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
 
     // Start scenario
     await page.evaluate(async () => {
@@ -63,11 +63,11 @@ test.describe('Track Display', () => {
   });
 
   test('PW-08: Detail panel shows content when Show Panel is clicked', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
 
     // Ensure panel toggle button is visible
     const panelBtn = page.getByRole('button', { name: /show panel|hide panel/i }).first();
-    await expect(panelBtn).toBeVisible();
+    await expect(panelBtn).toBeVisible({ timeout: 10000 });
 
     // If panel is hidden, click to show it
     const btnText = await panelBtn.textContent();
