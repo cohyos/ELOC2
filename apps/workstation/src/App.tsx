@@ -10,6 +10,7 @@ import { useSensorStore } from './stores/sensor-store';
 import { useTaskStore } from './stores/task-store';
 import { useUiStore } from './stores/ui-store';
 import { TaskPanel } from './task-panel/TaskPanel';
+import { ScenarioEditor } from './editor/ScenarioEditor';
 
 // ---------------------------------------------------------------------------
 // Colors
@@ -103,6 +104,7 @@ const btnBase = (isMobile: boolean): React.CSSProperties => ({
 
 export function App() {
   const isMobile = useIsMobile();
+  const [view, setView] = useState<'workstation' | 'editor'>('workstation');
   const detailView = useUiStore(s => s.detailView);
   const detailPanelOpen = useUiStore(s => s.detailPanelOpen);
   const timelinePanelOpen = useUiStore(s => s.timelinePanelOpen);
@@ -216,6 +218,10 @@ export function App() {
     return () => clearInterval(interval);
   }, []);
 
+  if (view === 'editor') {
+    return <ScenarioEditor onBack={() => setView('workstation')} />;
+  }
+
   if (isMobile) return <MobileLayout />;
 
   // ─── Desktop Layout ───────────────────────────────────────────────────
@@ -249,6 +255,7 @@ export function App() {
             {availableScenarios.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         )}
+        <button style={{ ...btn, background: '#2a2a4e', color: '#aa88ff', border: '1px solid #aa88ff44' }} onClick={() => setView('editor')}>Editor</button>
 
         {/* Track summary with filter toggles */}
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center', fontSize: '11px' }}>

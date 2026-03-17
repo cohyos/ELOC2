@@ -12,15 +12,16 @@ export { createEoReport, handleEoReport } from './eo-reporting/report-handler.js
 export type { EoReportData } from './eo-reporting/report-handler.js';
 
 // Ambiguity handling (Phase 5)
-export { assessAmbiguity } from './ambiguity/ambiguity-handler.js';
+export { assessAmbiguity, updateHypotheses } from './ambiguity/ambiguity-handler.js';
 export type {
   AssociationHypothesis,
   AmbiguityAssessment,
+  HypothesisUpdateResult,
 } from './ambiguity/ambiguity-handler.js';
 
 // Split-merge (Phase 5)
-export { splitGroup } from './split-merge/splitter.js';
-export type { SplitResult } from './split-merge/splitter.js';
+export { splitGroup, clusterBearings } from './split-merge/splitter.js';
+export type { SplitResult, ClusterOptions } from './split-merge/splitter.js';
 
 export { mergeIntoGroup } from './split-merge/merger.js';
 export type { MergeResult } from './split-merge/merger.js';

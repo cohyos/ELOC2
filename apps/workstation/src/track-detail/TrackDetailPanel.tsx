@@ -1,8 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useTrackStore } from '../stores/track-store';
 import { useTaskStore } from '../stores/task-store';
 import { useUiStore } from '../stores/ui-store';
 import type { GeometryEstimate } from '@eloc2/domain';
+import { EvidenceChain } from './EvidenceChain';
+import type { TrackEvidence } from './EvidenceChain';
+import { InvestigationHistory } from './InvestigationHistory';
+import type { InvestigationHistoryData } from './InvestigationHistory';
+import { ThreatAssessment } from './ThreatAssessment';
+import type { ThreatAssessmentData } from './ThreatAssessment';
 
 const styles = {
   container: {
@@ -124,6 +130,13 @@ export function TrackDetailPanel() {
   const eoTracks = useTaskStore(s => s.eoTracks);
   const fusionModes = useTaskStore(s => s.fusionModes);
   const [geometry, setGeometry] = useState<GeometryEstimate | null>(null);
+  const [dossier, setDossier] = useState<{
+    evidence: TrackEvidence;
+    investigationHistory: InvestigationHistoryData;
+    threatAssessment: ThreatAssessmentData;
+  } | null>(null);
+  const [dossierLoading, setDossierLoading] = useState(false);
+  const dossierFetchRef = useRef<string | null>(null);
 
   const track = selectedTrackId ? tracksById.get(selectedTrackId) : null;
 
@@ -152,6 +165,58 @@ export function TrackDetailPanel() {
       .then(data => setGeometry(data))
       .catch(() => setGeometry(null));
   }, [selectedTrackId, wsGeometry]);
+
+  // Fetch enriched dossier data when selected track changes
+  useEffect(() => {
+    if (!selectedTrackId) {
+      setDossier(null);
+      dossierFetchRef.current = null;
+      return;
+    }
+    const fetchId = selectedTrackId;
+    dossierFetchRef.current = fetchId;
+    setDossierLoading(true);
+    fetch(`/api/tracks/${selectedTrackId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (dossierFetchRef.current !== fetchId) return;
+        if (data?.evidence && data?.investigationHistory && data?.threatAssessment) {
+          setDossier({
+            evidence: data.evidence,
+            investigationHistory: data.investigationHistory,
+            threatAssessment: data.threatAssessment,
+          });
+        } else {
+          setDossier(null);
+        }
+        setDossierLoading(false);
+      })
+      .catch(() => {
+        if (dossierFetchRef.current !== fetchId) return;
+        setDossier(null);
+        setDossierLoading(false);
+      });
+
+    // Re-fetch periodically while track is selected (every 5s)
+    const interval = setInterval(() => {
+      if (dossierFetchRef.current !== fetchId) return;
+      fetch(`/api/tracks/${fetchId}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (dossierFetchRef.current !== fetchId) return;
+          if (data?.evidence && data?.investigationHistory && data?.threatAssessment) {
+            setDossier({
+              evidence: data.evidence,
+              investigationHistory: data.investigationHistory,
+              threatAssessment: data.threatAssessment,
+            });
+          }
+        })
+        .catch(() => { /* ignore */ });
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [selectedTrackId]);
 
   if (!track) {
     return (
@@ -350,6 +415,20 @@ export function TrackDetailPanel() {
           </div>
         ))}
       </div>
+
+      {/* Dossier Sections */}
+      {dossierLoading && !dossier && (
+        <div style={{ color: '#555', fontSize: '11px', fontStyle: 'italic', padding: '8px 0' }}>
+          Loading dossier...
+        </div>
+      )}
+      {dossier && (
+        <>
+          <EvidenceChain evidence={dossier.evidence} />
+          <InvestigationHistory investigationHistory={dossier.investigationHistory} />
+          <ThreatAssessment threatAssessment={dossier.threatAssessment} />
+        </>
+      )}
     </div>
   );
 }

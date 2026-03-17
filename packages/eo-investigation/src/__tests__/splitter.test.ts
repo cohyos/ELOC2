@@ -9,7 +9,7 @@ import type {
   Timestamp,
   UnresolvedGroup,
 } from '@eloc2/domain';
-import { splitGroup } from '../split-merge/splitter.js';
+import { splitGroup, clusterBearings } from '../split-merge/splitter.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -140,5 +140,61 @@ describe('splitter', () => {
 
     expect(result.resolvedTracks).toHaveLength(0);
     expect(result.remainingGroup).toEqual(group);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Adaptive threshold tests
+// ---------------------------------------------------------------------------
+
+describe('clusterBearings — adaptive threshold', () => {
+  it('should use default base threshold (0.5) when no options given (backward compatible)', () => {
+    // 0.4 deg apart — should be one cluster with default threshold 0.5
+    const bearings = [makeBearing(45.0), makeBearing(45.4)];
+    const clusters = clusterBearings(bearings);
+    expect(clusters).toHaveLength(1);
+    expect(clusters[0]).toHaveLength(2);
+  });
+
+  it('should equal base threshold when avgBearingNoise = 0', () => {
+    // 0.6 deg apart — exceeds 0.5 base threshold, should split
+    const bearings = [makeBearing(45.0), makeBearing(45.6)];
+    const clusters = clusterBearings(bearings, { avgBearingNoise: 0 });
+    expect(clusters).toHaveLength(2);
+  });
+
+  it('should widen threshold when avgBearingNoise is high (noise=1.0 doubles threshold)', () => {
+    // With noise=0.5, threshold = 0.5 * (1 + 0.5/0.5) = 1.0
+    // 0.8 deg apart — would split with default but not with noise=0.5
+    const bearings = [makeBearing(45.0), makeBearing(45.8)];
+
+    // Default: should split (0.8 > 0.5)
+    const defaultClusters = clusterBearings(bearings);
+    expect(defaultClusters).toHaveLength(2);
+
+    // With noise=0.5: threshold = 1.0, so 0.8 < 1.0 — same cluster
+    const noisyClusters = clusterBearings(bearings, { avgBearingNoise: 0.5 });
+    expect(noisyClusters).toHaveLength(1);
+  });
+
+  it('should double threshold when avgBearingNoise = 0.5', () => {
+    // threshold = 0.5 * (1 + 0.5/0.5) = 1.0
+    const bearings = [makeBearing(45.0), makeBearing(45.9)];
+    const clusters = clusterBearings(bearings, { avgBearingNoise: 0.5 });
+    expect(clusters).toHaveLength(1); // 0.9 < 1.0
+  });
+
+  it('should triple threshold when avgBearingNoise = 1.0', () => {
+    // threshold = 0.5 * (1 + 1.0/0.5) = 0.5 * 3 = 1.5
+    const bearings = [makeBearing(45.0), makeBearing(46.4)];
+    const clusters = clusterBearings(bearings, { avgBearingNoise: 1.0 });
+    expect(clusters).toHaveLength(1); // 1.4 < 1.5
+  });
+
+  it('should allow custom base threshold', () => {
+    // baseThreshold = 1.0, no noise → threshold = 1.0
+    const bearings = [makeBearing(45.0), makeBearing(45.8)];
+    const clusters = clusterBearings(bearings, { baseThreshold: 1.0 });
+    expect(clusters).toHaveLength(1); // 0.8 < 1.0
   });
 });

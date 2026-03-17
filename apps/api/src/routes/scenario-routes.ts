@@ -1,18 +1,32 @@
 import type { FastifyInstance } from 'fastify';
 import { engine } from '../simulation/live-engine.js';
 import { scenarios } from '@eloc2/scenario-library';
+import { customScenarios } from './editor-routes.js';
 
 export async function scenarioRoutes(app: FastifyInstance) {
-  // GET /api/scenarios — List all available scenarios
+  // GET /api/scenarios — List all available scenarios (built-in + custom)
   app.get('/api/scenarios', async () => {
-    return scenarios.map(s => ({
+    const builtIn = scenarios.map(s => ({
       id: s.id,
       name: s.name,
       description: s.description,
       durationSec: s.durationSec,
       sensorCount: s.sensors.length,
       targetCount: s.targets.length,
+      custom: false,
     }));
+
+    const custom = [...customScenarios.values()].map(s => ({
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      durationSec: s.durationSec,
+      sensorCount: s.sensors.length,
+      targetCount: s.targets.length,
+      custom: true,
+    }));
+
+    return [...builtIn, ...custom];
   });
 
   // GET /api/scenario/status — Current scenario state
@@ -55,6 +69,15 @@ export async function scenarioRoutes(app: FastifyInstance) {
   // POST /api/scenario/reset — Reset and optionally switch scenario
   app.post<{ Body: { scenarioId?: string } }>('/api/scenario/reset', async (request) => {
     const scenarioId = request.body?.scenarioId;
+
+    // Check if it's a custom scenario
+    if (scenarioId && customScenarios.has(scenarioId)) {
+      const customDef = customScenarios.get(scenarioId)!;
+      engine.loadCustomScenario(customDef);
+      const s = engine.getState();
+      return { ok: true, scenarioId: s.scenarioId };
+    }
+
     engine.reset(scenarioId);
     const s = engine.getState();
     return { ok: true, scenarioId: s.scenarioId };

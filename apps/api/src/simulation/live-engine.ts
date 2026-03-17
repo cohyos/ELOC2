@@ -139,6 +139,13 @@ export class LiveEngine {
     this.state = this.buildInitialState();
   }
 
+  // ── Injection log ────────────────────────────────────────────────────
+  injectionLog: Array<{ id: string; type: string; timestamp: number; details: any }> = [];
+
+  getInjectionLog(): typeof this.injectionLog {
+    return this.injectionLog;
+  }
+
   // ── Public API ────────────────────────────────────────────────────────
 
   getState(): LiveState {
@@ -237,6 +244,146 @@ export class LiveEngine {
     if (wasRunning) {
       this.start();
     }
+  }
+
+  // ── Live Injection API ───────────────────────────────────────────────
+
+  /**
+   * Inject a fault into the running scenario. Creates a fault_start event
+   * immediately and schedules a fault_end after durationSec.
+   * Returns the injection ID.
+   */
+  injectFault(fault: { type: string; sensorId: string; magnitude?: number; durationSec: number }): string {
+    const injectionId = generateId();
+    const now = this.state.elapsedSec;
+
+    // Log the injection
+    this.injectionLog.push({
+      id: injectionId,
+      type: 'fault',
+      timestamp: Date.now(),
+      details: { ...fault, simTimeSec: now },
+    });
+
+    // Emit fault_start via the normal processing path
+    this.processSimEvent({
+      type: 'fault_start',
+      timeSec: now,
+      data: {
+        type: fault.type,
+        sensorId: fault.sensorId,
+        magnitude: fault.magnitude,
+        startTime: now,
+        endTime: now + fault.durationSec,
+      },
+    });
+
+    // Schedule fault_end after durationSec (using real time scaled by speed)
+    const intervalMs = (fault.durationSec * 1000) / this.state.speed;
+    setTimeout(() => {
+      if (!this.state.running) return;
+      this.processSimEvent({
+        type: 'fault_end',
+        timeSec: this.state.elapsedSec,
+        data: {
+          type: fault.type,
+          sensorId: fault.sensorId,
+          magnitude: fault.magnitude,
+          startTime: now,
+          endTime: this.state.elapsedSec,
+        },
+      });
+      this.broadcastRap();
+    }, intervalMs);
+
+    // Broadcast the updated state immediately
+    this.broadcastRap();
+
+    return injectionId;
+  }
+
+  /**
+   * Inject a pop-up target into the running scenario.
+   * Creates a new target entry that will produce observations on subsequent ticks.
+   * Returns the target ID.
+   */
+  injectTarget(target: { lat: number; lon: number; alt: number; speed: number; headingDeg: number; label?: string }): string {
+    const targetId = `INJ-${generateId().slice(0, 8)}`;
+    const now = this.state.elapsedSec;
+    const label = target.label || `Popup-${targetId.slice(4)}`;
+
+    // Log the injection
+    this.injectionLog.push({
+      id: targetId,
+      type: 'target',
+      timestamp: Date.now(),
+      details: { ...target, targetId, simTimeSec: now },
+    });
+
+    // Compute an end position based on speed and heading over remaining scenario time
+    const remainingSec = this.state.durationSec - now;
+    const speedDegPerSec = target.speed / 111_000; // rough m/s to deg/s
+    const headingRad = (target.headingDeg * Math.PI) / 180;
+    const endLat = target.lat + speedDegPerSec * remainingSec * Math.cos(headingRad);
+    const endLon = target.lon + speedDegPerSec * remainingSec * Math.sin(headingRad);
+
+    // Add target definition to the scenario so the ScenarioRunner picks it up
+    // Note: ScenarioRunner reads scenario.targets directly, so we mutate it
+    (this.scenario as any).targets.push({
+      targetId,
+      name: label,
+      description: `Injected pop-up target at T+${now}s`,
+      startTime: now,
+      waypoints: [
+        { time: 0, position: { lat: target.lat, lon: target.lon, alt: target.alt } },
+        { time: remainingSec, position: { lat: endLat, lon: endLon, alt: target.alt } },
+      ],
+    });
+
+    this.pushEvent(
+      'target.injected',
+      `Pop-up target ${label} injected at (${target.lat.toFixed(3)}, ${target.lon.toFixed(3)})`,
+      { targetId, lat: target.lat, lon: target.lon, alt: target.alt, speed: target.speed, headingDeg: target.headingDeg },
+    );
+
+    return targetId;
+  }
+
+  /**
+   * Inject an operator action into the running scenario.
+   * Routes to existing operator controls (reserve/veto).
+   */
+  injectOperatorAction(action: { type: string; sensorId?: string; targetId?: string; durationSec?: number }): void {
+    const injectionId = generateId();
+    const now = this.state.elapsedSec;
+
+    this.injectionLog.push({
+      id: injectionId,
+      type: 'operator_action',
+      timestamp: Date.now(),
+      details: { ...action, simTimeSec: now },
+    });
+
+    this.processSimEvent({
+      type: 'operator_action',
+      timeSec: now,
+      data: {
+        action: action.type,
+        sensorId: action.sensorId,
+        targetId: action.targetId,
+        durationSec: action.durationSec,
+      },
+    });
+  }
+
+  /**
+   * Load a custom ScenarioDefinition into the engine and reset to use it.
+   */
+  loadCustomScenario(def: ScenarioDefinition): void {
+    this.pause();
+    this.scenario = def;
+    this.resetInternalState();
+    this.pushEvent('scenario.loaded', `Custom scenario "${def.name}" loaded`);
   }
 
   private resetInternalState(): void {
@@ -990,6 +1137,235 @@ export class LiveEngine {
         // Triangulation can fail with degenerate geometry — skip
       }
     }
+  }
+
+  // ── Track Dossier Methods ────────────────────────────────────────────
+
+  /**
+   * Collect evidence chain for a track: contributing sensors, observation
+   * count, correlation decisions, and last 20 source observations from the
+   * event log.
+   */
+  getTrackEvidence(trackId: string): Record<string, unknown> {
+    const track = this.trackManager.getTrack(trackId as SystemTrackId);
+    if (!track) return { contributingSensors: [], observationCount: 0, correlationDecisions: [], sourceObservations: [] };
+
+    const contributingSensors = track.sources.map(sid => {
+      const sensor = this.state.sensors.find(s => s.sensorId === sid);
+      return {
+        sensorId: sid,
+        sensorType: sensor?.sensorType ?? 'unknown',
+        online: sensor?.online ?? false,
+      };
+    });
+
+    const trackEvents = this.state.eventLog.filter(
+      e => e.data && (e.data as any).trackId === trackId,
+    );
+    const observationCount = trackEvents.filter(
+      e => e.eventType === 'source.observation.reported',
+    ).length;
+
+    const correlationDecisions = trackEvents
+      .filter(e => e.eventType === 'source.observation.reported')
+      .slice(-20)
+      .map(e => ({
+        timestamp: e.timestamp,
+        simTimeSec: e.simTimeSec,
+        sensorId: (e.data as any)?.sensorId ?? '',
+        decision: (e.data as any)?.decision ?? '',
+      }));
+
+    const sourceObservations = track.lineage.slice(-20).map(entry => ({
+      version: entry.version,
+      timestamp: entry.timestamp,
+      event: entry.event,
+      description: entry.description,
+    }));
+
+    return {
+      contributingSensors,
+      observationCount,
+      correlationDecisions,
+      sourceObservations,
+    };
+  }
+
+  /**
+   * Collect investigation history for a track: active cues, EO tracks/bearings,
+   * EO reports, identification support, and unresolved groups.
+   */
+  getTrackInvestigation(trackId: string): Record<string, unknown> {
+    const activeCues: Array<Record<string, unknown>> = [];
+    for (const [cueId, sysTrackId] of this.cueToTrack) {
+      if (sysTrackId !== trackId) continue;
+      const cue = this.activeCuesById.get(cueId);
+      if (!cue) continue;
+      const task = this.state.tasks.find(t => t.cueId === cueId);
+      activeCues.push({
+        cueId,
+        sensorId: task?.sensorId ?? null,
+        priority: cue.priority,
+        uncertaintyGateDeg: cue.uncertaintyGateDeg,
+        validFrom: cue.validFrom,
+        validTo: cue.validTo,
+        taskStatus: task?.status ?? null,
+      });
+    }
+
+    const eoTracks = [...this.eoTracksById.values()]
+      .filter(t => t.associatedSystemTrackId === trackId)
+      .map(t => ({
+        eoTrackId: t.eoTrackId,
+        sensorId: t.sensorId,
+        bearing: t.bearing,
+        imageQuality: t.imageQuality,
+        status: t.status,
+        confidence: t.confidence,
+        identificationSupport: t.identificationSupport ?? null,
+      }));
+
+    const eoReports = this.state.eventLog
+      .filter(
+        e =>
+          e.eventType === 'eo.report.received' &&
+          e.data &&
+          (e.data as any).systemTrackId === trackId,
+      )
+      .slice(-20)
+      .map(e => ({
+        timestamp: e.timestamp,
+        simTimeSec: e.simTimeSec,
+        outcome: (e.data as any)?.outcome ?? '',
+        sensorId: (e.data as any)?.sensorId ?? '',
+        cueId: (e.data as any)?.cueId ?? '',
+      }));
+
+    const identifications = [...this.eoTracksById.values()]
+      .filter(t => t.associatedSystemTrackId === trackId && t.identificationSupport)
+      .map(t => ({
+        sensorId: t.sensorId,
+        type: t.identificationSupport!.type,
+        confidence: t.identificationSupport!.confidence,
+        features: t.identificationSupport!.features,
+      }));
+
+    const trackEoTrackIds = new Set(
+      [...this.eoTracksById.values()]
+        .filter(t => t.associatedSystemTrackId === trackId)
+        .map(t => t.eoTrackId as string),
+    );
+    const unresolvedGroups = [...this.unresolvedGroupsById.values()]
+      .filter(g => g.status === 'active' && g.eoTrackIds.some(id => trackEoTrackIds.has(id as string)))
+      .map(g => ({
+        groupId: g.groupId,
+        eoTrackIds: g.eoTrackIds,
+        status: g.status,
+        reason: g.reason,
+        memberCount: g.eoTrackIds.length,
+        escalated: g.escalated ?? false,
+      }));
+
+    return {
+      activeCues,
+      eoTracks,
+      eoReports,
+      identifications,
+      unresolvedGroups,
+    };
+  }
+
+  /**
+   * Compute a threat assessment for a track: score breakdown, kinematic
+   * profile, closure rate, and tasking priority.
+   */
+  getTrackThreat(trackId: string): Record<string, unknown> {
+    const track = this.trackManager.getTrack(trackId as SystemTrackId);
+    if (!track) {
+      return {
+        threatScore: 0,
+        scoreBreakdown: null,
+        kinematicProfile: null,
+        closureRate: null,
+        taskingPriority: 'none',
+      };
+    }
+
+    const tasks = this.state.tasks.filter(t => (t.systemTrackId as string) === trackId);
+    const activeTask = tasks.find(t => t.status === 'executing');
+    const proposedTask = tasks.find(t => t.status === 'proposed');
+
+    const taskForScore = activeTask ?? proposedTask ?? tasks[tasks.length - 1];
+    const scoreBreakdown = taskForScore?.scoreBreakdown ?? {
+      threatScore: 0,
+      uncertaintyReduction: 0,
+      geometryGain: 0,
+      operatorIntent: 0,
+      slewCost: 0,
+      occupancyCost: 0,
+      total: 0,
+    };
+
+    const speed = track.velocity
+      ? Math.sqrt(track.velocity.vx ** 2 + track.velocity.vy ** 2 + track.velocity.vz ** 2)
+      : 0;
+    const altitudeRate = track.velocity?.vz ?? 0;
+    const headingRateDegPerSec = 0;
+
+    const speedTrend: 'increasing' | 'decreasing' | 'steady' =
+      speed > 250 ? 'increasing' : speed < 50 ? 'decreasing' : 'steady';
+    const altitudeTrend: 'climbing' | 'descending' | 'level' =
+      altitudeRate > 5 ? 'climbing' : altitudeRate < -5 ? 'descending' : 'level';
+
+    let closureRate = 0;
+    let closureSensorId: string | null = null;
+    for (const sensor of this.state.sensors) {
+      if (!track.velocity) break;
+      const dlat = track.state.lat - sensor.position.lat;
+      const dlon = track.state.lon - sensor.position.lon;
+      const dist = Math.sqrt(dlat ** 2 + dlon ** 2);
+      if (dist < 1e-9) continue;
+
+      const ux = dlon / dist;
+      const uy = dlat / dist;
+      const vr = track.velocity.vx * ux + track.velocity.vy * uy;
+      if (closureSensorId === null || Math.abs(vr) > Math.abs(closureRate)) {
+        closureRate = -vr;
+        closureSensorId = sensor.sensorId as string;
+      }
+    }
+
+    const taskingPriority = activeTask
+      ? 'active'
+      : proposedTask
+        ? 'proposed'
+        : 'none';
+
+    return {
+      threatScore: scoreBreakdown.total,
+      scoreBreakdown: {
+        threat: scoreBreakdown.threatScore,
+        uncertainty: scoreBreakdown.uncertaintyReduction,
+        geometry: scoreBreakdown.geometryGain,
+        intent: scoreBreakdown.operatorIntent,
+        slewCost: scoreBreakdown.slewCost,
+        occupancyCost: scoreBreakdown.occupancyCost,
+      },
+      kinematicProfile: {
+        speedMs: speed,
+        speedTrend,
+        altitudeM: track.state.alt,
+        altitudeTrend,
+        altitudeRateMs: altitudeRate,
+        headingRateDegPerSec,
+      },
+      closureRate: {
+        valueMs: closureRate,
+        approaching: closureRate > 0,
+        sensorId: closureSensorId,
+      },
+      taskingPriority,
+    };
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────
