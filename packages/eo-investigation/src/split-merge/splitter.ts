@@ -24,8 +24,16 @@ export interface SplitResult {
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Angular separation threshold in degrees. Bearings farther apart are separable. */
-const ANGULAR_SEPARATION_THRESHOLD = 0.5;
+/** Default angular separation threshold in degrees. */
+const DEFAULT_BASE_THRESHOLD = 0.5;
+
+/** Options for adaptive clustering threshold. */
+export interface ClusterOptions {
+  /** Base angular separation threshold in degrees (default 0.5). */
+  baseThreshold?: number;
+  /** Average bearing noise in degrees. Higher noise widens the threshold. */
+  avgBearingNoise?: number;
+}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -47,6 +55,7 @@ export function splitGroup(
   group: UnresolvedGroup,
   newBearings: BearingMeasurement[],
   existingTracks: Map<string, EoTrack>,
+  options?: ClusterOptions,
 ): SplitResult {
   const events: string[] = [];
 
@@ -56,7 +65,7 @@ export function splitGroup(
   }
 
   // Cluster bearings by angular separation
-  const clusters = clusterBearings(newBearings);
+  const clusters = clusterBearings(newBearings, options);
 
   // If only one cluster, nothing can be separated
   if (clusters.length <= 1) {
@@ -130,11 +139,19 @@ export function splitGroup(
 /**
  * Clusters bearings by angular separation. Two bearings are in the same cluster
  * if they are within the angular separation threshold.
+ *
+ * Supports adaptive threshold: `threshold = baseThreshold * (1 + avgBearingNoise / 0.5)`.
+ * When avgBearingNoise = 0 (default), the threshold equals baseThreshold (backward compatible).
  */
-function clusterBearings(
+export function clusterBearings(
   bearings: BearingMeasurement[],
+  options?: ClusterOptions,
 ): BearingMeasurement[][] {
   if (bearings.length === 0) return [];
+
+  const baseThreshold = options?.baseThreshold ?? DEFAULT_BASE_THRESHOLD;
+  const avgNoise = options?.avgBearingNoise ?? 0;
+  const threshold = baseThreshold * (1 + avgNoise / 0.5);
 
   // Sort by azimuth for easier clustering
   const sorted = [...bearings].sort(
@@ -154,7 +171,7 @@ function clusterBearings(
     );
     const angularSep = Math.sqrt(azDiff * azDiff + elDiff * elDiff);
 
-    if (angularSep <= ANGULAR_SEPARATION_THRESHOLD) {
+    if (angularSep <= threshold) {
       // Same cluster
       lastCluster.push(current);
     } else {

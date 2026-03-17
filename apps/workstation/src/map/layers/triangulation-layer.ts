@@ -1,5 +1,6 @@
 import type { Map as MaplibreMap } from 'maplibre-gl';
 import type { SensorState, SystemTrack } from '@eloc2/domain';
+import type { GeometryEstimateWS } from '../../stores/task-store';
 
 const SOURCE_ID = 'triangulation-rays';
 const LAYER_ID = 'triangulation-rays-layer';
@@ -48,12 +49,21 @@ export function updateTriangulationLayer(
   map: MaplibreMap,
   tracks: SystemTrack[],
   sensors: SensorState[],
+  geometryEstimates?: GeometryEstimateWS[],
 ) {
   const source = map.getSource(SOURCE_ID);
   if (!source) return;
 
   const sensorMap = new Map(sensors.map(s => [s.sensorId, s]));
   const features: GeoJSON.Feature[] = [];
+
+  // Build geometry lookup by trackId
+  const geoByTrack = new Map<string, GeometryEstimateWS>();
+  if (geometryEstimates) {
+    for (const est of geometryEstimates) {
+      geoByTrack.set(est.trackId, est);
+    }
+  }
 
   for (const track of tracks) {
     if (track.eoInvestigationStatus === 'none' || track.status === 'dropped') continue;
@@ -65,11 +75,18 @@ export function updateTriangulationLayer(
 
     if (eoSources.length === 0) continue;
 
-    // Approximate quality from number of EO contributors
+    // Use real geometry quality if available, otherwise approximate
+    const geoEst = geoByTrack.get(track.systemTrackId as string);
     let quality: string;
-    if (eoSources.length >= 3) quality = 'strong';
-    else if (eoSources.length === 2) quality = 'acceptable';
-    else quality = 'weak';
+    if (geoEst) {
+      quality = geoEst.quality;
+    } else if (eoSources.length >= 3) {
+      quality = 'strong';
+    } else if (eoSources.length === 2) {
+      quality = 'acceptable';
+    } else {
+      quality = 'weak';
+    }
 
     const color = qualityColor(quality);
 
@@ -84,6 +101,8 @@ export function updateTriangulationLayer(
           trackId: track.systemTrackId,
           sensorId: sensor.sensorId,
           quality,
+          classification: geoEst?.classification ?? 'unknown',
+          intersectionAngleDeg: geoEst?.intersectionAngleDeg ?? 0,
         },
         geometry: {
           type: 'LineString',

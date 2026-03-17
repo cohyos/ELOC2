@@ -4,6 +4,7 @@ import type { SystemTrack } from '@eloc2/domain';
 const SOURCE_ID = 'system-tracks';
 const LAYER_ID = 'system-tracks-layer';
 const LABEL_LAYER_ID = 'system-tracks-labels';
+const EO_BADGE_LAYER_ID = 'track-eo-badge';
 const ELLIPSE_SOURCE_ID = 'track-ellipses';
 const ELLIPSE_LAYER_ID = 'track-ellipses-layer';
 
@@ -19,6 +20,16 @@ function statusColor(status: string): string {
     case 'tentative': return '#ffcc00';
     case 'dropped': return '#ff3333';
     default: return '#888888';
+  }
+}
+
+function eoStatusColor(status: string): string {
+  switch (status) {
+    case 'in_progress': return '#4a9eff';
+    case 'confirmed': return '#00cc44';
+    case 'split_detected': return '#ff3333';
+    case 'no_support': return '#ff8800';
+    default: return 'transparent';
   }
 }
 
@@ -82,6 +93,21 @@ export function initTrackLayer(map: MaplibreMap) {
     console.warn('[track-layer] Label layer failed (font issue?):', e);
   }
 
+  // EO investigation status badge — small dot offset to top-right of track circle
+  map.addLayer({
+    id: EO_BADGE_LAYER_ID,
+    type: 'circle',
+    source: SOURCE_ID,
+    filter: ['!=', ['get', 'eoStatus'], 'none'],
+    paint: {
+      'circle-radius': 4,
+      'circle-color': ['get', 'eoColor'],
+      'circle-stroke-width': 1,
+      'circle-stroke-color': '#000',
+      'circle-translate': [7, -7],
+    },
+  });
+
   console.log('[track-layer] Initialized successfully');
 }
 
@@ -131,7 +157,7 @@ function isValidCoord(track: SystemTrack): boolean {
   );
 }
 
-export function updateTrackLayer(map: MaplibreMap, tracks: SystemTrack[]) {
+export function updateTrackLayer(map: MaplibreMap, tracks: SystemTrack[], selectedTrackId?: string | null) {
   const source = map.getSource(SOURCE_ID);
   const ellipseSource = map.getSource(ELLIPSE_SOURCE_ID);
   if (!source || !ellipseSource) {
@@ -167,6 +193,8 @@ export function updateTrackLayer(map: MaplibreMap, tracks: SystemTrack[]) {
       color: statusColor(track.status),
       status: track.status,
       confidence: track.confidence,
+      eoStatus: track.eoInvestigationStatus ?? 'none',
+      eoColor: eoStatusColor(track.eoInvestigationStatus ?? 'none'),
     },
     geometry: {
       type: 'Point',
@@ -188,6 +216,50 @@ export function updateTrackLayer(map: MaplibreMap, tracks: SystemTrack[]) {
 
   (source as any).setData({ type: 'FeatureCollection', features });
   (ellipseSource as any).setData({ type: 'FeatureCollection', features: ellipseFeatures });
+
+  // Apply selection-based styling: dim unrelated tracks when one is selected
+  if (selectedTrackId) {
+    const opacityExpr: any = ['case', ['==', ['get', 'id'], selectedTrackId], 1.0, 0.3];
+    const radiusExpr: any = ['case', ['==', ['get', 'id'], selectedTrackId], 10, 8];
+
+    try {
+      if (map.getLayer(LAYER_ID)) {
+        map.setPaintProperty(LAYER_ID, 'circle-opacity', opacityExpr);
+        map.setPaintProperty(LAYER_ID, 'circle-radius', radiusExpr);
+      }
+      if (map.getLayer(LABEL_LAYER_ID)) {
+        map.setPaintProperty(LABEL_LAYER_ID, 'text-opacity', opacityExpr);
+      }
+      if (map.getLayer(EO_BADGE_LAYER_ID)) {
+        map.setPaintProperty(EO_BADGE_LAYER_ID, 'circle-opacity', opacityExpr);
+      }
+      if (map.getLayer(ELLIPSE_LAYER_ID)) {
+        map.setPaintProperty(ELLIPSE_LAYER_ID, 'fill-opacity',
+          ['case', ['==', ['get', 'trackId'], selectedTrackId], 0.1, 0.03]);
+      }
+    } catch (e) {
+      console.warn('[track-layer] Failed to apply selection styling:', e);
+    }
+  } else {
+    // Reset to defaults when no selection
+    try {
+      if (map.getLayer(LAYER_ID)) {
+        map.setPaintProperty(LAYER_ID, 'circle-opacity', 1.0);
+        map.setPaintProperty(LAYER_ID, 'circle-radius', 8);
+      }
+      if (map.getLayer(LABEL_LAYER_ID)) {
+        map.setPaintProperty(LABEL_LAYER_ID, 'text-opacity', 1.0);
+      }
+      if (map.getLayer(EO_BADGE_LAYER_ID)) {
+        map.setPaintProperty(EO_BADGE_LAYER_ID, 'circle-opacity', 1.0);
+      }
+      if (map.getLayer(ELLIPSE_LAYER_ID)) {
+        map.setPaintProperty(ELLIPSE_LAYER_ID, 'fill-opacity', 0.1);
+      }
+    } catch (e) {
+      console.warn('[track-layer] Failed to reset selection styling:', e);
+    }
+  }
 }
 
 export function getTrackLayerId(): string {

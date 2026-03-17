@@ -8,12 +8,22 @@
     "test": "turbo test",
     "lint": "turbo lint",
     "dev": "turbo dev --parallel",
-    "clean": "turbo clean"
+    "clean": "turbo clean",
+    "test:e2e": "npx playwright test --config tests/e2e/playwright.config.ts",
+    "test:e2e:api": "npx playwright test --config tests/e2e/playwright.config.ts --project api",
+    "test:e2e:mobile": "npx playwright test --config tests/e2e/playwright.config.ts --project mobile",
+    "test:e2e:gcp": "npx playwright test --config tests/e2e/playwright.config.ts tests/e2e/gcp/",
+    "test:e2e:scenarios": "npx playwright test --config tests/e2e/playwright.config.ts tests/e2e/scenarios/",
+    "test:e2e:report": "npx tsx tests/e2e/reporting/html-dashboard.ts",
+    "test:e2e:full": "npx playwright test --config tests/e2e/playwright.config.ts && npx tsx tests/e2e/reporting/html-dashboard.ts"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/ws": "^8.18.1",
+    "prettier": "^3.4.0",
     "turbo": "^2.4.0",
     "typescript": "^5.7.0",
-    "prettier": "^3.4.0"
+    "ws": "^8.19.0"
   },
   "packageManager": "pnpm@9.15.0",
   "engines": {

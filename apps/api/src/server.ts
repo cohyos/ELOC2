@@ -7,7 +7,10 @@ import fastifyStatic from '@fastify/static';
 import { rapRoutes } from './routes/rap-routes.js';
 import { sensorRoutes } from './routes/sensor-routes.js';
 import { taskRoutes } from './routes/task-routes.js';
+import { groupRoutes } from './routes/group-routes.js';
 import { scenarioRoutes } from './routes/scenario-routes.js';
+import { registerEditorRoutes } from './routes/editor-routes.js';
+import { registerInvestigationRoutes } from './routes/investigation-routes.js';
 import { wsEventsRoute } from './routes/ws-events.js';
 import { engine } from './simulation/live-engine.js';
 
@@ -49,7 +52,10 @@ server.get('/api/health', async () => {
 await server.register(rapRoutes);
 await server.register(sensorRoutes);
 await server.register(taskRoutes);
+await server.register(groupRoutes);
 await server.register(scenarioRoutes);
+registerEditorRoutes(server, engine);
+registerInvestigationRoutes(server, engine);
 await server.register(wsEventsRoute);
 
 const start = async () => {

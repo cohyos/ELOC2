@@ -30,7 +30,18 @@ export async function taskRoutes(app: FastifyInstance) {
   });
 
   // POST /api/operator/reserve — Reserve a sensor for manual control
-  app.post<{ Body: { sensorId: string } }>('/api/operator/reserve', async (_request) => {
-    return { ok: true, reserved: true };
+  app.post<{ Body: { sensorId: string } }>('/api/operator/reserve', async (request) => {
+    const { sensorId } = request.body;
+    const sensor = engine.getState().sensors.find(s => s.sensorId === sensorId);
+    if (!sensor) {
+      return { ok: false, error: 'Sensor not found' };
+    }
+    // Cancel any executing tasks for this sensor
+    const cancelledTasks = engine.getState().tasks
+      .filter(t => t.sensorId === sensorId && t.status === 'executing');
+    for (const task of cancelledTasks) {
+      task.status = 'rejected' as any;
+    }
+    return { ok: true, reserved: true, sensorId, cancelledTaskCount: cancelledTasks.length };
   });
 }

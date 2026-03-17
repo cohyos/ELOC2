@@ -25,7 +25,10 @@ export async function rapRoutes(app: FastifyInstance) {
     if (!track) {
       return reply.code(404).send({ error: 'Track not found', trackId: id });
     }
-    return track;
+    const evidence = engine.getTrackEvidence(id);
+    const investigationHistory = engine.getTrackInvestigation(id);
+    const threatAssessment = engine.getTrackThreat(id);
+    return { ...track, evidence, investigationHistory, threatAssessment };
   });
 
   // GET /api/geometry/:id — Geometry estimate for a track

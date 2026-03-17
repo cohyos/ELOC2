@@ -1,0 +1,533 @@
+{
+  "timestamp": "2026-03-17T05:37:30.186Z",
+  "baseUrl": "http://localhost:3001",
+  "duration_ms": 79359,
+  "summary": {
+    "total": 44,
+    "passed": 44,
+    "failed": 0,
+    "skipped": 0,
+    "pass_rate": 1
+  },
+  "suites": {
+    "Group & EO Endpoints": {
+      "total": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    "Health Check": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "RAP Endpoints": {
+      "total": 4,
+      "passed": 4,
+      "failed": 0
+    },
+    "Replay & Validation Endpoints": {
+      "total": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    "Scenario Endpoints": {
+      "total": 7,
+      "passed": 7,
+      "failed": 0
+    },
+    "Sensor Endpoints": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0
+    },
+    "Task Endpoints": {
+      "total": 4,
+      "passed": 4,
+      "failed": 0
+    },
+    "UI-Equivalent: Track Display (PW-06, PW-21)": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0
+    },
+    "UI-Equivalent: Scenario Controls (PW-04, PW-05)": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0
+    },
+    "UI-Equivalent: Speed Controls (PW-11)": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "UI-Equivalent: Event List (PW-18, PW-19)": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "UI-Equivalent: WebSocket Status (PW-20)": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "UI-Equivalent: Sensor Degraded Mode (PW-22)": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "UI-Equivalent: Replay Scrubber (PW-13, PW-15)": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "UI-Equivalent: Task Panel (PW-16, PW-17)": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "WebSocket Endpoints": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0
+    },
+    "SV-04: Bad Triangulation Scenario": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "SV-07: Central Israel Full Scenario": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "SV-02: Crossed Tracks Scenario": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "SV-03: Good Triangulation Scenario": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "SV-08: Multi-EO Scenario": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "SV-06: Operator Override Scenario": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "SV-05: Sensor Fault Scenario": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "SV-01: Single Target Confirm Scenario": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    }
+  },
+  "tests": [
+    {
+      "id": "API-19",
+      "name": "API-19: GET /api/groups returns array",
+      "suite": "Group & EO Endpoints",
+      "status": "passed",
+      "duration_ms": 33,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-20",
+      "name": "API-20: GET /api/eo-cues returns array",
+      "suite": "Group & EO Endpoints",
+      "status": "passed",
+      "duration_ms": 8,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-21",
+      "name": "API-21: GET /api/eo-tracks returns array",
+      "suite": "Group & EO Endpoints",
+      "status": "passed",
+      "duration_ms": 7,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-01",
+      "name": "API-01: Health check returns 200 with status ok",
+      "suite": "Health Check",
+      "status": "passed",
+      "duration_ms": 11,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-09",
+      "name": "API-09: GET /api/rap returns object with tracks array and timestamp",
+      "suite": "RAP Endpoints",
+      "status": "passed",
+      "duration_ms": 16,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-10",
+      "name": "API-10: Start scenario, wait 2s, GET /api/rap has tracks",
+      "suite": "RAP Endpoints",
+      "status": "passed",
+      "duration_ms": 5027,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-11",
+      "name": "API-11: GET /api/events returns array",
+      "suite": "RAP Endpoints",
+      "status": "passed",
+      "duration_ms": 9,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-12",
+      "name": "API-12: GET /api/geometry/:id returns 404 for non-existent track",
+      "suite": "RAP Endpoints",
+      "status": "passed",
+      "duration_ms": 9,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-22",
+      "name": "API-22: POST /api/replay/seek with valid timeSec succeeds",
+      "suite": "Replay & Validation Endpoints",
+      "status": "passed",
+      "duration_ms": 1016,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-23",
+      "name": "API-23: POST /api/scenario/speed with negative speed returns 400",
+      "suite": "Replay & Validation Endpoints",
+      "status": "passed",
+      "duration_ms": 10,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-24",
+      "name": "API-24: POST /api/replay/seek with negative timeSec returns 400",
+      "suite": "Replay & Validation Endpoints",
+      "status": "passed",
+      "duration_ms": 9,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-02",
+      "name": "API-02: GET /api/scenarios returns array with >= 9 scenarios",
+      "suite": "Scenario Endpoints",
+      "status": "passed",
+      "duration_ms": 26,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-03",
+      "name": "API-03: GET /api/scenario/status returns valid status",
+      "suite": "Scenario Endpoints",
+      "status": "passed",
+      "duration_ms": 13,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-04",
+      "name": "API-04: POST /api/scenario/start returns ok with running true",
+      "suite": "Scenario Endpoints",
+      "status": "passed",
+      "duration_ms": 11,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-05",
+      "name": "API-05: POST /api/scenario/pause returns ok with running false",
+      "suite": "Scenario Endpoints",
+      "status": "passed",
+      "duration_ms": 11,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-06",
+      "name": "API-06: POST /api/scenario/speed with speed 5 returns success",
+      "suite": "Scenario Endpoints",
+      "status": "passed",
+      "duration_ms": 8,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-07",
+      "name": "API-07: POST /api/scenario/reset returns ok",
+      "suite": "Scenario Endpoints",
+      "status": "passed",
+      "duration_ms": 9,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-08",
+      "name": "API-08: POST /api/scenario/reset with scenarioId switches scenario",
+      "suite": "Scenario Endpoints",
+      "status": "passed",
+      "duration_ms": 9,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-13",
+      "name": "API-13: GET /api/sensors returns array of sensors",
+      "suite": "Sensor Endpoints",
+      "status": "passed",
+      "duration_ms": 8,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-14",
+      "name": "API-14: GET /api/sensors/:id/registration returns registration state",
+      "suite": "Sensor Endpoints",
+      "status": "passed",
+      "duration_ms": 6,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-15",
+      "name": "API-15: GET /api/tasks returns array",
+      "suite": "Task Endpoints",
+      "status": "passed",
+      "duration_ms": 5,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-16",
+      "name": "API-16: POST /api/operator/approve with invalid taskId returns 404",
+      "suite": "Task Endpoints",
+      "status": "passed",
+      "duration_ms": 5,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-17",
+      "name": "API-17: POST /api/operator/reject with invalid taskId returns 404",
+      "suite": "Task Endpoints",
+      "status": "passed",
+      "duration_ms": 5,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-18",
+      "name": "API-18: POST /api/operator/reserve with valid sensorId returns reservation",
+      "suite": "Task Endpoints",
+      "status": "passed",
+      "duration_ms": 8,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "APUI-01",
+      "name": "APUI-01: Running scenario produces tracks with status breakdown",
+      "suite": "UI-Equivalent: Track Display (PW-06, PW-21)",
+      "status": "passed",
+      "duration_ms": 2023,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "APUI-02",
+      "name": "APUI-02: Confirmed tracks appear after sufficient simulation time",
+      "suite": "UI-Equivalent: Track Display (PW-06, PW-21)",
+      "status": "passed",
+      "duration_ms": 2023,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "APUI-03",
+      "name": "APUI-03: At least 9 scenarios available for dropdown",
+      "suite": "UI-Equivalent: Scenario Controls (PW-04, PW-05)",
+      "status": "passed",
+      "duration_ms": 19,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "APUI-04",
+      "name": "APUI-04: Start/pause cycle changes running state",
+      "suite": "UI-Equivalent: Scenario Controls (PW-04, PW-05)",
+      "status": "passed",
+      "duration_ms": 18,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "APUI-05",
+      "name": "APUI-05: Speed change is reflected in status",
+      "suite": "UI-Equivalent: Speed Controls (PW-11)",
+      "status": "passed",
+      "duration_ms": 15,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "APUI-06",
+      "name": "APUI-06: Running scenario generates events visible in timeline",
+      "suite": "UI-Equivalent: Event List (PW-18, PW-19)",
+      "status": "passed",
+      "duration_ms": 2026,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "APUI-07",
+      "name": "APUI-07: WebSocket connects and receives snapshot",
+      "suite": "UI-Equivalent: WebSocket Status (PW-20)",
+      "status": "passed",
+      "duration_ms": 28,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "APUI-08",
+      "name": "APUI-08: Sensor registration state available for degraded banner",
+      "suite": "UI-Equivalent: Sensor Degraded Mode (PW-22)",
+      "status": "passed",
+      "duration_ms": 6034,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "APUI-09",
+      "name": "APUI-09: Replay seek changes simulation time",
+      "suite": "UI-Equivalent: Replay Scrubber (PW-13, PW-15)",
+      "status": "passed",
+      "duration_ms": 3026,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "APUI-10",
+      "name": "APUI-10: Task list endpoint provides panel data",
+      "suite": "UI-Equivalent: Task Panel (PW-16, PW-17)",
+      "status": "passed",
+      "duration_ms": 9,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-25",
+      "name": "API-25: WebSocket connects to /ws/events and receives snapshot",
+      "suite": "WebSocket Endpoints",
+      "status": "passed",
+      "duration_ms": 6,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "API-26",
+      "name": "API-26: Start scenario, receive rap.update via WebSocket",
+      "suite": "WebSocket Endpoints",
+      "status": "passed",
+      "duration_ms": 114,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "Shallow intersection angle produces weak or no geometry estimate",
+      "name": "Shallow intersection angle produces weak or no geometry estimate",
+      "suite": "SV-04: Bad Triangulation Scenario",
+      "status": "passed",
+      "duration_ms": 10058,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "Full complex scenario produces multiple tracks, confirmed states, and rich event log",
+      "name": "Full complex scenario produces multiple tracks, confirmed states, and rich event log",
+      "suite": "SV-07: Central Israel Full Scenario",
+      "status": "passed",
+      "duration_ms": 6100,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "Two targets create distinct tracks that are not incorrectly merged",
+      "name": "Two targets create distinct tracks that are not incorrectly merged",
+      "suite": "SV-02: Crossed Tracks Scenario",
+      "status": "passed",
+      "duration_ms": 7038,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "Two EO sensors produce geometry events with adequate intersection angle",
+      "name": "Two EO sensors produce geometry events with adequate intersection angle",
+      "suite": "SV-03: Good Triangulation Scenario",
+      "status": "passed",
+      "duration_ms": 10041,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "Multiple EO sensors track same target, producing EO tracks and potential split detection",
+      "name": "Multiple EO sensors track same target, producing EO tracks and potential split detection",
+      "suite": "SV-08: Multi-EO Scenario",
+      "status": "passed",
+      "duration_ms": 2041,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "Operator can reject a proposed task and status changes",
+      "name": "Operator can reject a proposed task and status changes",
+      "suite": "SV-06: Operator Override Scenario",
+      "status": "passed",
+      "duration_ms": 8033,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "Azimuth bias fault triggers registration degradation and fault events",
+      "name": "Azimuth bias fault triggers registration degradation and fault events",
+      "suite": "SV-05: Sensor Fault Scenario",
+      "status": "passed",
+      "duration_ms": 2034,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "Track created, confirmed, and EO cue issued",
+      "name": "Track created, confirmed, and EO cue issued",
+      "suite": "SV-01: Single Target Confirm Scenario",
+      "status": "passed",
+      "duration_ms": 10046,
+      "screenshot": null,
+      "error": null
+    }
+  ],
+  "screenshots": {}
+}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { useUiStore, type EventLogEntry } from '../stores/ui-store';
 import { useTaskStore } from '../stores/task-store';
 
@@ -7,10 +7,21 @@ const eventTypeColors: Record<string, string> = {
   'source.observation.reported': '#4488ff',
   'eo.cue.issued': '#ff8800',
   'eo.report.received': '#ff8800',
+  'eo.bearing.measured': '#ffaa33',
+  'eo.track.created': '#ff8800',
+  'eo.group.created': '#ff6699',
   'registration.state.updated': '#aa44ff',
   'geometry.estimate.updated': '#ffcc00',
   'task.decided': '#ff6699',
   'correlation.decided': '#44ccaa',
+  'fault.started': '#ff3333',
+  'fault.ended': '#00cc44',
+  'scenario.started': '#4a9eff',
+  'scenario.paused': '#ffcc00',
+  'scenario.completed': '#00cc44',
+  'scenario.reset': '#888',
+  'scenario.speed_changed': '#888',
+  'operator.action': '#aa44ff',
 };
 
 const styles = {
@@ -58,28 +69,47 @@ const styles = {
     cursor: 'pointer',
     fontSize: '10px',
   } as React.CSSProperties),
-  filterBtn: (active: boolean) => ({
-    background: active ? '#ffffff11' : 'transparent',
-    color: active ? '#ddd' : '#666',
-    border: 'none',
-    padding: '1px 5px',
+  filterBtn: (active: boolean, color: string) => ({
+    background: active ? color + '22' : 'transparent',
+    color: active ? color : '#555',
+    border: active ? `1px solid ${color}44` : '1px solid #333',
+    padding: '2px 8px',
     borderRadius: '3px',
     cursor: 'pointer',
-    fontSize: '10px',
+    fontSize: '11px',
+    fontWeight: active ? 600 : 400,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px',
   } as React.CSSProperties),
   scrubber: {
     background: '#333',
-    height: '4px',
-    borderRadius: '2px',
+    height: '6px',
+    borderRadius: '3px',
     marginBottom: '6px',
     position: 'relative' as const,
     flexShrink: 0,
+    cursor: 'pointer',
   },
   scrubberFill: (pct: number) => ({
     background: '#4a9eff',
     height: '100%',
     width: `${pct}%`,
-    borderRadius: '2px',
+    borderRadius: '3px',
+    pointerEvents: 'none' as const,
+  } as React.CSSProperties),
+  scrubberThumb: (pct: number) => ({
+    position: 'absolute' as const,
+    left: `${pct}%`,
+    top: '50%',
+    transform: 'translate(-50%, -50%)',
+    width: '12px',
+    height: '12px',
+    borderRadius: '50%',
+    background: '#4a9eff',
+    border: '2px solid #fff',
+    boxShadow: '0 0 4px rgba(0,0,0,0.5)',
+    pointerEvents: 'none' as const,
   } as React.CSSProperties),
   eventList: {
     flex: 1,
@@ -118,19 +148,21 @@ const styles = {
 };
 
 const SPEEDS = [1, 2, 5, 10];
-const EVENT_TYPES = [
-  'system.track.updated',
-  'source.observation.reported',
-  'eo.cue.issued',
-  'registration.state.updated',
-  'geometry.estimate.updated',
-  'task.decided',
+const EVENT_TYPES: Array<{ type: string; label: string }> = [
+  { type: 'source.observation.reported', label: 'Observations' },
+  { type: 'eo.cue.issued', label: 'EO Cues' },
+  { type: 'eo.report.received', label: 'EO Reports' },
+  { type: 'eo.bearing.measured', label: 'Bearings' },
+  { type: 'fault.started', label: 'Faults' },
+  { type: 'scenario.started', label: 'Scenario' },
 ];
 
 export function TimelinePanel() {
   const eventLog = useUiStore(s => s.eventLog);
   const replayPlaying = useUiStore(s => s.replayPlaying);
   const replaySpeed = useUiStore(s => s.replaySpeed);
+  const replayTime = useUiStore(s => s.replayTime);
+  const scenarioDurationSec = useUiStore(s => s.scenarioDurationSec);
   const setReplayPlaying = useUiStore(s => s.setReplayPlaying);
   const setReplaySpeed = useUiStore(s => s.setReplaySpeed);
 
@@ -168,6 +200,36 @@ export function TimelinePanel() {
     }).catch(() => {});
   };
 
+  const scrubberRef = useRef<HTMLDivElement>(null);
+  const [isSeeking, setIsSeeking] = useState(false);
+
+  const seekToPosition = useCallback((clientX: number) => {
+    const bar = scrubberRef.current;
+    if (!bar || scenarioDurationSec <= 0) return;
+    const rect = bar.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const timeSec = Math.round(pct * scenarioDurationSec);
+    fetch('/api/replay/seek', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ timeSec }),
+    }).catch(() => {});
+  }, [scenarioDurationSec]);
+
+  const handleScrubberMouseDown = useCallback((e: React.MouseEvent) => {
+    setIsSeeking(true);
+    seekToPosition(e.clientX);
+
+    const handleMouseMove = (ev: MouseEvent) => seekToPosition(ev.clientX);
+    const handleMouseUp = () => {
+      setIsSeeking(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [seekToPosition]);
+
   return (
     <div style={styles.container}>
       {/* Controls row */}
@@ -197,23 +259,45 @@ export function TimelinePanel() {
 
       {/* Filter row */}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '4px', flexWrap: 'wrap', flexShrink: 0 }}>
-        {EVENT_TYPES.map(type => {
-          const shortName = type.split('.').pop() ?? type;
+        {EVENT_TYPES.map(({ type, label }) => {
+          const color = eventTypeColors[type] ?? '#888';
+          const active = filterTypes.size === 0 || filterTypes.has(type);
           return (
             <button
               key={type}
-              style={styles.filterBtn(filterTypes.size === 0 || filterTypes.has(type))}
+              style={styles.filterBtn(active, color)}
               onClick={() => toggleFilter(type)}
             >
-              {shortName}
+              <span style={{
+                display: 'inline-block',
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                background: active ? color : '#444',
+              }} />
+              {label}
             </button>
           );
         })}
       </div>
 
       {/* Scrubber */}
-      <div style={styles.scrubber}>
-        <div style={styles.scrubberFill(replayPlaying ? 50 : 0)} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexShrink: 0 }}>
+        <span style={{ fontSize: '10px', color: '#888', fontFamily: '"Fira Code", monospace', width: '50px' }}>
+          T+{Math.floor(replayTime / 60)}:{String(Math.floor(replayTime % 60)).padStart(2, '0')}
+        </span>
+        <div
+          ref={scrubberRef}
+          style={{ ...styles.scrubber, flex: 1, marginBottom: 0, height: '10px', padding: '3px 0' }}
+          onMouseDown={handleScrubberMouseDown}
+          title="Click or drag to seek"
+        >
+          <div style={{ ...styles.scrubberFill(scenarioDurationSec > 0 ? (replayTime / scenarioDurationSec) * 100 : 0), height: '4px', position: 'relative', top: '50%', transform: 'translateY(-50%)' }} />
+          <div style={styles.scrubberThumb(scenarioDurationSec > 0 ? (replayTime / scenarioDurationSec) * 100 : 0)} />
+        </div>
+        <span style={{ fontSize: '10px', color: '#666', fontFamily: '"Fira Code", monospace', width: '50px', textAlign: 'right' }}>
+          {Math.floor(scenarioDurationSec / 60)}:{String(Math.floor(scenarioDurationSec % 60)).padStart(2, '0')}
+        </span>
       </div>
 
       {/* Event list */}
