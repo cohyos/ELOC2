@@ -6,7 +6,7 @@ test.describe('Scenario Integration', () => {
   });
 
   test('PW-21: Run scenario 15s at 10x -> confirmed track count > 0', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
 
     // Start scenario at 10x speed
     await page.evaluate(async () => {
@@ -31,7 +31,7 @@ test.describe('Scenario Integration', () => {
   });
 
   test('PW-22: Run sensor-fault scenario -> degraded mode banner appears', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
 
     // Select the sensor-fault scenario if available
     const select = page.locator('select').first();

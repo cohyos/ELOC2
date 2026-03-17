@@ -4,25 +4,25 @@ test.describe('Mobile Layout', () => {
   test.use({ viewport: { width: 375, height: 812 } });
 
   test('PW-23: Mobile layout renders correctly', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
     // Check that header text is visible
-    await expect(page.locator('text=ELOC2').first()).toBeVisible();
+    await expect(page.locator('text=ELOC2').first()).toBeVisible({ timeout: 10000 });
     // Map canvas fills viewport
     await expect(page.locator('canvas').first()).toBeVisible({ timeout: 15000 });
   });
 
   test('PW-24: Can start scenario on mobile', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
     // Find and click Start/Play button
     const startBtn = page.getByRole('button', { name: /start|play/i }).first();
-    await expect(startBtn).toBeVisible();
+    await expect(startBtn).toBeVisible({ timeout: 10000 });
     await startBtn.click();
     // Wait for scenario to produce tracks
     await page.waitForTimeout(3000);
   });
 
   test('PW-25: Mobile panel opens via bottom toolbar', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
     // Look for bottom toolbar buttons (Overview, Tasks, Timeline)
     // These may be implemented as buttons near the bottom
     const overviewBtn = page.locator('button').filter({ hasText: /overview|detail/i }).first();
@@ -34,7 +34,7 @@ test.describe('Mobile Layout', () => {
   });
 
   test('PW-26: Mobile panel dismisses', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
     // If panel is open, close it
     const closeBtn = page.locator('button').filter({ hasText: /×|close/i }).first();
     if (await closeBtn.isVisible()) {

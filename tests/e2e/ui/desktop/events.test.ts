@@ -6,7 +6,7 @@ test.describe('Events & WebSocket', () => {
   });
 
   test('PW-18: Start scenario, wait -> event list has entries', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
 
     // Open timeline panel to see events
     const timelineBtn = page.getByRole('button', { name: /show timeline/i }).first();
@@ -36,7 +36,7 @@ test.describe('Events & WebSocket', () => {
   });
 
   test('PW-19: Toggle event filter -> event list changes', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
 
     // Open timeline
     const timelineBtn = page.getByRole('button', { name: /show timeline/i }).first();
@@ -76,7 +76,7 @@ test.describe('Events & WebSocket', () => {
   });
 
   test('PW-20: WS connected indicator is green', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
 
     // Wait for WebSocket connection to establish
     await page.waitForTimeout(3000);
