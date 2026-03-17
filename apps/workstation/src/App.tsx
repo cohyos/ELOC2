@@ -19,6 +19,10 @@ import { LiveInjectionToolbar } from './injection/LiveInjectionToolbar';
 import { useDemoStore } from './stores/demo-store';
 import { ToggleOverlay } from './demo/ToggleOverlay';
 import { getBasicModeHiddenPanels } from './demo/BasicModeFilter';
+import { PresenterDashboard } from './demo/PresenterDashboard';
+import { AnnotationOverlay } from './demo/AnnotationOverlay';
+import { NarrationPanel } from './demo/NarrationPanel';
+import { MetricsOverlay } from './demo/MetricsOverlay';
 
 // ---------------------------------------------------------------------------
 // Colors
@@ -125,11 +129,17 @@ export function App() {
   const trackStatusFilter = useUiStore(s => s.trackStatusFilter);
   const toggleTrackStatus = useUiStore(s => s.toggleTrackStatus);
   const demoActive = useDemoStore(s => s.active);
+  const setDemoActive = useDemoStore(s => s.setActive);
   const viewMode = useDemoStore(s => s.viewMode);
   const basicHiddenPanels = demoActive && viewMode === 'basic' ? getBasicModeHiddenPanels() : [];
+  const [dashboardOpen, setDashboardOpen] = useState(false);
 
   const injectionMode = useUiStore(s => s.injectionMode);
   const toggleInjectionMode = useUiStore(s => s.toggleInjectionMode);
+
+  // Sync demo mode to ui-store for convenience
+  const setDemoMode = useUiStore(s => s.setDemoMode);
+  useEffect(() => { setDemoMode(demoActive); }, [demoActive, setDemoMode]);
 
   const fetchRap = useTrackStore(s => s.fetchRap);
   const fetchSensors = useSensorStore(s => s.fetchSensors);
@@ -227,11 +237,21 @@ export function App() {
             toggleInjectionMode();
           }
           break;
+        case 'd':
+        case 'D':
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            // Toggle demo mode and open dashboard
+            const nextActive = !useDemoStore.getState().active;
+            setDemoActive(nextActive);
+            setDashboardOpen(nextActive);
+          }
+          break;
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [handleStartPause, simElapsed, toggleInjectionMode]);
+  }, [handleStartPause, simElapsed, toggleInjectionMode, setDemoActive]);
 
   // Periodic refresh (every 10s)
   useEffect(() => {
@@ -282,6 +302,14 @@ export function App() {
           </select>
         )}
         <button style={{ ...btn, background: '#2a2a4e', color: '#aa88ff', border: '1px solid #aa88ff44' }} onClick={() => setView('editor')}>Editor</button>
+        <button
+          style={{ ...btn, background: demoActive ? '#4a9eff' : '#2a2a4e', color: demoActive ? '#fff' : '#4a9eff', border: '1px solid #4a9eff44' }}
+          onClick={() => {
+            if (!demoActive) setDemoActive(true);
+            setDashboardOpen(!dashboardOpen);
+          }}
+          title="Presenter Dashboard (Ctrl+D)"
+        >Demo</button>
 
         {/* Track summary with filter toggles */}
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center', fontSize: '11px' }}>
@@ -380,6 +408,12 @@ export function App() {
           <div style={{ padding: '6px 16px', fontSize: '12px', color: '#666' }}>Timeline (collapsed) — click Show Timeline to expand</div>
         )}
       </div>
+
+      {/* Demo mode overlays */}
+      {demoActive && <AnnotationOverlay />}
+      {demoActive && <NarrationPanel />}
+      {demoActive && <MetricsOverlay />}
+      {dashboardOpen && <PresenterDashboard onClose={() => setDashboardOpen(false)} />}
     </div>
   );
 }

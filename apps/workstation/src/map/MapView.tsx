@@ -46,6 +46,9 @@ export function MapView() {
   const activeCues = useTaskStore(s => s.activeCues);
   const layerVisibility = useUiStore(s => s.layerVisibility);
   const trackStatusFilter = useUiStore(s => s.trackStatusFilter);
+  const spawnTargetActive = useUiStore(s => s.spawnTargetActive);
+  const setSpawnTargetPosition = useUiStore(s => s.setSpawnTargetPosition);
+  const spawnTargetPosition = useUiStore(s => s.spawnTargetPosition);
   const demoActive = useDemoStore(s => s.active);
   const viewMode = useDemoStore(s => s.viewMode);
 
@@ -353,6 +356,60 @@ export function MapView() {
       applyFullMode(map.current);
     }
   }, [viewMode, demoActive, layersReady]);
+
+  // Spawn-target map click interception
+  const spawnMarkerRef = useRef<maplibregl.Marker | null>(null);
+
+  useEffect(() => {
+    if (!map.current || !layersReady) return;
+    if (!spawnTargetActive) {
+      // Remove marker + restore cursor when deactivated
+      if (spawnMarkerRef.current) {
+        spawnMarkerRef.current.remove();
+        spawnMarkerRef.current = null;
+      }
+      map.current.getCanvas().style.cursor = '';
+      return;
+    }
+
+    // Change cursor to crosshair while in spawn mode
+    map.current.getCanvas().style.cursor = 'crosshair';
+
+    const handler = (e: maplibregl.MapMouseEvent) => {
+      const { lng, lat } = e.lngLat;
+      setSpawnTargetPosition({ lat, lon: lng });
+
+      // Place / move a temporary marker
+      if (spawnMarkerRef.current) {
+        spawnMarkerRef.current.setLngLat([lng, lat]);
+      } else {
+        const el = document.createElement('div');
+        el.style.width = '16px';
+        el.style.height = '16px';
+        el.style.borderRadius = '50%';
+        el.style.background = '#00cc44';
+        el.style.border = '2px solid #fff';
+        el.style.boxShadow = '0 0 8px rgba(0,204,68,0.6)';
+        spawnMarkerRef.current = new maplibregl.Marker({ element: el })
+          .setLngLat([lng, lat])
+          .addTo(map.current!);
+      }
+    };
+
+    map.current.on('click', handler);
+    return () => {
+      map.current?.off('click', handler);
+      map.current && (map.current.getCanvas().style.cursor = '');
+    };
+  }, [spawnTargetActive, layersReady, setSpawnTargetPosition]);
+
+  // Clean up spawn marker when position is cleared (after submit)
+  useEffect(() => {
+    if (!spawnTargetPosition && spawnMarkerRef.current) {
+      spawnMarkerRef.current.remove();
+      spawnMarkerRef.current = null;
+    }
+  }, [spawnTargetPosition]);
 
   // Expose map instance as state so DebugOverlay can use it
   const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
