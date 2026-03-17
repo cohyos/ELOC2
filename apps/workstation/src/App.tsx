@@ -15,6 +15,10 @@ import { CueDetailPanel } from './cue-detail/CueDetailPanel';
 import { GroupDetailPanel } from './group-detail/GroupDetailPanel';
 import { GeometryDetailPanel } from './geometry-detail/GeometryDetailPanel';
 import { ScenarioEditor } from './editor/ScenarioEditor';
+import { LiveInjectionToolbar } from './injection/LiveInjectionToolbar';
+import { useDemoStore } from './stores/demo-store';
+import { ToggleOverlay } from './demo/ToggleOverlay';
+import { getBasicModeHiddenPanels } from './demo/BasicModeFilter';
 
 // ---------------------------------------------------------------------------
 // Colors
@@ -120,6 +124,12 @@ export function App() {
   const tentativeCount = useTrackStore(s => s.tentativeCount);
   const trackStatusFilter = useUiStore(s => s.trackStatusFilter);
   const toggleTrackStatus = useUiStore(s => s.toggleTrackStatus);
+  const demoActive = useDemoStore(s => s.active);
+  const viewMode = useDemoStore(s => s.viewMode);
+  const basicHiddenPanels = demoActive && viewMode === 'basic' ? getBasicModeHiddenPanels() : [];
+
+  const injectionMode = useUiStore(s => s.injectionMode);
+  const toggleInjectionMode = useUiStore(s => s.toggleInjectionMode);
 
   const fetchRap = useTrackStore(s => s.fetchRap);
   const fetchSensors = useSensorStore(s => s.fetchSensors);
@@ -210,11 +220,18 @@ export function App() {
             body: JSON.stringify({ timeSec: simElapsed + 10 }),
           }).catch(() => {});
           break;
+        case 'i':
+        case 'I':
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            toggleInjectionMode();
+          }
+          break;
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [handleStartPause, simElapsed]);
+  }, [handleStartPause, simElapsed, toggleInjectionMode]);
 
   // Periodic refresh (every 10s)
   useEffect(() => {
@@ -230,6 +247,7 @@ export function App() {
 
   // ─── Desktop Layout ───────────────────────────────────────────────────
   const showDetail = detailPanelOpen;
+  const showInjection = injectionMode && simRunning;
   const btn = btnBase(false);
 
   return (
@@ -240,11 +258,15 @@ export function App() {
       background: colors.bg,
       color: colors.text,
       overflow: 'hidden',
-      gridTemplateRows: '40px 1fr auto',
+      gridTemplateRows: showInjection ? '40px auto 1fr auto' : '40px 1fr auto',
       gridTemplateColumns: showDetail ? '1fr 380px' : '1fr',
       gridTemplateAreas: showDetail
-        ? `"header header" "map detail" "timeline timeline"`
-        : `"header" "map" "timeline"`,
+        ? (showInjection
+          ? `"header header" "inject inject" "map detail" "timeline timeline"`
+          : `"header header" "map detail" "timeline timeline"`)
+        : (showInjection
+          ? `"header" "inject" "map" "timeline"`
+          : `"header" "map" "timeline"`),
     }}>
       {/* Header */}
       <header style={{ gridArea: 'header', background: colors.headerBg, display: 'flex', alignItems: 'center', padding: '0 16px', gap: '12px', fontSize: '13px', borderBottom: `1px solid ${colors.border}`, zIndex: 10 }}>
@@ -288,6 +310,16 @@ export function App() {
           <span style={{ fontSize: '11px', color: '#aaa', fontFamily: 'monospace', minWidth: '50px' }}>T+{formatTime(simElapsed)}</span>
         </div>
 
+        {simRunning && (
+          <button
+            style={{ ...btn, background: injectionMode ? '#ff8800' : '#333', color: injectionMode ? '#fff' : '#aaa', border: injectionMode ? '1px solid #ff880066' : 'none', fontWeight: injectionMode ? 600 : 400 }}
+            onClick={toggleInjectionMode}
+            title="Toggle live injection toolbar (Ctrl+I)"
+          >
+            Live Inject
+          </button>
+        )}
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginLeft: 'auto', fontSize: '11px', color: colors.textDim }}>
           <button style={{ ...btn, background: detailView === 'tasks' && detailPanelOpen ? '#4a9eff' : '#333', color: detailView === 'tasks' && detailPanelOpen ? '#fff' : '#aaa' }}
             onClick={() => {
@@ -314,10 +346,18 @@ export function App() {
         </div>
       </header>
 
+      {/* Injection Toolbar */}
+      {showInjection && (
+        <div style={{ gridArea: 'inject' }}>
+          <LiveInjectionToolbar />
+        </div>
+      )}
+
       {/* Map */}
       <div style={{ gridArea: 'map', position: 'relative', overflow: 'hidden' }}>
         <DegradedModeOverlay />
         <MapView />
+        <ToggleOverlay />
       </div>
 
       {/* Detail Panel */}
@@ -325,12 +365,12 @@ export function App() {
         <div style={{ gridArea: 'detail', background: colors.panelBg, borderLeft: `1px solid ${colors.border}`, overflowY: 'auto', overflowX: 'hidden' }}>
           {detailView === 'track' && <TrackDetailPanel />}
           {detailView === 'sensor' && <SensorDetailPanel />}
-          {detailView === 'tasks' && <TaskPanel />}
-          {detailView === 'investigation' && <InvestigationManagerPanel />}
+          {!basicHiddenPanels.includes('tasks') && detailView === 'tasks' && <TaskPanel />}
+          {!basicHiddenPanels.includes('investigation') && detailView === 'investigation' && <InvestigationManagerPanel />}
           {detailView === 'cue' && <CueDetailPanel />}
           {detailView === 'group' && <GroupDetailPanel />}
           {detailView === 'geometry' && <GeometryDetailPanel />}
-          {detailView === 'none' && <DefaultPanel />}
+          {(detailView === 'none' || (basicHiddenPanels.includes(detailView))) && <DefaultPanel />}
         </div>
       )}
 

@@ -67,6 +67,15 @@ interface UiState {
   // Event log
   eventLog: EventLogEntry[];
 
+  // Demo mode (synced from demo store for convenience)
+  demoMode: boolean;
+
+  // Injection
+  injectionMode: boolean;
+  injectionLog: InjectionLogEntry[];
+  spawnTargetPosition: { lat: number; lon: number } | null;
+  spawnTargetActive: boolean;
+
   // Actions
   selectTrack: (id: string | null) => void;
   selectSensor: (id: string | null) => void;
@@ -88,6 +97,15 @@ interface UiState {
   clearSelectionHighlights: () => void;
   addEvent: (entry: EventLogEntry) => void;
   clearEvents: () => void;
+
+  // Demo mode actions
+  setDemoMode: (active: boolean) => void;
+
+  // Injection actions
+  toggleInjectionMode: () => void;
+  addInjectionEntry: (entry: InjectionLogEntry) => void;
+  setSpawnTargetPosition: (pos: { lat: number; lon: number } | null) => void;
+  setSpawnTargetActive: (active: boolean) => void;
 }
 
 export interface SelectionBearingRay {
@@ -102,6 +120,13 @@ export interface EventLogEntry {
   eventType: string;
   timestamp: number;
   summary: string;
+}
+
+export interface InjectionLogEntry {
+  id: string;
+  type: 'fault' | 'action' | 'target';
+  timestamp: number;
+  description: string;
 }
 
 let eventCounter = 0;
@@ -125,6 +150,11 @@ export const useUiStore = create<UiState>((set) => ({
   highlightedSensorIds: [],
   selectionBearingRays: [],
   eventLog: [],
+  demoMode: false,
+  injectionMode: false,
+  injectionLog: [],
+  spawnTargetPosition: null,
+  spawnTargetActive: false,
 
   selectTrack: (id) =>
     set({ selectedTrackId: id, selectedSensorId: null, selectedCueId: null, selectedGroupId: null, selectedGeometryTrackId: null, detailView: id ? 'track' : 'none', detailPanelOpen: !!id }),
@@ -176,4 +206,17 @@ export const useUiStore = create<UiState>((set) => ({
     })),
 
   clearEvents: () => set({ eventLog: [] }),
+
+  setDemoMode: (active) => set({ demoMode: active }),
+
+  toggleInjectionMode: () =>
+    set((s) => ({ injectionMode: !s.injectionMode, spawnTargetActive: false, spawnTargetPosition: null })),
+
+  addInjectionEntry: (entry) =>
+    set((s) => ({
+      injectionLog: [entry, ...s.injectionLog].slice(0, 100),
+    })),
+
+  setSpawnTargetPosition: (pos) => set({ spawnTargetPosition: pos }),
+  setSpawnTargetActive: (active) => set({ spawnTargetActive: active, spawnTargetPosition: active ? null : null }),
 }));

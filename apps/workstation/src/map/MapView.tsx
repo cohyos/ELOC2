@@ -17,6 +17,8 @@ import { initSelectionRayLayer, updateSelectionRayLayer, clearSelectionRayLayer 
 import { DebugOverlay } from './DebugOverlay';
 import { LayerFilterPanel } from './LayerFilterPanel';
 import type { LayerVisibility, SelectionBearingRay } from '../stores/ui-store';
+import { useDemoStore } from '../stores/demo-store';
+import { applyBasicMode, applyFullMode } from '../demo/BasicModeFilter';
 
 export function MapView() {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -44,6 +46,8 @@ export function MapView() {
   const activeCues = useTaskStore(s => s.activeCues);
   const layerVisibility = useUiStore(s => s.layerVisibility);
   const trackStatusFilter = useUiStore(s => s.trackStatusFilter);
+  const demoActive = useDemoStore(s => s.active);
+  const viewMode = useDemoStore(s => s.viewMode);
 
   // Initialize map
   useEffect(() => {
@@ -339,6 +343,16 @@ export function MapView() {
       }
     }
   }, [layerVisibility, layersReady]);
+
+  // Demo mode: toggle between basic and full ELOC2 view
+  useEffect(() => {
+    if (!map.current || !layersReady || !demoActive) return;
+    if (viewMode === 'basic') {
+      applyBasicMode(map.current);
+    } else {
+      applyFullMode(map.current);
+    }
+  }, [viewMode, demoActive, layersReady]);
 
   // Expose map instance as state so DebugOverlay can use it
   const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
