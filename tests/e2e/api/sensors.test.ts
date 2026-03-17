@@ -9,7 +9,7 @@ test.describe('Sensor Endpoints', () => {
     // Each sensor should have standard fields
     for (const sensor of body) {
       expect(sensor).toHaveProperty('sensorId');
-      expect(sensor).toHaveProperty('type');
+      expect(sensor).toHaveProperty('sensorType');
     }
   });
 

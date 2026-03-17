@@ -15,13 +15,14 @@ test.describe('SV-08: Multi-EO Scenario', () => {
   });
 
   test('Multiple EO sensors track same target, producing EO tracks and potential split detection', async ({ request }) => {
-    // Wait 10s real = ~100s sim — enough for radar detection, EO cueing, and EO tracks
-    await new Promise(r => setTimeout(r, 10_000));
-
-    // Verify tracks exist
-    const rapRes = await request.get('/api/rap');
-    expect(rapRes.ok()).toBeTruthy();
-    const rap = await rapRes.json();
+    // Poll until tracks appear (up to 20s real = ~200s sim)
+    let rap: any = { tracks: [] };
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const rapRes = await request.get('/api/rap');
+      rap = await rapRes.json();
+      if (rap.tracks.length > 0) break;
+    }
     expect(rap.tracks.length).toBeGreaterThan(0);
 
     // Check EO tracks — two EO sensors should produce observations

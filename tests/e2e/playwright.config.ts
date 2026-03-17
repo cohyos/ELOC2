@@ -34,6 +34,8 @@ export default defineConfig({
       name: 'scenarios',
       testMatch: 'scenarios/**/*.test.ts',
       timeout: 120_000,
+      fullyParallel: false,
     },
   ],
+  workers: 1,
 });

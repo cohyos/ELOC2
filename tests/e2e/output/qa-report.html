@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>ELOC2 QA Report</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0d0d1a; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; padding: 20px; }
+    h1 { color: #4a9eff; margin-bottom: 10px; }
+    .summary { display: flex; gap: 30px; align-items: center; margin: 20px 0; padding: 20px; background: #141425; border: 1px solid #2a2a3e; border-radius: 8px; }
+    .stat { text-align: center; }
+    .stat-value { font-size: 32px; font-weight: bold; }
+    .stat-label { font-size: 12px; color: #888; text-transform: uppercase; }
+    .suite { margin: 15px 0; border: 1px solid #2a2a3e; border-radius: 8px; overflow: hidden; }
+    .suite-header { padding: 12px 16px; background: #1a1a2e; cursor: pointer; display: flex; justify-content: space-between; }
+    .suite-header:hover { background: #222240; }
+    .suite-body { display: none; }
+    .suite-body.open { display: block; }
+    .test-row { padding: 8px 16px; border-top: 1px solid #2a2a3e; display: flex; justify-content: space-between; align-items: center; }
+    .test-row:hover { background: #1a1a2e; }
+    .badge { padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+    .passed { background: #00cc44; color: #000; }
+    .failed { background: #ff3333; color: #fff; }
+    .skipped { background: #888; color: #fff; }
+    .error-detail { padding: 8px 16px; background: #1a0000; color: #ff6666; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
+    .meta { color: #888; font-size: 13px; margin: 5px 0; }
+    .screenshot { max-width: 400px; border: 1px solid #2a2a3e; border-radius: 4px; margin: 8px 16px; }
+  </style>
+</head>
+<body>
+  <h1>ELOC2 QA Report</h1>
+  <div class="meta">Generated: 2026-03-17T05:19:16.868Z | Base URL: http://localhost:3001 | Duration: 64.4s</div>
+
+  <div class="summary">
+    
+    <svg width="120" height="120" viewBox="0 0 120 120">
+      <circle cx="60" cy="60" r="50" fill="none" stroke="#00cc44" stroke-width="20"
+        stroke-dasharray="314.28 314.28"
+        transform="rotate(-90 60 60)" />
+      <circle cx="60" cy="60" r="50" fill="none" stroke="#ff3333" stroke-width="20"
+        stroke-dasharray="0 314.28"
+        stroke-dashoffset="-314.28"
+        transform="rotate(-90 60 60)" />
+      
+      <text x="60" y="65" text-anchor="middle" fill="white" font-size="18" font-weight="bold">
+        100%
+      </text>
+    </svg>
+    <div class="stat"><div class="stat-value" style="color: #e0e0e0">34</div><div class="stat-label">Total</div></div>
+    <div class="stat"><div class="stat-value" style="color: #00cc44">34</div><div class="stat-label">Passed</div></div>
+    <div class="stat"><div class="stat-value" style="color: #ff3333">0</div><div class="stat-label">Failed</div></div>
+    <div class="stat"><div class="stat-value" style="color: #888">0</div><div class="stat-label">Skipped</div></div>
+  </div>
+
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>Group &amp; EO Endpoints (3/3)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>API-19: API-19: GET /api/groups returns array</span>
+            <span><span class="badge passed">PASSED</span> 36ms</span>
+          </div>
+          
+          
+        
+          <div class="test-row">
+            <span>API-20: API-20: GET /api/eo-cues returns array</span>
+            <span><span class="badge passed">PASSED</span> 9ms</span>
+          </div>
+          
+          
+        
+          <div class="test-row">
+            <span>API-21: API-21: GET /api/eo-tracks returns array</span>
+            <span><span class="badge passed">PASSED</span> 7ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>Health Check (1/1)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>API-01: API-01: Health check returns 200 with status ok</span>
+            <span><span class="badge passed">PASSED</span> 11ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>RAP Endpoints (4/4)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>API-09: API-09: GET /api/rap returns object with tracks array and timestamp</span>
+            <span><span class="badge passed">PASSED</span> 18ms</span>
+          </div>
+          
+          
+        
+          <div class="test-row">
+            <span>API-10: API-10: Start scenario, wait 2s, GET /api/rap has tracks</span>
+            <span><span class="badge passed">PASSED</span> 5029ms</span>
+          </div>
+          
+          
+        
+          <div class="test-row">
+            <span>API-11: API-11: GET /api/events returns array</span>
+            <span><span class="badge passed">PASSED</span> 9ms</span>
+          </div>
+          
+          
+        
+          <div class="test-row">
+            <span>API-12: API-12: GET /api/geometry/:id returns 404 for non-existent track</span>
+            <span><span class="badge passed">PASSED</span> 9ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>Replay &amp; Validation Endpoints (3/3)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>API-22: API-22: POST /api/replay/seek with valid timeSec succeeds</span>
+            <span><span class="badge passed">PASSED</span> 1016ms</span>
+          </div>
+          
+          
+        
+          <div class="test-row">
+            <span>API-23: API-23: POST /api/scenario/speed with negative speed returns 400</span>
+            <span><span class="badge passed">PASSED</span> 11ms</span>
+          </div>
+          
+          
+        
+          <div class="test-row">
+            <span>API-24: API-24: POST /api/replay/seek with negative timeSec returns 400</span>
+            <span><span class="badge passed">PASSED</span> 9ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>Scenario Endpoints (7/7)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>API-02: API-02: GET /api/scenarios returns array with &gt;= 9 scenarios</span>
+            <span><span class="badge passed">PASSED</span> 28ms</span>
+          </div>
+          
+          
+        
+          <div class="test-row">
+            <span>API-03: API-03: GET /api/scenario/status returns valid status</span>
+            <span><span class="badge passed">PASSED</span> 13ms</span>
+          </div>
+          
+          
+        
+          <div class="test-row">
+            <span>API-04: API-04: POST /api/scenario/start returns ok with running true</span>
+            <span><span class="badge passed">PASSED</span> 11ms</span>
+          </div>
+          
+          
+        
+          <div class="test-row">
+            <span>API-05: API-05: POST /api/scenario/pause returns ok with running false</span>
+            <span><span class="badge passed">PASSED</span> 12ms</span>
+          </div>
+          
+          
+        
+          <div class="test-row">
+            <span>API-06: API-06: POST /api/scenario/speed with speed 5 returns success</span>
+            <span><span class="badge passed">PASSED</span> 10ms</span>
+          </div>
+          
+          
+        
+          <div class="test-row">
+            <span>API-07: API-07: POST /api/scenario/reset returns ok</span>
+            <span><span class="badge passed">PASSED</span> 9ms</span>
+          </div>
+          
+          
+        
+          <div class="test-row">
+            <span>API-08: API-08: POST /api/scenario/reset with scenarioId switches scenario</span>
+            <span><span class="badge passed">PASSED</span> 10ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>Sensor Endpoints (2/2)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>API-13: API-13: GET /api/sensors returns array of sensors</span>
+            <span><span class="badge passed">PASSED</span> 7ms</span>
+          </div>
+          
+          
+        
+          <div class="test-row">
+            <span>API-14: API-14: GET /api/sensors/:id/registration returns registration state</span>
+            <span><span class="badge passed">PASSED</span> 7ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>Task Endpoints (4/4)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>API-15: API-15: GET /api/tasks returns array</span>
+            <span><span class="badge passed">PASSED</span> 6ms</span>
+          </div>
+          
+          
+        
+          <div class="test-row">
+            <span>API-16: API-16: POST /api/operator/approve with invalid taskId returns 404</span>
+            <span><span class="badge passed">PASSED</span> 5ms</span>
+          </div>
+          
+          
+        
+          <div class="test-row">
+            <span>API-17: API-17: POST /api/operator/reject with invalid taskId returns 404</span>
+            <span><span class="badge passed">PASSED</span> 5ms</span>
+          </div>
+          
+          
+        
+          <div class="test-row">
+            <span>API-18: API-18: POST /api/operator/reserve with valid sensorId returns reservation</span>
+            <span><span class="badge passed">PASSED</span> 13ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>WebSocket Endpoints (2/2)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>API-25: API-25: WebSocket connects to /ws/events and receives snapshot</span>
+            <span><span class="badge passed">PASSED</span> 8ms</span>
+          </div>
+          
+          
+        
+          <div class="test-row">
+            <span>API-26: API-26: Start scenario, receive rap.update via WebSocket</span>
+            <span><span class="badge passed">PASSED</span> 119ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>SV-04: Bad Triangulation Scenario (1/1)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>Shallow intersection angle produces weak or no geometry estimate: Shallow intersection angle produces weak or no geometry estimate</span>
+            <span><span class="badge passed">PASSED</span> 10061ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>SV-07: Central Israel Full Scenario (1/1)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>Full complex scenario produces multiple tracks, confirmed states, and rich event log: Full complex scenario produces multiple tracks, confirmed states, and rich event log</span>
+            <span><span class="badge passed">PASSED</span> 6091ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>SV-02: Crossed Tracks Scenario (1/1)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>Two targets create distinct tracks that are not incorrectly merged: Two targets create distinct tracks that are not incorrectly merged</span>
+            <span><span class="badge passed">PASSED</span> 7045ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>SV-03: Good Triangulation Scenario (1/1)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>Two EO sensors produce geometry events with adequate intersection angle: Two EO sensors produce geometry events with adequate intersection angle</span>
+            <span><span class="badge passed">PASSED</span> 10041ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>SV-08: Multi-EO Scenario (1/1)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>Multiple EO sensors track same target, producing EO tracks and potential split detection: Multiple EO sensors track same target, producing EO tracks and potential split detection</span>
+            <span><span class="badge passed">PASSED</span> 2039ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>SV-06: Operator Override Scenario (1/1)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>Operator can reject a proposed task and status changes: Operator can reject a proposed task and status changes</span>
+            <span><span class="badge passed">PASSED</span> 8030ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>SV-05: Sensor Fault Scenario (1/1)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>Azimuth bias fault triggers registration degradation and fault events: Azimuth bias fault triggers registration degradation and fault events</span>
+            <span><span class="badge passed">PASSED</span> 2033ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>SV-01: Single Target Confirm Scenario (1/1)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>Track created, confirmed, and EO cue issued: Track created, confirmed, and EO cue issued</span>
+            <span><span class="badge passed">PASSED</span> 10046ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+
+  <script>
+    // Auto-open suites with failures
+    document.querySelectorAll('.suite').forEach(s => {
+      if (s.querySelector('.badge.failed')) {
+        s.querySelector('.suite-body')?.classList.add('open');
+      }
+    });
+  </script>
+</body>
+</html>

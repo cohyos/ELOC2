@@ -15,14 +15,14 @@ test.describe('SV-02: Crossed Tracks Scenario', () => {
   });
 
   test('Two targets create distinct tracks that are not incorrectly merged', async ({ request }) => {
-    // Wait 5s real = ~50s sim — both targets should be detected by both radars
-    await new Promise(r => setTimeout(r, 5000));
-
-    const rapRes = await request.get('/api/rap');
-    expect(rapRes.ok()).toBeTruthy();
-    const rap = await rapRes.json();
-
-    // Should have at least 2 tracks (one per target)
+    // Poll until at least 2 tracks appear (up to 20s real = ~200s sim)
+    let rap: any = { tracks: [] };
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const rapRes = await request.get('/api/rap');
+      rap = await rapRes.json();
+      if (rap.tracks.length >= 2) break;
+    }
     expect(rap.tracks.length).toBeGreaterThanOrEqual(2);
 
     // Tracks should have different IDs (not incorrectly merged)

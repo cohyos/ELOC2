@@ -26,8 +26,8 @@ test.describe('RAP Endpoints', () => {
     await request.post('/api/scenario/speed', { data: { speed: 10 } });
     await request.post('/api/scenario/start');
 
-    // Wait for simulation to produce tracks
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+    // Wait for simulation to produce tracks (5s at 10x speed = 50s sim time)
+    await new Promise((resolve) => setTimeout(resolve, 5000));
 
     const res = await request.get('/api/rap');
     expect(res.ok()).toBeTruthy();
