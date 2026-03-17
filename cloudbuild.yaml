@@ -23,7 +23,7 @@ steps:
     entrypoint: 'sh'
     args:
       - '-c'
-      - 'pnpm test'
+      - 'cd /app && pnpm test'
 
   # Copy built app to shared volume for E2E step
   - name: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}'
