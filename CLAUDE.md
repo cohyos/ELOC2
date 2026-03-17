@@ -58,7 +58,7 @@ The `Knowledge_Base_and_Agents_instructions/` folder contains **17 foundational 
 | `Claude_agent_build_prompts.md` | Detailed agent prompts with scope + done criteria | Agent execution |
 | `Chunk_index.md` | Index of all knowledge base chunks for retrieval | Reference |
 
-## Current Completion (as of 1f2500f — 2026-03-16)
+## Current Completion (as of 2026-03-17)
 
 | Phase | Status | Notes |
 |-------|--------|-------|
@@ -68,41 +68,57 @@ The `Knowledge_Base_and_Agents_instructions/` folder contains **17 foundational 
 | 3: EO Cueing | **Complete** | CueIssuer, gimbal/FOV, EO reports (50 tests) |
 | 4: Tasking | **Complete** | Scoring, policy engine, assigner (22 tests) |
 | 5: Multi-Target | **Complete** | Ambiguity, split/merge, EoTrack |
-| 6: Triangulation | **Wired** | Integrated in live-engine, geometry broadcast via WS |
-| 7: Advanced Fusion | **Wired** | fusion-mode-selector active, conservative/centralized modes |
-| 8: Workstation | **~85%** | Map, panels, layers, responsive layout done |
+| 6: Triangulation | **Complete** | Integrated in live-engine, geometry broadcast via WS |
+| 7: Advanced Fusion | **Complete** | fusion-mode-selector active, conservative/centralized modes |
+| 8: Workstation | **~95%** | Map, panels, layers, dark mode, trails, actions, responsive layout |
 | 9: Scenarios | **Partial** | central-israel exists; no integration tests |
+
+## Recent Fixes (Rounds 1-3, branch `claude/eloc2-development-U3sup`)
+
+### Round 1 — Core rendering fixes
+- DebugOverlay gated behind `?debug=1` URL param
+- Coverage layer opacity increased + radar outline stroke
+- Labels default OFF, short format (T1, R1, E2)
+- `rap.snapshot` complete with all data fields on WS connect
+- Broadcast throttling (cap 4/sec at >2x speed)
+
+### Round 2 — Gimbal and font fixes
+- Continuous gimbal tracking every tick (not just at task assignment)
+- Glyph CDN switched to `fonts.openmaptiles.org` (reliable)
+- Font stack simplified to `Open Sans Bold`
+- Azimuth validation in ray layers (`Number.isFinite` guards)
+- Reduced console logging noise
+
+### Round 3 — UX and features
+- **Dark mode map**: CartoDB Dark Matter tiles, toggle in header (default ON)
+- **Track trails**: Fading breadcrumb dots (max 5 past positions per track)
+- **System health panel**: DefaultPanel shows fusion mode, registration health, sensor online count
+- **Track action buttons**: "Investigate" and "Mark Priority" in TrackDetailPanel
+- **Operator priority API**: `POST /api/operator/priority` boosts EO tasking score
+- **Demo button toggle**: Now properly toggles demo mode off when clicked again
+- **Version label**: Updated to v0.3.0 with tooltip
+- **RAF batching**: ReplayController coalesces WS messages via requestAnimationFrame
+- **Pause fix**: Backend sends final broadcast with `running: false` on pause
 
 ## Gap Completion Plan (Ordered)
 
 ### HIGH — Must fix for demo
-1. **Map symbols blank on deploy** — MapLibre v5 glyph/font loading fails silently. DebugOverlay fallback exists. Fix: verify font loading or use circle-only layers. Files: `MapView.tsx`, `track-layer.ts`, `sensor-layer.ts`
+1. ~~**Map symbols blank on deploy**~~ — **DONE**: Font CDN fixed, try/catch isolation, DebugOverlay gated
 2. **Deploy to Cloud Run** — Merge dev→master triggers Cloud Build. Or manual `gcloud builds submit`.
 
 ### MEDIUM — Feature completeness
-3. ~~**Replay/timeline scrubbing**~~ — **DONE**: `/api/replay/seek` endpoint, click+drag scrubber, keyboard shortcuts (Space=play/pause, Left/Right=seek +-10s)
-4. ~~**Ambiguity map markers**~~ — **DONE**: `ambiguity-marker-layer.ts` renders pink rings on split_detected tracks
-5. ~~**Per-sensor degraded indicators**~~ — **DONE**: Yellow/red degraded ring on sensor icons based on registration state
-6. **Integration tests** — Full pipeline: scenario → live-engine → validation assertions. Files: `tests/integration/`, `validation/src/runner.ts`
-7. ~~**Missing API endpoints**~~ — **DONE**: Replay seek, EO cues, unresolved groups, EO tracks all served via routes + WS
+3. ~~**Replay/timeline scrubbing**~~ — **DONE**
+4. ~~**Ambiguity map markers**~~ — **DONE**
+5. ~~**Per-sensor degraded indicators**~~ — **DONE**
+6. **Integration tests** — Full pipeline: scenario -> live-engine -> validation assertions
+7. ~~**Missing API endpoints**~~ — **DONE**
 
 ### LOW — Polish
-8. ~~**Named scenarios**~~ — **DONE**: All 9 scenarios implemented (8 simple + 1 complex central-israel)
-9. ~~**TrackDetail enhancements**~~ — **DONE**: Shows fusion mode, geometry, identification support, lineage
+8. ~~**Named scenarios**~~ — **DONE**
+9. ~~**TrackDetail enhancements**~~ — **DONE**: Shows fusion mode, geometry, ID support, lineage, action buttons
 10. **Playwright E2E** — Smoke browser test. New `tests/e2e/`
 
 ## Known Issues
-
-### Map symbols not rendering (ACTIVE)
-- Header shows correct track counts (95 tentative) but map is blank
-- Data pipeline verified correct: tracks have valid `state: { lat, lon, alt }`
-- Likely cause: MapLibre GL v5 font/glyph loading failure blocking rendering
-- Fixes applied but NOT YET DEPLOYED:
-  - Symbol/label layers isolated in try/catch (font failure won't block circles)
-  - Font fallback stack: Open Sans Bold, Noto Sans Bold, Arial Unicode MS Bold
-  - DebugOverlay renders HTML markers bypassing MapLibre entirely
-  - WS payload trimmed (lineage capped to last 3 entries per track)
-  - MapLibre error event logging added
 
 ### Deployment (ACTIVE)
 - Cloud Run service: `eloc2-820514480393.me-west1.run.app`
@@ -110,7 +126,7 @@ The `Knowledge_Base_and_Agents_instructions/` folder contains **17 foundational 
 - Manual deploy:
   ```bash
   gcloud auth login
-  git checkout master && git merge claude/eloc2-development-ElpmM
+  git checkout master && git merge claude/eloc2-development-U3sup
   gcloud builds submit --config=cloudbuild.yaml \
     --substitutions=SHORT_SHA=$(git rev-parse --short HEAD) \
     --project=eloc2demo

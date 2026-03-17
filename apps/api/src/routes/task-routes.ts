@@ -29,6 +29,18 @@ export async function taskRoutes(app: FastifyInstance) {
     return task;
   });
 
+  // POST /api/operator/priority — Add/remove track from operator priority set
+  app.post<{ Body: { trackId: string; priority: boolean } }>('/api/operator/priority', async (request, reply) => {
+    const { trackId, priority } = request.body;
+    if (!trackId) return reply.code(400).send({ error: 'trackId is required' });
+    if (priority) {
+      engine.addPriorityTrack(trackId);
+    } else {
+      engine.removePriorityTrack(trackId);
+    }
+    return { ok: true, trackId, priority, priorityTracks: engine.getPriorityTracks() };
+  });
+
   // POST /api/operator/reserve — Reserve a sensor for manual control
   app.post<{ Body: { sensorId: string } }>('/api/operator/reserve', async (request) => {
     const { sensorId } = request.body;

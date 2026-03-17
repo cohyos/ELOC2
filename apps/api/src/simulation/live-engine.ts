@@ -179,6 +179,7 @@ export class LiveEngine {
   private activeCuesById = new Map<string, EoCue>();
   /** Maps cueId → systemTrackId for cue-to-track lookup. */
   private cueToTrack = new Map<string, string>();
+  private operatorPriorityTracks = new Set<string>();
   /** Accumulates bearings per cueId within a tick for batch processing. */
   private pendingBearings = new Map<string, EoBearingObservation[]>();
   private lastEoTaskingSec = 0;
@@ -429,6 +430,8 @@ export class LiveEngine {
       this.timer = null;
     }
     this.pushEvent('scenario.paused', 'Scenario paused');
+    // Send final broadcast with running=false so frontend knows to stop
+    this.broadcastRap(true);
   }
 
   setSpeed(speed: number): void {
@@ -1158,10 +1161,9 @@ export class LiveEngine {
 
     // 2. Score each candidate
     // Tracks with unresolved groups get a boost via operator-interest set
-    const groupBoostedTrackIds = new Set<string>();
+    const groupBoostedTrackIds = new Set<string>(this.operatorPriorityTracks);
     for (const group of this.unresolvedGroupsById.values()) {
       if (group.status !== 'active') continue;
-      // Find the system track associated with this group's cue
       const systemTrackId = this.cueToTrack.get(group.parentCueId);
       if (systemTrackId) groupBoostedTrackIds.add(systemTrackId);
     }
@@ -1676,6 +1678,21 @@ export class LiveEngine {
       sensor.online = !hasOutage;
       sensor.lastUpdateTime = Date.now() as Timestamp;
     }
+  }
+
+  /** Add a track to the operator priority set (boosts EO tasking score). */
+  addPriorityTrack(trackId: string): void {
+    this.operatorPriorityTracks.add(trackId);
+  }
+
+  /** Remove a track from the operator priority set. */
+  removePriorityTrack(trackId: string): void {
+    this.operatorPriorityTracks.delete(trackId);
+  }
+
+  /** Get all operator-prioritized track IDs. */
+  getPriorityTracks(): string[] {
+    return [...this.operatorPriorityTracks];
   }
 
   /** Update EO gimbal azimuth to continuously track assigned targets. */

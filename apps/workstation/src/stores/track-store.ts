@@ -9,9 +9,14 @@ export interface RapSnapshot {
   tentativeCount: number;
 }
 
+/** Max number of trail positions stored per track */
+const MAX_TRAIL = 5;
+
 interface TrackState {
   tracks: SystemTrack[];
   tracksById: Map<string, SystemTrack>;
+  /** Ring buffer of last N positions per track for trail rendering */
+  trailHistory: Map<string, Array<{ lon: number; lat: number }>>;
   timestamp: number;
   trackCount: number;
   confirmedCount: number;
@@ -28,6 +33,7 @@ interface TrackState {
 export const useTrackStore = create<TrackState>((set, get) => ({
   tracks: [],
   tracksById: new Map(),
+  trailHistory: new Map(),
   timestamp: 0,
   trackCount: 0,
   confirmedCount: 0,
@@ -76,11 +82,29 @@ export const useTrackStore = create<TrackState>((set, get) => ({
     for (const t of tracks) {
       byId.set(t.systemTrackId, t);
     }
+    // Update trail history: append current position, keep last MAX_TRAIL
+    const prevTrail = get().trailHistory;
+    const newTrail = new Map<string, Array<{ lon: number; lat: number }>>();
+    const activeIds = new Set<string>();
+    for (const t of tracks) {
+      activeIds.add(t.systemTrackId);
+      if (!t.state || !Number.isFinite(t.state.lat) || !Number.isFinite(t.state.lon)) continue;
+      const prev = prevTrail.get(t.systemTrackId) ?? [];
+      const last = prev[prev.length - 1];
+      // Only append if position changed (>~10m threshold)
+      if (!last || Math.abs(last.lat - t.state.lat) > 0.0001 || Math.abs(last.lon - t.state.lon) > 0.0001) {
+        const updated = [...prev, { lon: t.state.lon, lat: t.state.lat }];
+        newTrail.set(t.systemTrackId, updated.length > MAX_TRAIL ? updated.slice(-MAX_TRAIL) : updated);
+      } else {
+        newTrail.set(t.systemTrackId, prev);
+      }
+    }
     const confirmed = tracks.filter(t => t.status === 'confirmed').length;
     const tentative = tracks.filter(t => t.status === 'tentative').length;
     set({
       tracks,
       tracksById: byId,
+      trailHistory: newTrail,
       trackCount: tracks.length,
       confirmedCount: confirmed,
       tentativeCount: tentative,

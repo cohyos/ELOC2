@@ -5,7 +5,7 @@ import { useTrackStore } from '../stores/track-store';
 import { useSensorStore } from '../stores/sensor-store';
 import { useTaskStore } from '../stores/task-store';
 import { useUiStore } from '../stores/ui-store';
-import { initTrackLayer, updateTrackLayer, getTrackLayerId } from './layers/track-layer';
+import { initTrackLayer, updateTrackLayer, updateTrackTrailLayer, getTrackLayerId } from './layers/track-layer';
 import { initSensorLayer, updateSensorLayer, getSensorLayerId } from './layers/sensor-layer';
 import { initCoverageLayer, updateCoverageLayer } from './layers/coverage-layer';
 import { initEoRayLayer, updateEoRayLayer } from './layers/eo-ray-layer';
@@ -27,6 +27,7 @@ export function MapView() {
   const [layersReady, setLayersReady] = useState(false);
 
   const tracks = useTrackStore(s => s.tracks);
+  const trailHistory = useTrackStore(s => s.trailHistory);
   const sensors = useSensorStore(s => s.sensors);
   const selectTrack = useUiStore(s => s.selectTrack);
   const selectSensor = useUiStore(s => s.selectSensor);
@@ -49,6 +50,7 @@ export function MapView() {
   const spawnTargetActive = useUiStore(s => s.spawnTargetActive);
   const setSpawnTargetPosition = useUiStore(s => s.setSpawnTargetPosition);
   const spawnTargetPosition = useUiStore(s => s.spawnTargetPosition);
+  const darkMode = useUiStore(s => s.darkMode);
   const demoActive = useDemoStore(s => s.active);
   const viewMode = useDemoStore(s => s.viewMode);
 
@@ -64,9 +66,9 @@ export function MapView() {
         sources: {
           osm: {
             type: 'raster',
-            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+            tiles: ['https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'],
             tileSize: 256,
-            attribution: '&copy; OpenStreetMap contributors',
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
           },
         },
         layers: [
@@ -184,6 +186,17 @@ export function MapView() {
     };
   }, []);
 
+  // Switch map tiles when dark mode toggles
+  useEffect(() => {
+    if (!map.current) return;
+    const src = map.current.getSource('osm') as any;
+    if (!src) return;
+    const tiles = darkMode
+      ? ['https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png']
+      : ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'];
+    src.setTiles(tiles);
+  }, [darkMode]);
+
   // Update track layer when tracks change OR when layers become ready
   useEffect(() => {
     if (!map.current || !layersReady) return;
@@ -191,10 +204,11 @@ export function MapView() {
       trackStatusFilter[t.status as keyof typeof trackStatusFilter] !== false
     );
     updateTrackLayer(map.current, filteredTracks, selectedTrackId);
+    updateTrackTrailLayer(map.current, trailHistory, filteredTracks);
     updateTriangulationLayer(map.current, filteredTracks, sensors, geometryEstimates);
     updateInvestigationRingLayer(map.current, filteredTracks);
     updateAmbiguityMarkerLayer(map.current, unresolvedGroups, filteredTracks);
-  }, [tracks, sensors, layersReady, trackStatusFilter, geometryEstimates, unresolvedGroups, selectedTrackId]);
+  }, [tracks, sensors, trailHistory, layersReady, trackStatusFilter, geometryEstimates, unresolvedGroups, selectedTrackId]);
 
   // Update sensor layers when sensors change OR when layers become ready
   useEffect(() => {
@@ -428,7 +442,7 @@ export function MapView() {
         style={{
           width: '100%',
           height: '100%',
-          filter: 'brightness(0.85) saturate(0.7)',
+          filter: darkMode ? 'none' : 'brightness(0.85) saturate(0.7)',
         }}
       />
       <LayerFilterPanel />

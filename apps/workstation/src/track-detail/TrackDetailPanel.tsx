@@ -10,6 +10,17 @@ import type { InvestigationHistoryData } from './InvestigationHistory';
 import { ThreatAssessment } from './ThreatAssessment';
 import type { ThreatAssessmentData } from './ThreatAssessment';
 
+const actionBtnStyle: React.CSSProperties = {
+  background: '#4a9eff',
+  color: '#fff',
+  border: 'none',
+  padding: '5px 10px',
+  borderRadius: '3px',
+  cursor: 'pointer',
+  fontSize: '11px',
+  fontWeight: 600,
+};
+
 const styles = {
   container: {
     padding: '12px',
@@ -255,6 +266,44 @@ export function TrackDetailPanel() {
         <div style={styles.row}>
           <span style={styles.label}>Last Updated</span>
           <span style={styles.value}>{new Date(track.lastUpdated).toLocaleTimeString()}</span>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div style={styles.section}>
+        <div style={styles.sectionTitle}>Actions</div>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          <button
+            style={{
+              ...actionBtnStyle,
+              background: track.eoInvestigationStatus === 'in_progress' ? '#333' : '#4a9eff',
+              color: track.eoInvestigationStatus === 'in_progress' ? '#666' : '#fff',
+            }}
+            disabled={track.eoInvestigationStatus === 'in_progress'}
+            onClick={() => {
+              fetch('/api/operator/priority', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ trackId: track.systemTrackId, priority: true }),
+              });
+            }}
+            title="Boost EO tasking priority for this track"
+          >
+            Investigate
+          </button>
+          <button
+            style={actionBtnStyle}
+            onClick={() => {
+              fetch('/api/operator/priority', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ trackId: track.systemTrackId, priority: true }),
+              });
+            }}
+            title="Mark as high-priority for EO observation"
+          >
+            Mark Priority
+          </button>
         </div>
       </div>
 

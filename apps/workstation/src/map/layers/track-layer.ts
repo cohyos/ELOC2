@@ -7,6 +7,8 @@ const LABEL_LAYER_ID = 'system-tracks-labels';
 const EO_BADGE_LAYER_ID = 'track-eo-badge';
 const ELLIPSE_SOURCE_ID = 'track-ellipses';
 const ELLIPSE_LAYER_ID = 'track-ellipses-layer';
+const TRAIL_SOURCE_ID = 'track-trails';
+const TRAIL_LAYER_ID = 'track-trails-layer';
 
 /**
  * Status to color mapping (military C2 conventions):
@@ -54,6 +56,24 @@ export function initTrackLayer(map: MaplibreMap) {
     paint: {
       'fill-color': ['get', 'color'],
       'fill-opacity': 0.1,
+    },
+  });
+
+  // Track trail source + layer (fading breadcrumb dots)
+  map.addSource(TRAIL_SOURCE_ID, {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+  });
+
+  map.addLayer({
+    id: TRAIL_LAYER_ID,
+    type: 'circle',
+    source: TRAIL_SOURCE_ID,
+    paint: {
+      'circle-radius': 3,
+      'circle-color': ['get', 'color'],
+      'circle-opacity': ['get', 'opacity'],
+      'circle-stroke-width': 0,
     },
   });
 
@@ -270,6 +290,41 @@ export function updateTrackLayer(map: MaplibreMap, tracks: SystemTrack[], select
       console.warn('[track-layer] Failed to reset selection styling:', e);
     }
   }
+}
+
+/** Update trail layer with fading breadcrumb dots from position history. */
+export function updateTrackTrailLayer(
+  map: MaplibreMap,
+  trailHistory: Map<string, Array<{ lon: number; lat: number }>>,
+  tracks: SystemTrack[],
+) {
+  const source = map.getSource(TRAIL_SOURCE_ID);
+  if (!source) return;
+
+  const trackStatusMap = new Map(tracks.map(t => [t.systemTrackId, t.status]));
+  const features: GeoJSON.Feature[] = [];
+
+  for (const [trackId, positions] of trailHistory) {
+    const status = trackStatusMap.get(trackId) ?? 'tentative';
+    const color = statusColor(status);
+    const count = positions.length;
+    // Skip last position (that's the current track icon position)
+    for (let i = 0; i < count - 1; i++) {
+      const age = count - 1 - i; // oldest = highest age
+      const opacity = Math.max(0.15, 1.0 - (age / 5) * 0.85);
+      features.push({
+        type: 'Feature',
+        properties: { color, opacity, trackId },
+        geometry: { type: 'Point', coordinates: [positions[i].lon, positions[i].lat] },
+      });
+    }
+  }
+
+  (source as any).setData({ type: 'FeatureCollection', features });
+}
+
+export function getTrackTrailLayerId(): string {
+  return TRAIL_LAYER_ID;
 }
 
 export function getTrackLayerId(): string {

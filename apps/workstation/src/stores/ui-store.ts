@@ -70,6 +70,9 @@ interface UiState {
   // Demo mode (synced from demo store for convenience)
   demoMode: boolean;
 
+  // Map style
+  darkMode: boolean;
+
   // Injection
   injectionMode: boolean;
   injectionLog: InjectionLogEntry[];
@@ -100,6 +103,9 @@ interface UiState {
 
   // Demo mode actions
   setDemoMode: (active: boolean) => void;
+
+  // Map style actions
+  toggleDarkMode: () => void;
 
   // Injection actions
   toggleInjectionMode: () => void;
@@ -151,6 +157,7 @@ export const useUiStore = create<UiState>((set) => ({
   selectionBearingRays: [],
   eventLog: [],
   demoMode: false,
+  darkMode: true,
   injectionMode: false,
   injectionLog: [],
   spawnTargetPosition: null,
@@ -208,6 +215,8 @@ export const useUiStore = create<UiState>((set) => ({
   clearEvents: () => set({ eventLog: [] }),
 
   setDemoMode: (active) => set({ demoMode: active }),
+
+  toggleDarkMode: () => set((s) => ({ darkMode: !s.darkMode })),
 
   toggleInjectionMode: () =>
     set((s) => ({ injectionMode: !s.injectionMode, spawnTargetActive: false, spawnTargetPosition: null })),
