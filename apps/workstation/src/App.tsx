@@ -620,6 +620,7 @@ function MobileLayout() {
         {[
           { label: 'Overview', view: 'none' as const, icon: '\u2302' },
           { label: 'Tasks', view: 'tasks' as const, icon: '\u2611' },
+          { label: 'Invest.', view: 'investigation' as const, icon: '\u2318' },
           { label: 'Timeline', view: '__timeline__' as const, icon: '\u23F1' },
         ].map(item => {
           const isTimeline = item.view === '__timeline__';

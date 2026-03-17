@@ -742,6 +742,9 @@ export class LiveEngine {
     this.state.unresolvedGroups = [...this.unresolvedGroupsById.values()].filter(g => g.status === 'active');
     this.state.activeCues = [...this.activeCuesById.values()];
 
+    // Continuous gimbal tracking: update EO sensor gimbal azimuth toward current target
+    this.updateGimbalPointing();
+
     // Broadcast updated RAP to WebSocket clients
     this.broadcastRap();
 
@@ -1672,6 +1675,24 @@ export class LiveEngine {
       );
       sensor.online = !hasOutage;
       sensor.lastUpdateTime = Date.now() as Timestamp;
+    }
+  }
+
+  /** Update EO gimbal azimuth to continuously track assigned targets. */
+  private updateGimbalPointing(): void {
+    const trackMap = new Map(this.state.tracks.map(t => [t.systemTrackId, t]));
+    for (const sensor of this.state.sensors) {
+      if (!sensor.gimbal || !sensor.gimbal.currentTargetId || !sensor.online) continue;
+      const track = trackMap.get(sensor.gimbal.currentTargetId as string);
+      if (!track || track.status === 'dropped') {
+        // Target lost — clear assignment
+        sensor.gimbal.currentTargetId = undefined;
+        continue;
+      }
+      sensor.gimbal.azimuthDeg = bearingDeg(
+        sensor.position.lat, sensor.position.lon,
+        track.state.lat, track.state.lon,
+      );
     }
   }
 

@@ -81,7 +81,7 @@ export function initTrackLayer(map: MaplibreMap) {
         'text-size': 11,
         'text-offset': [0, 1.5],
         'text-anchor': 'top',
-        'text-font': ['Open Sans Bold', 'Noto Sans Bold', 'Arial Unicode MS Bold'],
+        'text-font': ['Open Sans Bold'],
       },
       paint: {
         'text-color': '#ffffff',
@@ -190,22 +190,9 @@ export function updateTrackLayer(map: MaplibreMap, tracks: SystemTrack[], select
 
   const validTracks = tracks.filter(isValidCoord);
 
-  // Log rendering info periodically
+  // Only log errors (not periodic info) to avoid console noise
   if (tracks.length > 0 && validTracks.length === 0) {
-    console.error(
-      '[track-layer] ALL tracks filtered as invalid!',
-      'Sample track:',
-      JSON.stringify({ id: tracks[0].systemTrackId, state: tracks[0].state }),
-    );
-  } else if (validTracks.length > 0 && validTracks.length % 10 === 0) {
-    console.log(`[track-layer] Rendering ${validTracks.length}/${tracks.length} tracks`);
-  }
-
-  if (validTracks.length !== tracks.length) {
-    console.warn(
-      `[track-layer] Filtered out ${tracks.length - validTracks.length} tracks with invalid coordinates`,
-      tracks.filter(t => !isValidCoord(t)).map(t => ({ id: t.systemTrackId, state: t.state })),
-    );
+    console.error('[track-layer] ALL tracks filtered as invalid! Sample:', tracks[0].systemTrackId);
   }
 
   const features: GeoJSON.Feature[] = validTracks.map(track => ({
