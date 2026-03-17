@@ -37,7 +37,7 @@ steps:
 
   # Run E2E tests (API + scenarios + browser UI)
   # Playwright image includes Chromium for PW-* browser tests
-  - name: 'mcr.microsoft.com/playwright:v1.52.0-noble'
+  - name: 'mcr.microsoft.com/playwright:v1.58.2-noble'
     entrypoint: 'bash'
     args:
       - '-c'
