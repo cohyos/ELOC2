@@ -29,7 +29,7 @@
 </head>
 <body>
   <h1>ELOC2 QA Report</h1>
-  <div class="meta">Generated: 2026-03-17T05:19:16.868Z | Base URL: http://localhost:3001 | Duration: 64.4s</div>
+  <div class="meta">Generated: 2026-03-17T05:37:30.186Z | Base URL: http://localhost:3001 | Duration: 79.4s</div>
 
   <div class="summary">
     
@@ -46,8 +46,8 @@
         100%
       </text>
     </svg>
-    <div class="stat"><div class="stat-value" style="color: #e0e0e0">34</div><div class="stat-label">Total</div></div>
-    <div class="stat"><div class="stat-value" style="color: #00cc44">34</div><div class="stat-label">Passed</div></div>
+    <div class="stat"><div class="stat-value" style="color: #e0e0e0">44</div><div class="stat-label">Total</div></div>
+    <div class="stat"><div class="stat-value" style="color: #00cc44">44</div><div class="stat-label">Passed</div></div>
     <div class="stat"><div class="stat-value" style="color: #ff3333">0</div><div class="stat-label">Failed</div></div>
     <div class="stat"><div class="stat-value" style="color: #888">0</div><div class="stat-label">Skipped</div></div>
   </div>
@@ -62,14 +62,14 @@
         
           <div class="test-row">
             <span>API-19: API-19: GET /api/groups returns array</span>
-            <span><span class="badge passed">PASSED</span> 36ms</span>
+            <span><span class="badge passed">PASSED</span> 33ms</span>
           </div>
           
           
         
           <div class="test-row">
             <span>API-20: API-20: GET /api/eo-cues returns array</span>
-            <span><span class="badge passed">PASSED</span> 9ms</span>
+            <span><span class="badge passed">PASSED</span> 8ms</span>
           </div>
           
           
@@ -110,14 +110,14 @@
         
           <div class="test-row">
             <span>API-09: API-09: GET /api/rap returns object with tracks array and timestamp</span>
-            <span><span class="badge passed">PASSED</span> 18ms</span>
+            <span><span class="badge passed">PASSED</span> 16ms</span>
           </div>
           
           
         
           <div class="test-row">
             <span>API-10: API-10: Start scenario, wait 2s, GET /api/rap has tracks</span>
-            <span><span class="badge passed">PASSED</span> 5029ms</span>
+            <span><span class="badge passed">PASSED</span> 5027ms</span>
           </div>
           
           
@@ -155,7 +155,7 @@
         
           <div class="test-row">
             <span>API-23: API-23: POST /api/scenario/speed with negative speed returns 400</span>
-            <span><span class="badge passed">PASSED</span> 11ms</span>
+            <span><span class="badge passed">PASSED</span> 10ms</span>
           </div>
           
           
@@ -179,7 +179,7 @@
         
           <div class="test-row">
             <span>API-02: API-02: GET /api/scenarios returns array with &gt;= 9 scenarios</span>
-            <span><span class="badge passed">PASSED</span> 28ms</span>
+            <span><span class="badge passed">PASSED</span> 26ms</span>
           </div>
           
           
@@ -200,14 +200,14 @@
         
           <div class="test-row">
             <span>API-05: API-05: POST /api/scenario/pause returns ok with running false</span>
-            <span><span class="badge passed">PASSED</span> 12ms</span>
+            <span><span class="badge passed">PASSED</span> 11ms</span>
           </div>
           
           
         
           <div class="test-row">
             <span>API-06: API-06: POST /api/scenario/speed with speed 5 returns success</span>
-            <span><span class="badge passed">PASSED</span> 10ms</span>
+            <span><span class="badge passed">PASSED</span> 8ms</span>
           </div>
           
           
@@ -221,7 +221,7 @@
         
           <div class="test-row">
             <span>API-08: API-08: POST /api/scenario/reset with scenarioId switches scenario</span>
-            <span><span class="badge passed">PASSED</span> 10ms</span>
+            <span><span class="badge passed">PASSED</span> 9ms</span>
           </div>
           
           
@@ -238,14 +238,14 @@
         
           <div class="test-row">
             <span>API-13: API-13: GET /api/sensors returns array of sensors</span>
-            <span><span class="badge passed">PASSED</span> 7ms</span>
+            <span><span class="badge passed">PASSED</span> 8ms</span>
           </div>
           
           
         
           <div class="test-row">
             <span>API-14: API-14: GET /api/sensors/:id/registration returns registration state</span>
-            <span><span class="badge passed">PASSED</span> 7ms</span>
+            <span><span class="badge passed">PASSED</span> 6ms</span>
           </div>
           
           
@@ -262,7 +262,7 @@
         
           <div class="test-row">
             <span>API-15: API-15: GET /api/tasks returns array</span>
-            <span><span class="badge passed">PASSED</span> 6ms</span>
+            <span><span class="badge passed">PASSED</span> 5ms</span>
           </div>
           
           
@@ -283,7 +283,157 @@
         
           <div class="test-row">
             <span>API-18: API-18: POST /api/operator/reserve with valid sensorId returns reservation</span>
-            <span><span class="badge passed">PASSED</span> 13ms</span>
+            <span><span class="badge passed">PASSED</span> 8ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>UI-Equivalent: Track Display (PW-06, PW-21) (2/2)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>APUI-01: APUI-01: Running scenario produces tracks with status breakdown</span>
+            <span><span class="badge passed">PASSED</span> 2023ms</span>
+          </div>
+          
+          
+        
+          <div class="test-row">
+            <span>APUI-02: APUI-02: Confirmed tracks appear after sufficient simulation time</span>
+            <span><span class="badge passed">PASSED</span> 2023ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>UI-Equivalent: Scenario Controls (PW-04, PW-05) (2/2)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>APUI-03: APUI-03: At least 9 scenarios available for dropdown</span>
+            <span><span class="badge passed">PASSED</span> 19ms</span>
+          </div>
+          
+          
+        
+          <div class="test-row">
+            <span>APUI-04: APUI-04: Start/pause cycle changes running state</span>
+            <span><span class="badge passed">PASSED</span> 18ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>UI-Equivalent: Speed Controls (PW-11) (1/1)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>APUI-05: APUI-05: Speed change is reflected in status</span>
+            <span><span class="badge passed">PASSED</span> 15ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>UI-Equivalent: Event List (PW-18, PW-19) (1/1)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>APUI-06: APUI-06: Running scenario generates events visible in timeline</span>
+            <span><span class="badge passed">PASSED</span> 2026ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>UI-Equivalent: WebSocket Status (PW-20) (1/1)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>APUI-07: APUI-07: WebSocket connects and receives snapshot</span>
+            <span><span class="badge passed">PASSED</span> 28ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>UI-Equivalent: Sensor Degraded Mode (PW-22) (1/1)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>APUI-08: APUI-08: Sensor registration state available for degraded banner</span>
+            <span><span class="badge passed">PASSED</span> 6034ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>UI-Equivalent: Replay Scrubber (PW-13, PW-15) (1/1)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>APUI-09: APUI-09: Replay seek changes simulation time</span>
+            <span><span class="badge passed">PASSED</span> 3026ms</span>
+          </div>
+          
+          
+        
+      </div>
+    </div>
+  
+    <div class="suite">
+      <div class="suite-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span>UI-Equivalent: Task Panel (PW-16, PW-17) (1/1)</span>
+        <span class="badge passed">PASS</span>
+      </div>
+      <div class="suite-body">
+        
+          <div class="test-row">
+            <span>APUI-10: APUI-10: Task list endpoint provides panel data</span>
+            <span><span class="badge passed">PASSED</span> 9ms</span>
           </div>
           
           
@@ -300,14 +450,14 @@
         
           <div class="test-row">
             <span>API-25: API-25: WebSocket connects to /ws/events and receives snapshot</span>
-            <span><span class="badge passed">PASSED</span> 8ms</span>
+            <span><span class="badge passed">PASSED</span> 6ms</span>
           </div>
           
           
         
           <div class="test-row">
             <span>API-26: API-26: Start scenario, receive rap.update via WebSocket</span>
-            <span><span class="badge passed">PASSED</span> 119ms</span>
+            <span><span class="badge passed">PASSED</span> 114ms</span>
           </div>
           
           
@@ -324,7 +474,7 @@
         
           <div class="test-row">
             <span>Shallow intersection angle produces weak or no geometry estimate: Shallow intersection angle produces weak or no geometry estimate</span>
-            <span><span class="badge passed">PASSED</span> 10061ms</span>
+            <span><span class="badge passed">PASSED</span> 10058ms</span>
           </div>
           
           
@@ -341,7 +491,7 @@
         
           <div class="test-row">
             <span>Full complex scenario produces multiple tracks, confirmed states, and rich event log: Full complex scenario produces multiple tracks, confirmed states, and rich event log</span>
-            <span><span class="badge passed">PASSED</span> 6091ms</span>
+            <span><span class="badge passed">PASSED</span> 6100ms</span>
           </div>
           
           
@@ -358,7 +508,7 @@
         
           <div class="test-row">
             <span>Two targets create distinct tracks that are not incorrectly merged: Two targets create distinct tracks that are not incorrectly merged</span>
-            <span><span class="badge passed">PASSED</span> 7045ms</span>
+            <span><span class="badge passed">PASSED</span> 7038ms</span>
           </div>
           
           
@@ -392,7 +542,7 @@
         
           <div class="test-row">
             <span>Multiple EO sensors track same target, producing EO tracks and potential split detection: Multiple EO sensors track same target, producing EO tracks and potential split detection</span>
-            <span><span class="badge passed">PASSED</span> 2039ms</span>
+            <span><span class="badge passed">PASSED</span> 2041ms</span>
           </div>
           
           
@@ -409,7 +559,7 @@
         
           <div class="test-row">
             <span>Operator can reject a proposed task and status changes: Operator can reject a proposed task and status changes</span>
-            <span><span class="badge passed">PASSED</span> 8030ms</span>
+            <span><span class="badge passed">PASSED</span> 8033ms</span>
           </div>
           
           
@@ -426,7 +576,7 @@
         
           <div class="test-row">
             <span>Azimuth bias fault triggers registration degradation and fault events: Azimuth bias fault triggers registration degradation and fault events</span>
-            <span><span class="badge passed">PASSED</span> 2033ms</span>
+            <span><span class="badge passed">PASSED</span> 2034ms</span>
           </div>
           
           

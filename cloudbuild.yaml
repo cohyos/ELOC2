@@ -18,7 +18,65 @@ steps:
       - '--all-tags'
       - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}'
 
-  # Deploy to Cloud Run
+  # Run unit tests inside the built image
+  - name: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - 'pnpm test'
+
+  # Copy built app to shared volume for E2E step
+  - name: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - 'cp -a /app/. /shared_app/'
+    volumes:
+      - name: 'app'
+        path: '/shared_app'
+
+  # Run E2E tests (API + scenarios + browser UI)
+  # Playwright image includes Chromium for PW-* browser tests
+  - name: 'mcr.microsoft.com/playwright:v1.52.0-noble'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        set -e
+
+        # Start the API server from the built app
+        cd /shared_app
+        node apps/api/dist/server.js &
+        SERVER_PID=$$!
+
+        # Wait for server (up to 30s)
+        for i in $$(seq 1 30); do
+          if curl -sf http://localhost:3001/api/health > /dev/null 2>&1; then
+            echo "Server ready after $${i}s"
+            break
+          fi
+          sleep 1
+        done
+
+        # Install test dependencies in workspace
+        cd /workspace
+        npm install --no-save @playwright/test ws tsx
+
+        # Run all test projects: API, scenarios, desktop UI, mobile UI
+        npx playwright test --config=tests/e2e/playwright.config.ts \
+          --project=api --project=scenarios --project=desktop --project=mobile
+        TEST_EXIT=$$?
+
+        # Generate QA HTML dashboard (non-blocking)
+        npx tsx tests/e2e/reporting/html-dashboard.ts 2>/dev/null || true
+
+        kill $$SERVER_PID 2>/dev/null || true
+        exit $$TEST_EXIT
+    volumes:
+      - name: 'app'
+        path: '/shared_app'
+
+  # Deploy to Cloud Run (only runs if tests pass)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'gcloud'
     args:
@@ -44,6 +102,35 @@ steps:
       - '3'
       - '--set-env-vars'
       - 'NODE_ENV=production'
+
+  # Post-deploy: Run GCP integration tests against live service
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        SERVICE_URL=$$(gcloud run services describe ${_SERVICE} \
+          --region=${_REGION} --format='value(status.url)')
+        echo "Running GCP tests against $$SERVICE_URL"
+
+        # Quick health + cold-start check
+        START=$$(date +%s%N)
+        HTTP_CODE=$$(curl -sf -o /dev/null -w "%{http_code}" "$$SERVICE_URL/api/health")
+        END=$$(date +%s%N)
+        ELAPSED=$$(( (END - START) / 1000000 ))
+
+        echo "Health check: HTTP $$HTTP_CODE in $${ELAPSED}ms"
+
+        if [ "$$HTTP_CODE" != "200" ]; then
+          echo "FAIL: Health check returned $$HTTP_CODE"
+          exit 1
+        fi
+
+        if [ $$ELAPSED -gt 10000 ]; then
+          echo "WARN: Cold start > 10s ($${ELAPSED}ms)"
+        fi
+
+        echo "GCP smoke tests passed"
 
 substitutions:
   _REGION: me-west1

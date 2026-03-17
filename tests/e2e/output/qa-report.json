@@ -1,10 +1,10 @@
 {
-  "timestamp": "2026-03-17T05:19:16.868Z",
+  "timestamp": "2026-03-17T05:37:30.186Z",
   "baseUrl": "http://localhost:3001",
-  "duration_ms": 64414,
+  "duration_ms": 79359,
   "summary": {
-    "total": 34,
-    "passed": 34,
+    "total": 44,
+    "passed": 44,
     "failed": 0,
     "skipped": 0,
     "pass_rate": 1
@@ -43,6 +43,46 @@
     "Task Endpoints": {
       "total": 4,
       "passed": 4,
+      "failed": 0
+    },
+    "UI-Equivalent: Track Display (PW-06, PW-21)": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0
+    },
+    "UI-Equivalent: Scenario Controls (PW-04, PW-05)": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0
+    },
+    "UI-Equivalent: Speed Controls (PW-11)": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "UI-Equivalent: Event List (PW-18, PW-19)": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "UI-Equivalent: WebSocket Status (PW-20)": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "UI-Equivalent: Sensor Degraded Mode (PW-22)": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "UI-Equivalent: Replay Scrubber (PW-13, PW-15)": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "UI-Equivalent: Task Panel (PW-16, PW-17)": {
+      "total": 1,
+      "passed": 1,
       "failed": 0
     },
     "WebSocket Endpoints": {
@@ -97,7 +137,7 @@
       "name": "API-19: GET /api/groups returns array",
       "suite": "Group & EO Endpoints",
       "status": "passed",
-      "duration_ms": 36,
+      "duration_ms": 33,
       "screenshot": null,
       "error": null
     },
@@ -106,7 +146,7 @@
       "name": "API-20: GET /api/eo-cues returns array",
       "suite": "Group & EO Endpoints",
       "status": "passed",
-      "duration_ms": 9,
+      "duration_ms": 8,
       "screenshot": null,
       "error": null
     },
@@ -133,7 +173,7 @@
       "name": "API-09: GET /api/rap returns object with tracks array and timestamp",
       "suite": "RAP Endpoints",
       "status": "passed",
-      "duration_ms": 18,
+      "duration_ms": 16,
       "screenshot": null,
       "error": null
     },
@@ -142,7 +182,7 @@
       "name": "API-10: Start scenario, wait 2s, GET /api/rap has tracks",
       "suite": "RAP Endpoints",
       "status": "passed",
-      "duration_ms": 5029,
+      "duration_ms": 5027,
       "screenshot": null,
       "error": null
     },
@@ -178,7 +218,7 @@
       "name": "API-23: POST /api/scenario/speed with negative speed returns 400",
       "suite": "Replay & Validation Endpoints",
       "status": "passed",
-      "duration_ms": 11,
+      "duration_ms": 10,
       "screenshot": null,
       "error": null
     },
@@ -196,7 +236,7 @@
       "name": "API-02: GET /api/scenarios returns array with >= 9 scenarios",
       "suite": "Scenario Endpoints",
       "status": "passed",
-      "duration_ms": 28,
+      "duration_ms": 26,
       "screenshot": null,
       "error": null
     },
@@ -223,7 +263,7 @@
       "name": "API-05: POST /api/scenario/pause returns ok with running false",
       "suite": "Scenario Endpoints",
       "status": "passed",
-      "duration_ms": 12,
+      "duration_ms": 11,
       "screenshot": null,
       "error": null
     },
@@ -232,7 +272,7 @@
       "name": "API-06: POST /api/scenario/speed with speed 5 returns success",
       "suite": "Scenario Endpoints",
       "status": "passed",
-      "duration_ms": 10,
+      "duration_ms": 8,
       "screenshot": null,
       "error": null
     },
@@ -250,7 +290,7 @@
       "name": "API-08: POST /api/scenario/reset with scenarioId switches scenario",
       "suite": "Scenario Endpoints",
       "status": "passed",
-      "duration_ms": 10,
+      "duration_ms": 9,
       "screenshot": null,
       "error": null
     },
@@ -259,7 +299,7 @@
       "name": "API-13: GET /api/sensors returns array of sensors",
       "suite": "Sensor Endpoints",
       "status": "passed",
-      "duration_ms": 7,
+      "duration_ms": 8,
       "screenshot": null,
       "error": null
     },
@@ -268,7 +308,7 @@
       "name": "API-14: GET /api/sensors/:id/registration returns registration state",
       "suite": "Sensor Endpoints",
       "status": "passed",
-      "duration_ms": 7,
+      "duration_ms": 6,
       "screenshot": null,
       "error": null
     },
@@ -277,7 +317,7 @@
       "name": "API-15: GET /api/tasks returns array",
       "suite": "Task Endpoints",
       "status": "passed",
-      "duration_ms": 6,
+      "duration_ms": 5,
       "screenshot": null,
       "error": null
     },
@@ -304,7 +344,97 @@
       "name": "API-18: POST /api/operator/reserve with valid sensorId returns reservation",
       "suite": "Task Endpoints",
       "status": "passed",
-      "duration_ms": 13,
+      "duration_ms": 8,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "APUI-01",
+      "name": "APUI-01: Running scenario produces tracks with status breakdown",
+      "suite": "UI-Equivalent: Track Display (PW-06, PW-21)",
+      "status": "passed",
+      "duration_ms": 2023,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "APUI-02",
+      "name": "APUI-02: Confirmed tracks appear after sufficient simulation time",
+      "suite": "UI-Equivalent: Track Display (PW-06, PW-21)",
+      "status": "passed",
+      "duration_ms": 2023,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "APUI-03",
+      "name": "APUI-03: At least 9 scenarios available for dropdown",
+      "suite": "UI-Equivalent: Scenario Controls (PW-04, PW-05)",
+      "status": "passed",
+      "duration_ms": 19,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "APUI-04",
+      "name": "APUI-04: Start/pause cycle changes running state",
+      "suite": "UI-Equivalent: Scenario Controls (PW-04, PW-05)",
+      "status": "passed",
+      "duration_ms": 18,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "APUI-05",
+      "name": "APUI-05: Speed change is reflected in status",
+      "suite": "UI-Equivalent: Speed Controls (PW-11)",
+      "status": "passed",
+      "duration_ms": 15,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "APUI-06",
+      "name": "APUI-06: Running scenario generates events visible in timeline",
+      "suite": "UI-Equivalent: Event List (PW-18, PW-19)",
+      "status": "passed",
+      "duration_ms": 2026,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "APUI-07",
+      "name": "APUI-07: WebSocket connects and receives snapshot",
+      "suite": "UI-Equivalent: WebSocket Status (PW-20)",
+      "status": "passed",
+      "duration_ms": 28,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "APUI-08",
+      "name": "APUI-08: Sensor registration state available for degraded banner",
+      "suite": "UI-Equivalent: Sensor Degraded Mode (PW-22)",
+      "status": "passed",
+      "duration_ms": 6034,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "APUI-09",
+      "name": "APUI-09: Replay seek changes simulation time",
+      "suite": "UI-Equivalent: Replay Scrubber (PW-13, PW-15)",
+      "status": "passed",
+      "duration_ms": 3026,
+      "screenshot": null,
+      "error": null
+    },
+    {
+      "id": "APUI-10",
+      "name": "APUI-10: Task list endpoint provides panel data",
+      "suite": "UI-Equivalent: Task Panel (PW-16, PW-17)",
+      "status": "passed",
+      "duration_ms": 9,
       "screenshot": null,
       "error": null
     },
@@ -313,7 +443,7 @@
       "name": "API-25: WebSocket connects to /ws/events and receives snapshot",
       "suite": "WebSocket Endpoints",
       "status": "passed",
-      "duration_ms": 8,
+      "duration_ms": 6,
       "screenshot": null,
       "error": null
     },
@@ -322,7 +452,7 @@
       "name": "API-26: Start scenario, receive rap.update via WebSocket",
       "suite": "WebSocket Endpoints",
       "status": "passed",
-      "duration_ms": 119,
+      "duration_ms": 114,
       "screenshot": null,
       "error": null
     },
@@ -331,7 +461,7 @@
       "name": "Shallow intersection angle produces weak or no geometry estimate",
       "suite": "SV-04: Bad Triangulation Scenario",
       "status": "passed",
-      "duration_ms": 10061,
+      "duration_ms": 10058,
       "screenshot": null,
       "error": null
     },
@@ -340,7 +470,7 @@
       "name": "Full complex scenario produces multiple tracks, confirmed states, and rich event log",
       "suite": "SV-07: Central Israel Full Scenario",
       "status": "passed",
-      "duration_ms": 6091,
+      "duration_ms": 6100,
       "screenshot": null,
       "error": null
     },
@@ -349,7 +479,7 @@
       "name": "Two targets create distinct tracks that are not incorrectly merged",
       "suite": "SV-02: Crossed Tracks Scenario",
       "status": "passed",
-      "duration_ms": 7045,
+      "duration_ms": 7038,
       "screenshot": null,
       "error": null
     },
@@ -367,7 +497,7 @@
       "name": "Multiple EO sensors track same target, producing EO tracks and potential split detection",
       "suite": "SV-08: Multi-EO Scenario",
       "status": "passed",
-      "duration_ms": 2039,
+      "duration_ms": 2041,
       "screenshot": null,
       "error": null
     },
@@ -376,7 +506,7 @@
       "name": "Operator can reject a proposed task and status changes",
       "suite": "SV-06: Operator Override Scenario",
       "status": "passed",
-      "duration_ms": 8030,
+      "duration_ms": 8033,
       "screenshot": null,
       "error": null
     },
@@ -385,7 +515,7 @@
       "name": "Azimuth bias fault triggers registration degradation and fault events",
       "suite": "SV-05: Sensor Fault Scenario",
       "status": "passed",
-      "duration_ms": 2033,
+      "duration_ms": 2034,
       "screenshot": null,
       "error": null
     },
