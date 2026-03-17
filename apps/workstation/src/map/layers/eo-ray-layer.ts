@@ -35,6 +35,7 @@ export function updateEoRayLayer(map: MaplibreMap, sensors: SensorState[]) {
 
   for (const sensor of sensors) {
     if (sensor.sensorType !== 'eo' || !sensor.gimbal || !sensor.online) continue;
+    if (!Number.isFinite(sensor.gimbal.azimuthDeg)) continue;
 
     const { lon, lat } = sensor.position;
     const azRad = (sensor.gimbal.azimuthDeg * Math.PI) / 180;

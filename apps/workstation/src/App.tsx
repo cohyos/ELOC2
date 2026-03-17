@@ -62,11 +62,25 @@ function DefaultPanel() {
   const tentativeCount = useTrackStore(s => s.tentativeCount);
   const sensors = useSensorStore(s => s.sensors);
   const tasks = useTaskStore(s => s.tasks);
+  const registrationStates = useTaskStore(s => s.registrationStates);
+  const fusionModes = useTaskStore(s => s.fusionModes);
   const selectView = useUiStore(s => s.setDetailView);
 
   const radarCount = sensors.filter(s => s.sensorType === 'radar').length;
   const eoCount = sensors.filter(s => s.sensorType === 'eo').length;
+  const onlineCount = sensors.filter(s => s.online).length;
+  const offlineCount = sensors.length - onlineCount;
   const activeTasks = tasks.filter(t => t.status === 'executing' || t.status === 'proposed').length;
+
+  // Registration health summary
+  const degradedCount = registrationStates.filter(s => s.spatialQuality === 'degraded' || s.timingQuality === 'degraded').length;
+  const unsafeCount = registrationStates.filter(s => !s.fusionSafe).length;
+
+  // Dominant fusion mode
+  const modeValues = Object.values(fusionModes ?? {}) as string[];
+  const modeCounts = modeValues.reduce((acc, m) => { acc[m] = (acc[m] || 0) + 1; return acc; }, {} as Record<string, number>);
+  const dominantMode = Object.entries(modeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'N/A';
+  const modeColor = dominantMode === 'centralized' ? '#00cc44' : dominantMode === 'conservative' ? '#ffcc00' : '#ff8800';
 
   const sectionTitle: React.CSSProperties = { fontSize: '11px', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', borderBottom: '1px solid #333', paddingBottom: '3px' };
   const row: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', padding: '2px 0' };
@@ -84,6 +98,14 @@ function DefaultPanel() {
         <div style={sectionTitle}>Sensors</div>
         <div style={row}><span style={{ color: '#4488ff', fontSize: '12px' }}>Radar</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{radarCount}</span></div>
         <div style={row}><span style={{ color: '#ff8800', fontSize: '12px' }}>EO</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{eoCount}</span></div>
+        <div style={row}><span style={{ color: onlineCount === sensors.length ? '#00cc44' : '#ffcc00', fontSize: '12px' }}>Online</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{onlineCount}/{sensors.length}</span></div>
+        {offlineCount > 0 && <div style={row}><span style={{ color: '#ff3333', fontSize: '12px' }}>Offline</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#ff3333' }}>{offlineCount}</span></div>}
+      </div>
+      <div style={{ marginBottom: '16px' }}>
+        <div style={sectionTitle}>System Health</div>
+        <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Fusion Mode</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: modeColor }}>{dominantMode}</span></div>
+        <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Registration</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: degradedCount === 0 ? '#00cc44' : '#ffcc00' }}>{degradedCount === 0 ? 'Healthy' : `${degradedCount} degraded`}</span></div>
+        {unsafeCount > 0 && <div style={row}><span style={{ color: '#ff3333', fontSize: '12px' }}>Fusion Unsafe</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#ff3333' }}>{unsafeCount} sensors</span></div>}
       </div>
       <div style={{ marginBottom: '16px' }}>
         <div style={sectionTitle}>EO Tasking</div>
@@ -136,6 +158,8 @@ export function App() {
 
   const injectionMode = useUiStore(s => s.injectionMode);
   const toggleInjectionMode = useUiStore(s => s.toggleInjectionMode);
+  const darkMode = useUiStore(s => s.darkMode);
+  const toggleDarkMode = useUiStore(s => s.toggleDarkMode);
 
   // Sync demo mode to ui-store for convenience
   const setDemoMode = useUiStore(s => s.setDemoMode);
@@ -305,8 +329,13 @@ export function App() {
         <button
           style={{ ...btn, background: demoActive ? '#4a9eff' : '#2a2a4e', color: demoActive ? '#fff' : '#4a9eff', border: '1px solid #4a9eff44' }}
           onClick={() => {
-            if (!demoActive) setDemoActive(true);
-            setDashboardOpen(!dashboardOpen);
+            if (demoActive) {
+              setDemoActive(false);
+              setDashboardOpen(false);
+            } else {
+              setDemoActive(true);
+              setDashboardOpen(true);
+            }
           }}
           title="Presenter Dashboard (Ctrl+D)"
         >Demo</button>
@@ -367,10 +396,13 @@ export function App() {
                 store.setDetailView('investigation');
               }
             }}>Investigation</button>
+          <button style={{ ...btn, background: darkMode ? '#4a9eff' : '#333', color: darkMode ? '#fff' : '#aaa' }} onClick={toggleDarkMode} title="Toggle dark/light map">
+            {darkMode ? 'Dark' : 'Light'}
+          </button>
           <button style={btn} onClick={toggleDetailPanel}>{showDetail ? 'Hide Panel' : 'Show Panel'}</button>
           <button style={btn} onClick={toggleTimelinePanel}>{timelinePanelOpen ? 'Hide Timeline' : 'Show Timeline'}</button>
           <span><span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: wsConnected ? '#00cc44' : '#ff3333', marginRight: '4px' }} />{wsConnected ? 'Connected' : 'Disconnected'}</span>
-          <span style={{ fontSize: '10px', opacity: 0.5 }}>v0.2.0</span>
+          <span style={{ fontSize: '10px', opacity: 0.5 }} title="ELOC2 Air Defense Demonstrator">v0.3.0</span>
         </div>
       </header>
 
@@ -620,6 +652,7 @@ function MobileLayout() {
         {[
           { label: 'Overview', view: 'none' as const, icon: '\u2302' },
           { label: 'Tasks', view: 'tasks' as const, icon: '\u2611' },
+          { label: 'Invest.', view: 'investigation' as const, icon: '\u2318' },
           { label: 'Timeline', view: '__timeline__' as const, icon: '\u23F1' },
         ].map(item => {
           const isTimeline = item.view === '__timeline__';

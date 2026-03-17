@@ -99,10 +99,18 @@ Cloud Run will print the public URL (e.g. `https://eloc2-xxxxx.a.run.app`). Open
 ## Running Tests
 
 ```bash
+# Unit tests (146+ Vitest tests across all packages)
 pnpm test
+
+# E2E tests (33 Playwright specs: API, scenarios, desktop UI, mobile UI)
+pnpm test:e2e
+
+# Generate HTML QA dashboard
+pnpm test:e2e:report
+# Reports output to: tests/e2e/output/qa-report.json
 ```
 
-Runs Vitest across all packages via Turborepo.
+Cloud Build runs all tests automatically on deploy (see `cloudbuild.yaml`).
 
 ## Workstation Controls
 
@@ -111,10 +119,31 @@ Runs Vitest across all packages via Turborepo.
 | **Start / Pause** | Begin or pause the simulation |
 | **Reset** | Reset the scenario to T+0:00 |
 | **1x / 2x / 5x / 10x** | Set simulation speed |
+| **Dark / Light** | Toggle dark/light map tiles |
+| **Tasks / Investigation** | Toggle task or investigation detail panels |
 | **Show/Hide Panel** | Toggle the track/sensor detail panel |
 | **Show/Hide Timeline** | Toggle the event timeline |
+| **Demo** | Toggle presenter dashboard mode |
+| **Space** | Play / Pause |
+| **Left/Right arrows** | Seek -10s / +10s |
+| **Ctrl+D** | Toggle demo mode |
+| **Ctrl+I** | Toggle live injection mode |
 
-Click a track on the map to see its detail (classification, velocity, contributing sensors). Click a sensor icon to see its status and coverage.
+Click a track on the map to see its detail (classification, velocity, contributing sensors, action buttons). Click a sensor icon to see its status, coverage, and registration health.
+
+## EO Tasking Algorithm
+
+The EO allocation runs every 5 simulation seconds:
+
+1. **Candidate generation**: All eligible tracks paired with all online EO sensors
+2. **Scoring**: `total = threat + uncertainty + geometry - slewCost - occupancy`
+   - Threat: confidence, altitude, speed, closure rate
+   - Uncertainty: larger covariance = higher score
+   - Geometry: intersection angle quality for triangulation
+   - Operator intent: +3.0 boost for priority-marked tracks
+3. **Policy**: Default `auto_with_veto` (auto-approved, operator can reject)
+4. **Assignment**: Greedy — one task per sensor, highest score first
+5. **Execution**: Gimbal slews to target, cue issued, investigation starts
 
 ## API Endpoints
 
@@ -131,7 +160,10 @@ Click a track on the map to see its detail (classification, velocity, contributi
 | POST | `/api/scenario/pause` | Pause simulation |
 | POST | `/api/scenario/speed` | Set speed `{ "speed": N }` |
 | POST | `/api/scenario/reset` | Reset scenario `{ "scenarioId?": "..." }` |
-| WS | `/ws` | Real-time event + RAP update stream |
+| POST | `/api/operator/priority` | Add/remove track from priority set `{ "trackId": "...", "priority": true }` |
+| POST | `/api/operator/approve` | Approve a proposed task `{ "taskId": "..." }` |
+| POST | `/api/operator/reject` | Reject a proposed task `{ "taskId": "..." }` |
+| WS | `/ws/events` | Real-time event + RAP update stream |
 
 ## Tech Stack
 

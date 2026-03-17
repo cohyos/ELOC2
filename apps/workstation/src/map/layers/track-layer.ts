@@ -7,6 +7,8 @@ const LABEL_LAYER_ID = 'system-tracks-labels';
 const EO_BADGE_LAYER_ID = 'track-eo-badge';
 const ELLIPSE_SOURCE_ID = 'track-ellipses';
 const ELLIPSE_LAYER_ID = 'track-ellipses-layer';
+const TRAIL_SOURCE_ID = 'track-trails';
+const TRAIL_LAYER_ID = 'track-trails-layer';
 
 /**
  * Status to color mapping (military C2 conventions):
@@ -57,6 +59,24 @@ export function initTrackLayer(map: MaplibreMap) {
     },
   });
 
+  // Track trail source + layer (fading breadcrumb dots)
+  map.addSource(TRAIL_SOURCE_ID, {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+  });
+
+  map.addLayer({
+    id: TRAIL_LAYER_ID,
+    type: 'circle',
+    source: TRAIL_SOURCE_ID,
+    paint: {
+      'circle-radius': 3,
+      'circle-color': ['get', 'color'],
+      'circle-opacity': ['get', 'opacity'],
+      'circle-stroke-width': 0,
+    },
+  });
+
   // Track icons as circles
   map.addLayer({
     id: LAYER_ID,
@@ -81,7 +101,7 @@ export function initTrackLayer(map: MaplibreMap) {
         'text-size': 11,
         'text-offset': [0, 1.5],
         'text-anchor': 'top',
-        'text-font': ['Open Sans Bold', 'Noto Sans Bold', 'Arial Unicode MS Bold'],
+        'text-font': ['Open Sans Bold'],
       },
       paint: {
         'text-color': '#ffffff',
@@ -148,6 +168,29 @@ function covarianceToEllipse(
   };
 }
 
+/**
+ * Generate a short label for a track.
+ * Format: <type-prefix><number> [<id-type>]
+ * e.g. "R1", "E2 hostile", "T3"
+ * Extracts the numeric portion from systemTrackId (e.g., "ST-003-abc" → "3").
+ */
+function shortLabel(track: SystemTrack): string {
+  // Determine prefix from primary source type
+  const id = track.systemTrackId as string;
+  // Extract number from ID pattern like "ST-001-..." or just use index
+  const numMatch = id.match(/(\d+)/);
+  const num = numMatch ? parseInt(numMatch[1], 10) : 0;
+  // Prefix: first source sensor type or fallback to 'T'
+  const prefix = 'T';
+  let label = `${prefix}${num}`;
+  // Append short identification type if available
+  const idSupport = (track as any).identificationSupport;
+  if (idSupport && idSupport !== 'unknown' && idSupport !== 'none') {
+    label += ` ${idSupport}`;
+  }
+  return label;
+}
+
 function isValidCoord(track: SystemTrack): boolean {
   const { lat, lon } = track.state;
   return (
@@ -167,29 +210,16 @@ export function updateTrackLayer(map: MaplibreMap, tracks: SystemTrack[], select
 
   const validTracks = tracks.filter(isValidCoord);
 
-  // Log rendering info periodically
+  // Only log errors (not periodic info) to avoid console noise
   if (tracks.length > 0 && validTracks.length === 0) {
-    console.error(
-      '[track-layer] ALL tracks filtered as invalid!',
-      'Sample track:',
-      JSON.stringify({ id: tracks[0].systemTrackId, state: tracks[0].state }),
-    );
-  } else if (validTracks.length > 0 && validTracks.length % 10 === 0) {
-    console.log(`[track-layer] Rendering ${validTracks.length}/${tracks.length} tracks`);
-  }
-
-  if (validTracks.length !== tracks.length) {
-    console.warn(
-      `[track-layer] Filtered out ${tracks.length - validTracks.length} tracks with invalid coordinates`,
-      tracks.filter(t => !isValidCoord(t)).map(t => ({ id: t.systemTrackId, state: t.state })),
-    );
+    console.error('[track-layer] ALL tracks filtered as invalid! Sample:', tracks[0].systemTrackId);
   }
 
   const features: GeoJSON.Feature[] = validTracks.map(track => ({
     type: 'Feature',
     properties: {
       id: track.systemTrackId,
-      label: track.systemTrackId,
+      label: shortLabel(track),
       color: statusColor(track.status),
       status: track.status,
       confidence: track.confidence,
@@ -260,6 +290,41 @@ export function updateTrackLayer(map: MaplibreMap, tracks: SystemTrack[], select
       console.warn('[track-layer] Failed to reset selection styling:', e);
     }
   }
+}
+
+/** Update trail layer with fading breadcrumb dots from position history. */
+export function updateTrackTrailLayer(
+  map: MaplibreMap,
+  trailHistory: Map<string, Array<{ lon: number; lat: number }>>,
+  tracks: SystemTrack[],
+) {
+  const source = map.getSource(TRAIL_SOURCE_ID);
+  if (!source) return;
+
+  const trackStatusMap = new Map(tracks.map(t => [t.systemTrackId, t.status]));
+  const features: GeoJSON.Feature[] = [];
+
+  for (const [trackId, positions] of trailHistory) {
+    const status = trackStatusMap.get(trackId) ?? 'tentative';
+    const color = statusColor(status);
+    const count = positions.length;
+    // Skip last position (that's the current track icon position)
+    for (let i = 0; i < count - 1; i++) {
+      const age = count - 1 - i; // oldest = highest age
+      const opacity = Math.max(0.15, 1.0 - (age / 5) * 0.85);
+      features.push({
+        type: 'Feature',
+        properties: { color, opacity, trackId },
+        geometry: { type: 'Point', coordinates: [positions[i].lon, positions[i].lat] },
+      });
+    }
+  }
+
+  (source as any).setData({ type: 'FeatureCollection', features });
+}
+
+export function getTrackTrailLayerId(): string {
+  return TRAIL_LAYER_ID;
 }
 
 export function getTrackLayerId(): string {

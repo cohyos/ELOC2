@@ -35,7 +35,7 @@ export function updateSelectionRayLayer(map: MaplibreMap, rays: SelectionBearing
   if (!source) return;
 
   const rayLengthKm = 50;
-  const features: GeoJSON.Feature[] = rays.map((ray) => {
+  const features: GeoJSON.Feature[] = rays.filter(ray => Number.isFinite(ray.azimuthDeg)).map((ray) => {
     const azRad = (ray.azimuthDeg * Math.PI) / 180;
     const latRad = (ray.sensorLat * Math.PI) / 180;
     const endLat = ray.sensorLat + (rayLengthKm / 111.32) * Math.cos(azRad);
