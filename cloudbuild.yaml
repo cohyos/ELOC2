@@ -35,8 +35,8 @@ steps:
       - name: 'app'
         path: '/shared_app'
 
-  # Run E2E tests (API + scenarios + browser UI)
-  # Playwright image includes Chromium for PW-* browser tests
+  # Run E2E tests (API + scenario integration tests)
+  # Desktop/mobile UI tests require a served frontend and are run post-deploy
   - name: 'mcr.microsoft.com/playwright:v1.58.2-noble'
     entrypoint: 'bash'
     args:
@@ -62,20 +62,50 @@ steps:
         cd /workspace
         npm install --no-save @playwright/test ws tsx
 
-        # Run all test projects: API, scenarios, desktop UI, mobile UI
+        # Run API + scenario tests (no browser required)
+        # Desktop/mobile UI tests skipped in CI — they need a served frontend
         npx playwright test --config=tests/e2e/playwright.config.ts \
-          --project=api --project=scenarios --project=desktop --project=mobile || true
+          --project=api --project=scenarios
+        TEST_EXIT=$$?
 
-        # Generate QA HTML dashboard (non-blocking)
+        # Generate QA HTML dashboard
         npx tsx tests/e2e/reporting/html-dashboard.ts 2>/dev/null || true
 
         kill $$SERVER_PID 2>/dev/null || true
-
-        # Report results but don't block deployment
-        echo "E2E tests completed (failures are non-blocking for deployment)"
+        exit $$TEST_EXIT
     volumes:
       - name: 'app'
         path: '/shared_app'
+
+  # Upload QA report to Cloud Storage for viewing
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        BUCKET="gs://${PROJECT_ID}-qa-reports"
+
+        # Create bucket if it doesn't exist (public read for HTML viewing)
+        gsutil ls "$$BUCKET" 2>/dev/null || \
+          gsutil mb -l ${_REGION} "$$BUCKET" && \
+          gsutil iam ch allUsers:objectViewer "$$BUCKET" 2>/dev/null || true
+
+        # Upload reports with build metadata
+        BUILD_DIR="$$BUCKET/builds/${SHORT_SHA}"
+        if [ -f tests/e2e/output/qa-report.html ]; then
+          gsutil -h "Content-Type:text/html" cp tests/e2e/output/qa-report.html "$$BUILD_DIR/qa-report.html"
+          gsutil -h "Content-Type:application/json" cp tests/e2e/output/qa-report.json "$$BUILD_DIR/qa-report.json"
+
+          # Also copy as latest for quick access
+          gsutil -h "Content-Type:text/html" cp tests/e2e/output/qa-report.html "$$BUCKET/latest/qa-report.html"
+          gsutil -h "Content-Type:application/json" cp tests/e2e/output/qa-report.json "$$BUCKET/latest/qa-report.json"
+
+          echo "QA Report uploaded:"
+          echo "  Build:  https://storage.googleapis.com/${PROJECT_ID}-qa-reports/builds/${SHORT_SHA}/qa-report.html"
+          echo "  Latest: https://storage.googleapis.com/${PROJECT_ID}-qa-reports/latest/qa-report.html"
+        else
+          echo "No QA report found — skipping upload"
+        fi
 
   # Deploy to Cloud Run (only runs if tests pass)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
