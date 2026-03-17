@@ -47,6 +47,9 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/apps ./apps
 
+# Ensure turbo and other node_modules binaries are in PATH
+# (Cloud Build overrides WORKDIR, so pnpm may not resolve .bin correctly)
+ENV PATH="/app/node_modules/.bin:${PATH}"
 ENV NODE_ENV=production
 EXPOSE 3001
 
