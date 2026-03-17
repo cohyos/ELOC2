@@ -64,18 +64,22 @@ steps:
         HTTP_CODE=$$(curl -sf -o /dev/null -w "%{http_code}" http://localhost:3001/)
         echo "Frontend check: HTTP $$HTTP_CODE"
 
-        # Install test dependencies in workspace and run via local bin (not npx)
+        # Install test dependencies in workspace
         cd /workspace
-        npm install --no-save @playwright/test ws tsx
+        npm init -y > /dev/null 2>&1
+        npm install @playwright/test ws tsx
         export PATH="/workspace/node_modules/.bin:$$PATH"
 
+        # Verify playwright CLI is available
+        which playwright || { echo "FATAL: playwright not in PATH"; ls -la node_modules/.bin/play* 2>/dev/null; exit 1; }
+
         # Run all test projects: API, scenarios, desktop UI, mobile UI
-        playwright test --config=tests/e2e/playwright.config.ts \
+        npx playwright test --config=tests/e2e/playwright.config.ts \
           --project=api --project=scenarios --project=desktop --project=mobile
         TEST_EXIT=$$?
 
         # Generate QA HTML dashboard
-        tsx tests/e2e/reporting/html-dashboard.ts 2>/dev/null || true
+        npx tsx tests/e2e/reporting/html-dashboard.ts 2>/dev/null || true
 
         kill $$SERVER_PID 2>/dev/null || true
         exit $$TEST_EXIT
