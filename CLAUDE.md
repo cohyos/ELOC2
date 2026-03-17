@@ -36,7 +36,7 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 
 ## Knowledge Base — Source of Truth
 
-The `Knowledge_Base_and_Agents_instructions/` folder contains **16 foundational design documents** that define ALL domain logic, algorithms, and UI requirements. **Always consult the relevant document before implementing or debugging a feature.**
+The `Knowledge_Base_and_Agents_instructions/` folder contains **17 foundational design documents** that define ALL domain logic, algorithms, and UI requirements. **Always consult the relevant document before implementing or debugging a feature.**
 
 | File | Purpose | Phases |
 |------|---------|--------|
@@ -53,6 +53,7 @@ The `Knowledge_Base_and_Agents_instructions/` folder contains **16 foundational 
 | `EO_triangulation_geometry.md` | Bearing math, triangulation, quality scoring | Phase 6 |
 | `Map_simulation_and_workstation.md` | UI layout, map layers, panels, responsive design | Phase 8 |
 | `ELOC2_UI_Requirements_and_VV_Spec.md` | **Full UI/UX requirements, visual inventory, interaction flows, QA agent spec, acceptance criteria** | **QA, All** |
+| `ELOC2_Implementation_Plan.md` | **Detailed implementation plan: 20 sub-tasks, file paths, agent prompts, execution order** | **All** |
 | `Claude_code_prompt_templates.md` | Copy-paste agent prompts with shared prefix | Agent execution |
 | `Claude_agent_build_prompts.md` | Detailed agent prompts with scope + done criteria | Agent execution |
 | `Chunk_index.md` | Index of all knowledge base chunks for retrieval | Reference |
