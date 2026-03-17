@@ -31,6 +31,7 @@ function sensorShape(type: string): string {
 }
 
 const DEGRADED_LAYER_ID = 'sensors-degraded';
+const HIGHLIGHT_RING_LAYER_ID = 'sensors-highlight-ring';
 
 export function initSensorLayer(map: MaplibreMap) {
   map.addSource(SOURCE_ID, {
@@ -94,12 +95,28 @@ export function initSensorLayer(map: MaplibreMap) {
   } catch (e) {
     console.warn('[sensor-layer] Label layer failed:', e);
   }
+
+  // Selection highlight ring — bright white border on highlighted sensors
+  map.addLayer({
+    id: HIGHLIGHT_RING_LAYER_ID,
+    type: 'circle',
+    source: SOURCE_ID,
+    filter: ['==', ['get', 'highlighted'], true],
+    paint: {
+      'circle-radius': 14,
+      'circle-color': 'transparent',
+      'circle-stroke-width': 4,
+      'circle-stroke-color': '#ffffff',
+      'circle-stroke-opacity': 0.9,
+    },
+  });
 }
 
 export function updateSensorLayer(
   map: MaplibreMap,
   sensors: SensorState[],
   registrationStates?: RegistrationStateWS[],
+  highlightedSensorIds?: string[],
 ) {
   const source = map.getSource(SOURCE_ID);
   if (!source) return;
@@ -107,6 +124,9 @@ export function updateSensorLayer(
   const regMap = new Map(
     (registrationStates ?? []).map(r => [r.sensorId, r]),
   );
+
+  const highlightSet = new Set(highlightedSensorIds ?? []);
+  const hasSelection = highlightSet.size > 0;
 
   const features: GeoJSON.Feature[] = sensors.map(sensor => {
     const reg = regMap.get(sensor.sensorId as string);
@@ -125,6 +145,7 @@ export function updateSensorLayer(
         online: sensor.online,
         degraded,
         fusionSafe: reg?.fusionSafe ?? true,
+        highlighted: highlightSet.has(sensor.sensorId as string),
       },
       geometry: {
         type: 'Point',
@@ -134,6 +155,34 @@ export function updateSensorLayer(
   });
 
   (source as any).setData({ type: 'FeatureCollection', features });
+
+  // Apply selection-based opacity: dim non-highlighted sensors when a track is selected
+  try {
+    if (hasSelection) {
+      const opacityExpr: any = ['case', ['==', ['get', 'highlighted'], true], 1.0, 0.5];
+      if (map.getLayer(LAYER_ID)) {
+        map.setPaintProperty(LAYER_ID, 'circle-opacity', opacityExpr);
+      }
+      if (map.getLayer(LABEL_LAYER_ID)) {
+        map.setPaintProperty(LABEL_LAYER_ID, 'text-opacity', opacityExpr);
+      }
+      if (map.getLayer(DEGRADED_LAYER_ID)) {
+        map.setPaintProperty(DEGRADED_LAYER_ID, 'circle-stroke-opacity', opacityExpr);
+      }
+    } else {
+      if (map.getLayer(LAYER_ID)) {
+        map.setPaintProperty(LAYER_ID, 'circle-opacity', 1.0);
+      }
+      if (map.getLayer(LABEL_LAYER_ID)) {
+        map.setPaintProperty(LABEL_LAYER_ID, 'text-opacity', 1.0);
+      }
+      if (map.getLayer(DEGRADED_LAYER_ID)) {
+        map.setPaintProperty(DEGRADED_LAYER_ID, 'circle-stroke-opacity', 0.8);
+      }
+    }
+  } catch (e) {
+    console.warn('[sensor-layer] Failed to apply highlight styling:', e);
+  }
 }
 
 export function getSensorLayerId(): string {

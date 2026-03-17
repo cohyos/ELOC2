@@ -10,6 +10,10 @@ import { useSensorStore } from './stores/sensor-store';
 import { useTaskStore } from './stores/task-store';
 import { useUiStore } from './stores/ui-store';
 import { TaskPanel } from './task-panel/TaskPanel';
+import { InvestigationManagerPanel } from './investigation/InvestigationManagerPanel';
+import { CueDetailPanel } from './cue-detail/CueDetailPanel';
+import { GroupDetailPanel } from './group-detail/GroupDetailPanel';
+import { GeometryDetailPanel } from './geometry-detail/GeometryDetailPanel';
 import { ScenarioEditor } from './editor/ScenarioEditor';
 
 // ---------------------------------------------------------------------------
@@ -294,6 +298,15 @@ export function App() {
                 store.setDetailView('tasks');
               }
             }}>Tasks</button>
+          <button style={{ ...btn, background: detailView === 'investigation' && detailPanelOpen ? '#4a9eff' : '#333', color: detailView === 'investigation' && detailPanelOpen ? '#fff' : '#aaa' }}
+            onClick={() => {
+              const store = useUiStore.getState();
+              if (store.detailView === 'investigation' && store.detailPanelOpen) {
+                store.toggleDetailPanel();
+              } else {
+                store.setDetailView('investigation');
+              }
+            }}>Investigation</button>
           <button style={btn} onClick={toggleDetailPanel}>{showDetail ? 'Hide Panel' : 'Show Panel'}</button>
           <button style={btn} onClick={toggleTimelinePanel}>{timelinePanelOpen ? 'Hide Timeline' : 'Show Timeline'}</button>
           <span><span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: wsConnected ? '#00cc44' : '#ff3333', marginRight: '4px' }} />{wsConnected ? 'Connected' : 'Disconnected'}</span>
@@ -313,6 +326,10 @@ export function App() {
           {detailView === 'track' && <TrackDetailPanel />}
           {detailView === 'sensor' && <SensorDetailPanel />}
           {detailView === 'tasks' && <TaskPanel />}
+          {detailView === 'investigation' && <InvestigationManagerPanel />}
+          {detailView === 'cue' && <CueDetailPanel />}
+          {detailView === 'group' && <GroupDetailPanel />}
+          {detailView === 'geometry' && <GeometryDetailPanel />}
           {detailView === 'none' && <DefaultPanel />}
         </div>
       )}
@@ -481,6 +498,10 @@ function MobileLayout() {
             {detailView === 'track' && <TrackDetailPanel />}
             {detailView === 'sensor' && <SensorDetailPanel />}
             {detailView === 'tasks' && <TaskPanel />}
+            {detailView === 'investigation' && <InvestigationManagerPanel />}
+            {detailView === 'cue' && <CueDetailPanel />}
+            {detailView === 'group' && <GroupDetailPanel />}
+            {detailView === 'geometry' && <GeometryDetailPanel />}
             {detailView === 'none' && <DefaultPanel />}
           </div>
         )}

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type DetailView = 'track' | 'sensor' | 'tasks' | 'none';
+export type DetailView = 'track' | 'sensor' | 'tasks' | 'investigation' | 'cue' | 'group' | 'geometry' | 'none';
 
 export interface LayerVisibility {
   tracks: boolean;
@@ -36,6 +36,9 @@ interface UiState {
   // Selection
   selectedTrackId: string | null;
   selectedSensorId: string | null;
+  selectedCueId: string | null;
+  selectedGroupId: string | null;
+  selectedGeometryTrackId: string | null;
   detailView: DetailView;
 
   // Panel visibility
@@ -57,12 +60,19 @@ interface UiState {
   // WebSocket
   wsConnected: boolean;
 
+  // Selection highlights
+  highlightedSensorIds: string[];
+  selectionBearingRays: SelectionBearingRay[];
+
   // Event log
   eventLog: EventLogEntry[];
 
   // Actions
   selectTrack: (id: string | null) => void;
   selectSensor: (id: string | null) => void;
+  selectCue: (id: string | null) => void;
+  selectGroup: (id: string | null) => void;
+  selectGeometry: (trackId: string | null) => void;
   toggleDetailPanel: () => void;
   toggleTimelinePanel: () => void;
   toggleLayer: (layer: keyof LayerVisibility) => void;
@@ -73,8 +83,18 @@ interface UiState {
   setReplayTime: (time: number) => void;
   setScenarioDurationSec: (duration: number) => void;
   setWsConnected: (connected: boolean) => void;
+  setHighlightedSensors: (ids: string[]) => void;
+  setSelectionBearingRays: (rays: SelectionBearingRay[]) => void;
+  clearSelectionHighlights: () => void;
   addEvent: (entry: EventLogEntry) => void;
   clearEvents: () => void;
+}
+
+export interface SelectionBearingRay {
+  sensorLat: number;
+  sensorLon: number;
+  azimuthDeg: number;
+  color: string;
 }
 
 export interface EventLogEntry {
@@ -89,6 +109,9 @@ let eventCounter = 0;
 export const useUiStore = create<UiState>((set) => ({
   selectedTrackId: null,
   selectedSensorId: null,
+  selectedCueId: null,
+  selectedGroupId: null,
+  selectedGeometryTrackId: null,
   detailView: 'none',
   detailPanelOpen: true,
   timelinePanelOpen: true,
@@ -99,13 +122,24 @@ export const useUiStore = create<UiState>((set) => ({
   replayTime: 0,
   scenarioDurationSec: 900,
   wsConnected: false,
+  highlightedSensorIds: [],
+  selectionBearingRays: [],
   eventLog: [],
 
   selectTrack: (id) =>
-    set({ selectedTrackId: id, selectedSensorId: null, detailView: id ? 'track' : 'none', detailPanelOpen: !!id }),
+    set({ selectedTrackId: id, selectedSensorId: null, selectedCueId: null, selectedGroupId: null, selectedGeometryTrackId: null, detailView: id ? 'track' : 'none', detailPanelOpen: !!id }),
 
   selectSensor: (id) =>
-    set({ selectedSensorId: id, selectedTrackId: null, detailView: id ? 'sensor' : 'none', detailPanelOpen: !!id }),
+    set({ selectedSensorId: id, selectedTrackId: null, selectedCueId: null, selectedGroupId: null, selectedGeometryTrackId: null, detailView: id ? 'sensor' : 'none', detailPanelOpen: !!id }),
+
+  selectCue: (id) =>
+    set({ selectedCueId: id, selectedTrackId: null, selectedSensorId: null, selectedGroupId: null, selectedGeometryTrackId: null, detailView: id ? 'cue' : 'none', detailPanelOpen: !!id }),
+
+  selectGroup: (id) =>
+    set({ selectedGroupId: id, selectedTrackId: null, selectedSensorId: null, selectedCueId: null, selectedGeometryTrackId: null, detailView: id ? 'group' : 'none', detailPanelOpen: !!id }),
+
+  selectGeometry: (trackId) =>
+    set({ selectedGeometryTrackId: trackId, selectedTrackId: null, selectedSensorId: null, selectedCueId: null, selectedGroupId: null, detailView: trackId ? 'geometry' : 'none', detailPanelOpen: !!trackId }),
 
   toggleDetailPanel: () =>
     set((s) => ({ detailPanelOpen: !s.detailPanelOpen })),
@@ -131,6 +165,10 @@ export const useUiStore = create<UiState>((set) => ({
   setReplayTime: (time) => set({ replayTime: time }),
   setScenarioDurationSec: (duration) => set({ scenarioDurationSec: duration }),
   setWsConnected: (connected) => set({ wsConnected: connected }),
+
+  setHighlightedSensors: (ids) => set({ highlightedSensorIds: ids }),
+  setSelectionBearingRays: (rays) => set({ selectionBearingRays: rays }),
+  clearSelectionHighlights: () => set({ highlightedSensorIds: [], selectionBearingRays: [] }),
 
   addEvent: (entry) =>
     set((s) => ({

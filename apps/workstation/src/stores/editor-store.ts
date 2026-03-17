@@ -87,13 +87,70 @@ export interface EditorState {
   setValidationResult: (result: EditorState['validationResult']) => void;
   reset: () => void;
 
-  // Target/waypoint actions (stubs for now, implemented in 1C)
+  // Target/waypoint actions
   addTarget: (target: EditorTarget) => void;
   removeTarget: (id: string) => void;
+  updateTarget: (id: string, updates: Partial<EditorTarget>) => void;
+  addWaypoint: (targetId: string, waypoint: EditorWaypoint) => void;
+  removeWaypoint: (targetId: string, waypointIndex: number) => void;
+  updateWaypoint: (targetId: string, waypointIndex: number, updates: Partial<EditorWaypoint>) => void;
+  setActiveTargetId: (id: string | null) => void;
+
   addFault: (fault: EditorFault) => void;
   removeFault: (id: string) => void;
+  updateFault: (id: string, updates: Partial<EditorFault>) => void;
   addAction: (action: EditorAction) => void;
   removeAction: (id: string) => void;
+  updateAction: (id: string, updates: Partial<EditorAction>) => void;
+  buildScenarioDefinition: () => ScenarioExport;
+  loadFromScenarioDefinition: (def: ScenarioExport) => void;
+}
+
+/** Shape matching ScenarioDefinition from scenario-library */
+export interface ScenarioExport {
+  id: string;
+  name: string;
+  description: string;
+  durationSec: number;
+  policyMode: string;
+  sensors: Array<{
+    sensorId: string;
+    type: string;
+    position: { lat: number; lon: number; alt: number };
+    coverage: {
+      minAzDeg: number;
+      maxAzDeg: number;
+      minElDeg: number;
+      maxElDeg: number;
+      maxRangeM: number;
+    };
+    fov?: { halfAngleHDeg: number; halfAngleVDeg: number };
+    slewRateDegPerSec?: number;
+  }>;
+  targets: Array<{
+    targetId: string;
+    name: string;
+    description: string;
+    startTime: number;
+    waypoints: Array<{
+      time: number;
+      position: { lat: number; lon: number; alt: number };
+    }>;
+  }>;
+  faults: Array<{
+    type: string;
+    sensorId: string;
+    startTime: number;
+    endTime?: number;
+    magnitude?: number;
+  }>;
+  operatorActions: Array<{
+    type: string;
+    time: number;
+    sensorId?: string;
+    targetId?: string;
+    durationSec?: number;
+  }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -164,7 +221,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   reset: () =>
     set({ ...initialState }),
 
-  // Target stubs
+  // Target CRUD
   addTarget: (target) =>
     set((s) => ({ targets: [...s.targets, target] })),
 
@@ -173,7 +230,50 @@ export const useEditorStore = create<EditorState>((set) => ({
       targets: s.targets.filter((t) => t.id !== id),
       selectedItemId: s.selectedItemId === id ? null : s.selectedItemId,
       selectedItemType: s.selectedItemId === id ? null : s.selectedItemType,
+      activeTargetId: s.activeTargetId === id ? null : s.activeTargetId,
     })),
+
+  updateTarget: (id, updates) =>
+    set((s) => ({
+      targets: s.targets.map((t) =>
+        t.id === id ? { ...t, ...updates } : t
+      ),
+    })),
+
+  addWaypoint: (targetId, waypoint) =>
+    set((s) => ({
+      targets: s.targets.map((t) =>
+        t.id === targetId
+          ? { ...t, waypoints: [...t.waypoints, waypoint] }
+          : t
+      ),
+    })),
+
+  removeWaypoint: (targetId, waypointIndex) =>
+    set((s) => ({
+      targets: s.targets.map((t) =>
+        t.id === targetId
+          ? { ...t, waypoints: t.waypoints.filter((_, i) => i !== waypointIndex) }
+          : t
+      ),
+    })),
+
+  updateWaypoint: (targetId, waypointIndex, updates) =>
+    set((s) => ({
+      targets: s.targets.map((t) =>
+        t.id === targetId
+          ? {
+              ...t,
+              waypoints: t.waypoints.map((wp, i) =>
+                i === waypointIndex ? { ...wp, ...updates } : wp
+              ),
+            }
+          : t
+      ),
+    })),
+
+  setActiveTargetId: (id) =>
+    set({ activeTargetId: id }),
 
   addFault: (fault) =>
     set((s) => ({ faults: [...s.faults, fault] })),
@@ -181,9 +281,151 @@ export const useEditorStore = create<EditorState>((set) => ({
   removeFault: (id) =>
     set((s) => ({ faults: s.faults.filter((f) => f.id !== id) })),
 
+  updateFault: (id, updates) =>
+    set((s) => ({
+      faults: s.faults.map((f) =>
+        f.id === id ? { ...f, ...updates } : f
+      ),
+    })),
+
   addAction: (action) =>
     set((s) => ({ actions: [...s.actions, action] })),
 
   removeAction: (id) =>
     set((s) => ({ actions: s.actions.filter((a) => a.id !== id) })),
+
+  updateAction: (id, updates) =>
+    set((s) => ({
+      actions: s.actions.map((a) =>
+        a.id === id ? { ...a, ...updates } : a
+      ),
+    })),
+
+  buildScenarioDefinition: () => {
+    const s = useEditorStore.getState();
+    return {
+      id: 'custom-' + Date.now(),
+      name: s.scenarioName,
+      description: s.description,
+      durationSec: s.duration,
+      policyMode: s.policyMode,
+      sensors: s.sensors.map((sen) => ({
+        sensorId: sen.id,
+        type: sen.type,
+        position: { lat: sen.lat, lon: sen.lon, alt: sen.alt },
+        coverage: {
+          minAzDeg: sen.azMin,
+          maxAzDeg: sen.azMax,
+          minElDeg: sen.elMin,
+          maxElDeg: sen.elMax,
+          maxRangeM: sen.rangeMaxKm * 1000,
+        },
+        ...(sen.type === 'eo'
+          ? {
+              fov: {
+                halfAngleHDeg: sen.fovHalfAngleH ?? 2.5,
+                halfAngleVDeg: sen.fovHalfAngleV ?? 1.8,
+              },
+              slewRateDegPerSec: sen.slewRateDegSec ?? 30,
+            }
+          : {}),
+      })),
+      targets: s.targets.map((t) => ({
+        targetId: t.id,
+        name: t.label,
+        description: '',
+        startTime: t.waypoints.length > 0 ? t.waypoints[0].arrivalTimeSec : 0,
+        waypoints: t.waypoints.map((wp) => ({
+          time: wp.arrivalTimeSec,
+          position: { lat: wp.lat, lon: wp.lon, alt: wp.alt },
+        })),
+      })),
+      faults: s.faults.map((f) => ({
+        type: f.type,
+        sensorId: f.sensorId,
+        startTime: f.startTimeSec,
+        endTime: f.endTimeSec,
+        magnitude: f.magnitude,
+      })),
+      operatorActions: s.actions.map((a) => ({
+        type: a.type,
+        time: a.timeSec,
+        sensorId: a.sensorId,
+        targetId: a.targetId,
+        durationSec: a.durationSec,
+      })),
+    };
+  },
+
+  loadFromScenarioDefinition: (def) => {
+    set({ ...initialState });
+    const store = useEditorStore.getState();
+    if (def.name) store.setScenarioName(def.name);
+    if (def.description) store.setDescription(def.description);
+    if (def.durationSec) store.setDuration(def.durationSec);
+    if (def.policyMode) store.setPolicyMode(def.policyMode as EditorState['policyMode']);
+
+    if (Array.isArray(def.sensors)) {
+      for (const s of def.sensors) {
+        store.addSensor({
+          id: s.sensorId || crypto.randomUUID(),
+          type: (s.type as EditorSensor['type']) || 'radar',
+          lat: s.position?.lat ?? 0,
+          lon: s.position?.lon ?? 0,
+          alt: s.position?.alt ?? 0,
+          azMin: s.coverage?.minAzDeg ?? 0,
+          azMax: s.coverage?.maxAzDeg ?? 360,
+          elMin: s.coverage?.minElDeg ?? -5,
+          elMax: s.coverage?.maxElDeg ?? 85,
+          rangeMaxKm: (s.coverage?.maxRangeM ?? 100000) / 1000,
+          fovHalfAngleH: s.fov?.halfAngleHDeg,
+          fovHalfAngleV: s.fov?.halfAngleVDeg,
+          slewRateDegSec: s.slewRateDegPerSec,
+        });
+      }
+    }
+
+    if (Array.isArray(def.targets)) {
+      for (const t of def.targets) {
+        store.addTarget({
+          id: t.targetId || crypto.randomUUID(),
+          label: t.name || 'Target',
+          rcs: 1,
+          waypoints: (t.waypoints || []).map((wp: any) => ({
+            lat: wp.position?.lat ?? 0,
+            lon: wp.position?.lon ?? 0,
+            alt: wp.position?.alt ?? 0,
+            speedMs: 0,
+            arrivalTimeSec: wp.time ?? 0,
+          })),
+        });
+      }
+    }
+
+    if (Array.isArray(def.faults)) {
+      for (const f of def.faults) {
+        store.addFault({
+          id: crypto.randomUUID(),
+          type: f.type as EditorFault['type'],
+          sensorId: f.sensorId,
+          startTimeSec: f.startTime ?? 0,
+          endTimeSec: f.endTime ?? 0,
+          magnitude: f.magnitude,
+        });
+      }
+    }
+
+    if (Array.isArray(def.operatorActions)) {
+      for (const a of def.operatorActions) {
+        store.addAction({
+          id: crypto.randomUUID(),
+          type: a.type as EditorAction['type'],
+          timeSec: a.time ?? 0,
+          sensorId: a.sensorId,
+          targetId: a.targetId,
+          durationSec: a.durationSec,
+        });
+      }
+    }
+  },
 }));

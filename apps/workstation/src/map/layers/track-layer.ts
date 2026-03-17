@@ -157,7 +157,7 @@ function isValidCoord(track: SystemTrack): boolean {
   );
 }
 
-export function updateTrackLayer(map: MaplibreMap, tracks: SystemTrack[]) {
+export function updateTrackLayer(map: MaplibreMap, tracks: SystemTrack[], selectedTrackId?: string | null) {
   const source = map.getSource(SOURCE_ID);
   const ellipseSource = map.getSource(ELLIPSE_SOURCE_ID);
   if (!source || !ellipseSource) {
@@ -216,6 +216,50 @@ export function updateTrackLayer(map: MaplibreMap, tracks: SystemTrack[]) {
 
   (source as any).setData({ type: 'FeatureCollection', features });
   (ellipseSource as any).setData({ type: 'FeatureCollection', features: ellipseFeatures });
+
+  // Apply selection-based styling: dim unrelated tracks when one is selected
+  if (selectedTrackId) {
+    const opacityExpr: any = ['case', ['==', ['get', 'id'], selectedTrackId], 1.0, 0.3];
+    const radiusExpr: any = ['case', ['==', ['get', 'id'], selectedTrackId], 10, 8];
+
+    try {
+      if (map.getLayer(LAYER_ID)) {
+        map.setPaintProperty(LAYER_ID, 'circle-opacity', opacityExpr);
+        map.setPaintProperty(LAYER_ID, 'circle-radius', radiusExpr);
+      }
+      if (map.getLayer(LABEL_LAYER_ID)) {
+        map.setPaintProperty(LABEL_LAYER_ID, 'text-opacity', opacityExpr);
+      }
+      if (map.getLayer(EO_BADGE_LAYER_ID)) {
+        map.setPaintProperty(EO_BADGE_LAYER_ID, 'circle-opacity', opacityExpr);
+      }
+      if (map.getLayer(ELLIPSE_LAYER_ID)) {
+        map.setPaintProperty(ELLIPSE_LAYER_ID, 'fill-opacity',
+          ['case', ['==', ['get', 'trackId'], selectedTrackId], 0.1, 0.03]);
+      }
+    } catch (e) {
+      console.warn('[track-layer] Failed to apply selection styling:', e);
+    }
+  } else {
+    // Reset to defaults when no selection
+    try {
+      if (map.getLayer(LAYER_ID)) {
+        map.setPaintProperty(LAYER_ID, 'circle-opacity', 1.0);
+        map.setPaintProperty(LAYER_ID, 'circle-radius', 8);
+      }
+      if (map.getLayer(LABEL_LAYER_ID)) {
+        map.setPaintProperty(LABEL_LAYER_ID, 'text-opacity', 1.0);
+      }
+      if (map.getLayer(EO_BADGE_LAYER_ID)) {
+        map.setPaintProperty(EO_BADGE_LAYER_ID, 'circle-opacity', 1.0);
+      }
+      if (map.getLayer(ELLIPSE_LAYER_ID)) {
+        map.setPaintProperty(ELLIPSE_LAYER_ID, 'fill-opacity', 0.1);
+      }
+    } catch (e) {
+      console.warn('[track-layer] Failed to reset selection styling:', e);
+    }
+  }
 }
 
 export function getTrackLayerId(): string {

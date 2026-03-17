@@ -1,6 +1,5 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import { useEditorStore } from '../stores/editor-store';
-import type { EditorSensor, EditorTarget, EditorFault, EditorAction } from '../stores/editor-store';
 
 const colors = {
   headerBg: '#1a1a2e',
@@ -32,92 +31,46 @@ export function EditorHeader({ onBack }: EditorHeaderProps) {
   const validationResult = useEditorStore((s) => s.validationResult);
   const setValidationResult = useEditorStore((s) => s.setValidationResult);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const buildScenarioDefinition = useEditorStore((s) => s.buildScenarioDefinition);
+  const loadFromScenarioDefinition = useEditorStore((s) => s.loadFromScenarioDefinition);
 
-  const buildExportPayload = useCallback(() => {
-    const state = useEditorStore.getState();
-    return {
-      id: 'custom-' + Date.now(),
-      name: state.scenarioName,
-      description: state.description,
-      durationSec: state.duration,
-      policyMode: state.policyMode,
-      sensors: state.sensors.map((s) => ({
-        sensorId: s.id,
-        type: s.type,
-        position: { lat: s.lat, lon: s.lon, alt: s.alt },
-        coverage: {
-          minAzDeg: s.azMin,
-          maxAzDeg: s.azMax,
-          minElDeg: s.elMin,
-          maxElDeg: s.elMax,
-          maxRangeM: s.rangeMaxKm * 1000,
-        },
-        ...(s.type === 'eo'
-          ? {
-              fov: {
-                halfAngleHDeg: s.fovHalfAngleH ?? 2.5,
-                halfAngleVDeg: s.fovHalfAngleV ?? 1.8,
-              },
-              slewRateDegPerSec: s.slewRateDegSec ?? 30,
-            }
-          : {}),
-      })),
-      targets: state.targets.map((t) => ({
-        targetId: t.id,
-        name: t.label,
-        description: '',
-        startTime: t.waypoints.length > 0 ? t.waypoints[0].arrivalTimeSec : 0,
-        waypoints: t.waypoints.map((wp) => ({
-          time: wp.arrivalTimeSec,
-          position: { lat: wp.lat, lon: wp.lon, alt: wp.alt },
-        })),
-      })),
-      faults: state.faults.map((f) => ({
-        type: f.type,
-        sensorId: f.sensorId,
-        startTime: f.startTimeSec,
-        endTime: f.endTimeSec,
-        magnitude: f.magnitude,
-      })),
-      operatorActions: state.actions.map((a) => ({
-        type: a.type,
-        time: a.timeSec,
-        sensorId: a.sensorId,
-        targetId: a.targetId,
-      })),
-    };
+  const showToast = useCallback((message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
   }, []);
 
   const handleSave = useCallback(async () => {
     try {
-      const payload = buildExportPayload();
+      const payload = buildScenarioDefinition();
       const res = await fetch('/api/scenarios/custom', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       if (res.ok) {
-        alert('Scenario saved successfully.');
+        showToast('Scenario saved successfully.', 'success');
       } else {
-        alert('Save failed: ' + (await res.text()));
+        showToast('Save failed: ' + (await res.text()), 'error');
       }
     } catch (err) {
-      alert('Save error: ' + (err as Error).message);
+      showToast('Save error: ' + (err as Error).message, 'error');
     }
-  }, [buildExportPayload]);
+  }, [buildScenarioDefinition, showToast]);
 
   const handleExport = useCallback(() => {
-    const payload = buildExportPayload();
+    const payload = buildScenarioDefinition();
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: 'application/json',
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${payload.name.replace(/\s+/g, '_').toLowerCase()}.json`;
+    a.download = `scenario-${payload.name.replace(/\s+/g, '_').toLowerCase()}-${ts}.json`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [buildExportPayload]);
+  }, [buildScenarioDefinition]);
 
   const handleImport = useCallback(() => {
     fileInputRef.current?.click();
@@ -131,79 +84,25 @@ export function EditorHeader({ onBack }: EditorHeaderProps) {
       reader.onload = () => {
         try {
           const data = JSON.parse(reader.result as string);
-          const store = useEditorStore.getState();
-          store.reset();
-          if (data.name) store.setScenarioName(data.name);
-          if (data.description) store.setDescription(data.description);
-          if (data.durationSec) store.setDuration(data.durationSec);
-          if (data.policyMode) store.setPolicyMode(data.policyMode);
-
-          // Import sensors
-          if (Array.isArray(data.sensors)) {
-            for (const s of data.sensors) {
-              store.addSensor({
-                id: s.sensorId || crypto.randomUUID(),
-                type: s.type || 'radar',
-                lat: s.position?.lat ?? 0,
-                lon: s.position?.lon ?? 0,
-                alt: s.position?.alt ?? 0,
-                azMin: s.coverage?.minAzDeg ?? 0,
-                azMax: s.coverage?.maxAzDeg ?? 360,
-                elMin: s.coverage?.minElDeg ?? -5,
-                elMax: s.coverage?.maxElDeg ?? 85,
-                rangeMaxKm: (s.coverage?.maxRangeM ?? 100000) / 1000,
-                fovHalfAngleH: s.fov?.halfAngleHDeg,
-                fovHalfAngleV: s.fov?.halfAngleVDeg,
-                slewRateDegSec: s.slewRateDegPerSec,
-              });
-            }
+          if (!data || typeof data !== 'object') {
+            showToast('Invalid JSON file.', 'error');
+            return;
           }
-
-          // Import targets
-          if (Array.isArray(data.targets)) {
-            for (const t of data.targets) {
-              store.addTarget({
-                id: t.targetId || crypto.randomUUID(),
-                label: t.name || 'Target',
-                rcs: 1,
-                waypoints: (t.waypoints || []).map((wp: any) => ({
-                  lat: wp.position?.lat ?? 0,
-                  lon: wp.position?.lon ?? 0,
-                  alt: wp.position?.alt ?? 0,
-                  speedMs: 0,
-                  arrivalTimeSec: wp.time ?? 0,
-                })),
-              });
-            }
-          }
-
-          // Import faults
-          if (Array.isArray(data.faults)) {
-            for (const f of data.faults) {
-              store.addFault({
-                id: crypto.randomUUID(),
-                type: f.type,
-                sensorId: f.sensorId,
-                startTimeSec: f.startTime ?? 0,
-                endTimeSec: f.endTime ?? 0,
-                magnitude: f.magnitude,
-              });
-            }
-          }
+          loadFromScenarioDefinition(data);
+          showToast('Scenario imported successfully.', 'success');
         } catch (err) {
-          alert('Import failed: ' + (err as Error).message);
+          showToast('Import failed: ' + (err as Error).message, 'error');
         }
       };
       reader.readAsText(file);
-      // Reset file input so same file can be re-imported
       e.target.value = '';
     },
-    []
+    [loadFromScenarioDefinition, showToast]
   );
 
   const handleValidate = useCallback(async () => {
     try {
-      const payload = buildExportPayload();
+      const payload = buildScenarioDefinition();
       const res = await fetch('/api/scenarios/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -224,21 +123,40 @@ export function EditorHeader({ onBack }: EditorHeaderProps) {
         warnings: [],
       });
     }
-  }, [buildExportPayload, setValidationResult]);
+  }, [buildScenarioDefinition, setValidationResult]);
 
   const handleStart = useCallback(async () => {
     try {
-      const payload = buildExportPayload();
+      // Check validation first
+      if (validationResult && validationResult.errors.length > 0) {
+        alert('Cannot start: scenario has validation errors. Fix them first.');
+        return;
+      }
+
+      const payload = buildScenarioDefinition();
+
+      // Save first
+      await fetch('/api/scenarios/custom', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      // Reset with custom scenario
       await fetch('/api/scenario/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scenarioId: payload.id, custom: payload }),
       });
+
+      // Start the scenario
+      await fetch('/api/scenario/start', { method: 'POST' });
+
       onBack();
     } catch (err) {
-      alert('Start failed: ' + (err as Error).message);
+      showToast('Start failed: ' + (err as Error).message, 'error');
     }
-  }, [buildExportPayload, onBack]);
+  }, [buildScenarioDefinition, validationResult, onBack, showToast]);
 
   return (
     <header
@@ -348,6 +266,27 @@ export function EditorHeader({ onBack }: EditorHeaderProps) {
       >
         Scenario Editor
       </span>
+
+      {/* Toast notification */}
+      {toast && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '50px',
+            right: '16px',
+            background: toast.type === 'success' ? '#00aa44' : '#cc2222',
+            color: '#fff',
+            padding: '8px 16px',
+            borderRadius: '4px',
+            fontSize: '12px',
+            fontWeight: 600,
+            zIndex: 10000,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+          }}
+        >
+          {toast.message}
+        </div>
+      )}
     </header>
   );
 }

@@ -2,6 +2,7 @@ import { useUiStore } from '../stores/ui-store';
 import { useTrackStore } from '../stores/track-store';
 import { useSensorStore } from '../stores/sensor-store';
 import { useTaskStore } from '../stores/task-store';
+import { useInvestigationStore } from '../stores/investigation-store';
 
 /**
  * ReplayController manages the WebSocket connection for real-time event streaming
@@ -85,6 +86,9 @@ export class ReplayController {
       }
       if (data.fusionModes && typeof data.fusionModes === 'object') {
         useTaskStore.getState().setFusionModes(data.fusionModes);
+      }
+      if (data.investigationSummaries && Array.isArray(data.investigationSummaries)) {
+        useInvestigationStore.getState().setActiveInvestigations(data.investigationSummaries);
       }
       // Update replay time from simulation
       if (typeof data.simTimeSec === 'number') {

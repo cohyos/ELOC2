@@ -1,9 +1,13 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useEditorStore } from '../stores/editor-store';
-import type { EditorSensor } from '../stores/editor-store';
+import type { EditorSensor, EditorTarget, EditorWaypoint } from '../stores/editor-store';
 import { SENSOR_TEMPLATES } from './sensor-templates';
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
 
 const SENSOR_COLORS: Record<string, string> = {
   radar: '#4488ff',
@@ -16,6 +20,33 @@ const SENSOR_LAYER = 'editor-sensors-layer';
 const SENSOR_LABEL_LAYER = 'editor-sensors-labels';
 const COVERAGE_SOURCE = 'editor-coverage';
 const COVERAGE_LAYER = 'editor-coverage-layer';
+
+const TARGET_PATH_SOURCE = 'editor-targets-source';
+const TARGET_PATH_LAYER = 'editor-target-paths';
+const WAYPOINT_MARKER_SOURCE = 'editor-waypoint-markers-source';
+const WAYPOINT_MARKER_LAYER = 'editor-waypoint-markers';
+
+// ---------------------------------------------------------------------------
+// Haversine distance (km)
+// ---------------------------------------------------------------------------
+
+function haversineDistanceKm(
+  lat1: number, lon1: number,
+  lat2: number, lon2: number,
+): number {
+  const R = 6371;
+  const toRad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * toRad;
+  const dLon = (lon2 - lon1) * toRad;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// ---------------------------------------------------------------------------
+// GeoJSON builders — sensors
+// ---------------------------------------------------------------------------
 
 function buildSensorGeoJSON(sensors: EditorSensor[]): GeoJSON.FeatureCollection {
   return {
@@ -36,7 +67,6 @@ function buildSensorGeoJSON(sensors: EditorSensor[]): GeoJSON.FeatureCollection 
 function buildCoverageGeoJSON(sensors: EditorSensor[]): GeoJSON.FeatureCollection {
   const features: GeoJSON.Feature[] = [];
   for (const s of sensors) {
-    // Approximate circle as polygon (32 points)
     const steps = 32;
     const km = s.rangeMaxKm;
     const coords: [number, number][] = [];
@@ -50,25 +80,98 @@ function buildCoverageGeoJSON(sensors: EditorSensor[]): GeoJSON.FeatureCollectio
     features.push({
       type: 'Feature',
       geometry: { type: 'Polygon', coordinates: [coords] },
-      properties: {
-        id: s.id,
-        color: SENSOR_COLORS[s.type] || '#888',
-      },
+      properties: { id: s.id, color: SENSOR_COLORS[s.type] || '#888' },
     });
   }
   return { type: 'FeatureCollection', features };
 }
 
+// ---------------------------------------------------------------------------
+// GeoJSON builders — targets
+// ---------------------------------------------------------------------------
+
+function speedToColor(speedMs: number): string {
+  if (speedMs < 100) return '#00cc44';
+  if (speedMs > 300) return '#ff3333';
+  return '#ffcc00';
+}
+
+function buildTargetPathGeoJSON(
+  targets: EditorTarget[],
+  activeTargetId: string | null,
+): GeoJSON.FeatureCollection {
+  const features: GeoJSON.Feature[] = [];
+  for (const t of targets) {
+    if (t.waypoints.length < 2) continue;
+    const isActive = t.id === activeTargetId;
+    // Build individual line segments so each can be colored by speed
+    for (let i = 0; i < t.waypoints.length - 1; i++) {
+      const wp1 = t.waypoints[i];
+      const wp2 = t.waypoints[i + 1];
+      const avgSpeed = (wp1.speedMs + wp2.speedMs) / 2;
+      features.push({
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [wp1.lon, wp1.lat],
+            [wp2.lon, wp2.lat],
+          ],
+        },
+        properties: {
+          targetId: t.id,
+          color: isActive ? speedToColor(avgSpeed) : '#555',
+          width: isActive ? 3 : 1.5,
+          opacity: isActive ? 0.9 : 0.4,
+        },
+      });
+    }
+  }
+  return { type: 'FeatureCollection', features };
+}
+
+function buildWaypointMarkersGeoJSON(
+  targets: EditorTarget[],
+  activeTargetId: string | null,
+): GeoJSON.FeatureCollection {
+  const features: GeoJSON.Feature[] = [];
+  for (const t of targets) {
+    const isActive = t.id === activeTargetId;
+    for (let i = 0; i < t.waypoints.length; i++) {
+      const wp = t.waypoints[i];
+      features.push({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [wp.lon, wp.lat] },
+        properties: {
+          targetId: t.id,
+          waypointIndex: i,
+          color: isActive ? '#ffffff' : '#888',
+          strokeColor: isActive ? speedToColor(wp.speedMs) : '#555',
+          radius: isActive ? 6 : 4,
+        },
+      });
+    }
+  }
+  return { type: 'FeatureCollection', features };
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
 export function EditorMap() {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [layersReady, setLayersReady] = useState(false);
+  const dragState = useRef<{
+    targetId: string;
+    waypointIndex: number;
+  } | null>(null);
 
   const sensors = useEditorStore((s) => s.sensors);
+  const targets = useEditorStore((s) => s.targets);
   const editMode = useEditorStore((s) => s.editMode);
-  const addSensor = useEditorStore((s) => s.addSensor);
-  const selectItem = useEditorStore((s) => s.selectItem);
-  const setEditMode = useEditorStore((s) => s.setEditMode);
+  const activeTargetId = useEditorStore((s) => s.activeTargetId);
   const selectedItemId = useEditorStore((s) => s.selectedItemId);
 
   // Initialize map
@@ -108,7 +211,7 @@ export function EditorMap() {
       const m = mapRef.current;
       if (!m) return;
 
-      // Coverage layer (below sensors)
+      // --- Coverage layer ---
       m.addSource(COVERAGE_SOURCE, {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -125,7 +228,45 @@ export function EditorMap() {
         },
       });
 
-      // Sensor circles
+      // --- Target paths layer ---
+      m.addSource(TARGET_PATH_SOURCE, {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      m.addLayer({
+        id: TARGET_PATH_LAYER,
+        type: 'line',
+        source: TARGET_PATH_SOURCE,
+        layout: {
+          'line-cap': 'round',
+          'line-join': 'round',
+        },
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': ['get', 'width'],
+          'line-opacity': ['get', 'opacity'],
+        },
+      });
+
+      // --- Waypoint markers layer ---
+      m.addSource(WAYPOINT_MARKER_SOURCE, {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      m.addLayer({
+        id: WAYPOINT_MARKER_LAYER,
+        type: 'circle',
+        source: WAYPOINT_MARKER_SOURCE,
+        paint: {
+          'circle-radius': ['get', 'radius'],
+          'circle-color': ['get', 'color'],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': ['get', 'strokeColor'],
+          'circle-opacity': 0.95,
+        },
+      });
+
+      // --- Sensor circles ---
       m.addSource(SENSOR_SOURCE, {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -143,7 +284,7 @@ export function EditorMap() {
         },
       });
 
-      // Sensor labels
+      // --- Sensor labels ---
       try {
         m.addLayer({
           id: SENSOR_LABEL_LAYER,
@@ -166,13 +307,12 @@ export function EditorMap() {
         console.warn('Editor sensor labels init failed:', e);
       }
 
-      // Click on sensor to select
+      // --- Click on sensor to select ---
       m.on('click', SENSOR_LAYER, (e) => {
         if (e.features && e.features.length > 0) {
           const id = e.features[0].properties?.id;
           if (id) {
-            selectItem('sensor', id);
-            // Stop propagation so map click doesn't fire
+            useEditorStore.getState().selectItem('sensor', id);
             e.originalEvent.stopPropagation();
           }
         }
@@ -183,6 +323,73 @@ export function EditorMap() {
       });
       m.on('mouseleave', SENSOR_LAYER, () => {
         if (mapRef.current) mapRef.current.getCanvas().style.cursor = '';
+      });
+
+      // --- Waypoint marker interactions ---
+      m.on('mouseenter', WAYPOINT_MARKER_LAYER, () => {
+        if (mapRef.current && useEditorStore.getState().editMode === 'select') {
+          mapRef.current.getCanvas().style.cursor = 'grab';
+        }
+      });
+      m.on('mouseleave', WAYPOINT_MARKER_LAYER, () => {
+        if (mapRef.current && !dragState.current) {
+          mapRef.current.getCanvas().style.cursor = '';
+        }
+      });
+
+      // Drag waypoint: mousedown on marker
+      m.on('mousedown', WAYPOINT_MARKER_LAYER, (e) => {
+        if (useEditorStore.getState().editMode !== 'select') return;
+        if (!e.features || e.features.length === 0) return;
+        const props = e.features[0].properties;
+        if (!props) return;
+
+        dragState.current = {
+          targetId: props.targetId as string,
+          waypointIndex: props.waypointIndex as number,
+        };
+
+        m.getCanvas().style.cursor = 'grabbing';
+        e.preventDefault(); // Prevent map pan
+
+        const onMove = (moveEvt: maplibregl.MapMouseEvent) => {
+          if (!dragState.current) return;
+          const { targetId, waypointIndex } = dragState.current;
+          const store = useEditorStore.getState();
+          const target = store.targets.find((t) => t.id === targetId);
+          if (!target) return;
+
+          store.updateWaypoint(targetId, waypointIndex, {
+            lat: moveEvt.lngLat.lat,
+            lon: moveEvt.lngLat.lng,
+          });
+
+          // Recalculate arrival times after drag
+          recalcArrivalTimes(targetId);
+        };
+
+        const onUp = () => {
+          dragState.current = null;
+          m.getCanvas().style.cursor = '';
+          m.off('mousemove', onMove);
+          m.off('mouseup', onUp);
+        };
+
+        m.on('mousemove', onMove);
+        m.on('mouseup', onUp);
+      });
+
+      // Right-click waypoint to delete
+      m.on('contextmenu', WAYPOINT_MARKER_LAYER, (e) => {
+        e.preventDefault();
+        if (!e.features || e.features.length === 0) return;
+        const props = e.features[0].properties;
+        if (!props) return;
+        const targetId = props.targetId as string;
+        const waypointIndex = props.waypointIndex as number;
+        useEditorStore.getState().removeWaypoint(targetId, waypointIndex);
+        // Recalculate arrival times
+        recalcArrivalTimes(targetId);
       });
 
       setLayersReady(true);
@@ -201,7 +408,9 @@ export function EditorMap() {
     if (!m) return;
 
     const handler = (e: maplibregl.MapMouseEvent) => {
-      const currentMode = useEditorStore.getState().editMode;
+      const state = useEditorStore.getState();
+      const currentMode = state.editMode;
+
       if (currentMode === 'place-sensor') {
         const defaults = SENSOR_TEMPLATES['long-range-radar'];
         const newSensor: EditorSensor = {
@@ -217,11 +426,39 @@ export function EditorMap() {
           rangeMaxKm: defaults.rangeMaxKm,
           template: 'long-range-radar',
         };
-        useEditorStore.getState().addSensor(newSensor);
-        useEditorStore.getState().selectItem('sensor', newSensor.id);
-        useEditorStore.getState().setEditMode('select');
-      } else if (currentMode === 'select') {
-        // Deselect if clicking empty space (sensor click is handled by layer click above)
+        state.addSensor(newSensor);
+        state.selectItem('sensor', newSensor.id);
+        state.setEditMode('select');
+      } else if (currentMode === 'place-waypoint') {
+        const targetId = state.activeTargetId;
+        if (!targetId) return;
+
+        const target = state.targets.find((t) => t.id === targetId);
+        if (!target) return;
+
+        const lat = e.lngLat.lat;
+        const lon = e.lngLat.lng;
+        const alt = 1000;
+        const speedMs = 200;
+
+        let arrivalTimeSec = 0;
+        if (target.waypoints.length > 0) {
+          const prev = target.waypoints[target.waypoints.length - 1];
+          const distKm = haversineDistanceKm(prev.lat, prev.lon, lat, lon);
+          const timeSec = (distKm * 1000) / speedMs;
+          arrivalTimeSec = prev.arrivalTimeSec + timeSec;
+        }
+
+        const newWaypoint: EditorWaypoint = {
+          lat,
+          lon,
+          alt,
+          speedMs,
+          arrivalTimeSec,
+        };
+
+        state.addWaypoint(targetId, newWaypoint);
+        // Stay in place-waypoint mode for chaining
       }
     };
 
@@ -253,6 +490,18 @@ export function EditorMap() {
     const covSrc = m.getSource(COVERAGE_SOURCE) as maplibregl.GeoJSONSource;
     if (covSrc) covSrc.setData(buildCoverageGeoJSON(sensors));
   }, [sensors, layersReady]);
+
+  // Update target paths and waypoint markers on map
+  useEffect(() => {
+    const m = mapRef.current;
+    if (!m || !layersReady) return;
+
+    const pathSrc = m.getSource(TARGET_PATH_SOURCE) as maplibregl.GeoJSONSource;
+    if (pathSrc) pathSrc.setData(buildTargetPathGeoJSON(targets, activeTargetId));
+
+    const wpSrc = m.getSource(WAYPOINT_MARKER_SOURCE) as maplibregl.GeoJSONSource;
+    if (wpSrc) wpSrc.setData(buildWaypointMarkersGeoJSON(targets, activeTargetId));
+  }, [targets, activeTargetId, layersReady]);
 
   // Mode indicator overlay
   const modeLabel =
@@ -300,4 +549,31 @@ export function EditorMap() {
       )}
     </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Helper: recalculate arrival times for a target's waypoints
+// ---------------------------------------------------------------------------
+
+function recalcArrivalTimes(targetId: string) {
+  const store = useEditorStore.getState();
+  const target = store.targets.find((t) => t.id === targetId);
+  if (!target) return;
+
+  for (let i = 0; i < target.waypoints.length; i++) {
+    if (i === 0) {
+      store.updateWaypoint(targetId, 0, { arrivalTimeSec: 0 });
+    } else {
+      const prev = store.targets.find((t) => t.id === targetId)!.waypoints[i - 1];
+      const curr = target.waypoints[i];
+      const distKm = haversineDistanceKm(prev.lat, prev.lon, curr.lat, curr.lon);
+      const speed = curr.speedMs > 0 ? curr.speedMs : 1;
+      const timeSec = (distKm * 1000) / speed;
+      // Re-read prev arrival after possible update
+      const updatedPrev = useEditorStore.getState().targets.find((t) => t.id === targetId)!.waypoints[i - 1];
+      store.updateWaypoint(targetId, i, {
+        arrivalTimeSec: updatedPrev.arrivalTimeSec + timeSec,
+      });
+    }
+  }
 }

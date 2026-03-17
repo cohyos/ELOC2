@@ -53,6 +53,7 @@ import {
   applyPolicy,
   assignTasks,
 } from '@eloc2/eo-tasking';
+import type { ScoringWeights } from '@eloc2/eo-tasking';
 import {
   triangulateMultiple,
   buildGeometryEstimate,
@@ -96,6 +97,59 @@ export interface LiveEvent {
 
 type WsClient = { send: (data: string) => void };
 
+export interface InvestigationParameters {
+  weights: {
+    threat: number;
+    uncertaintyReduction: number;
+    geometryGain: number;
+    operatorIntent: number;
+    slewCost: number;
+    occupancyCost: number;
+  };
+  thresholds: {
+    splitAngleDeg: number;
+    confidenceGate: number;
+    cueValidityWindowSec: number;
+    convergenceThreshold: number;
+  };
+  policyMode: 'recommended_only' | 'auto_with_veto' | 'manual';
+}
+
+export interface InvestigationSummaryWS {
+  trackId: string;
+  trackStatus: string;
+  investigationStatus: string;
+  assignedSensors: string[];
+  cuePriority: number;
+  bearingCount: number;
+  geometryStatus: string;
+  hypotheses: Array<{ label: string; probability: number }>;
+  scoreBreakdown: {
+    threat: number;
+    uncertainty: number;
+    geometry: number;
+    intent: number;
+  };
+}
+
+const DEFAULT_INVESTIGATION_PARAMETERS: InvestigationParameters = {
+  weights: {
+    threat: 1.0,
+    uncertaintyReduction: 1.0,
+    geometryGain: 0.5,
+    operatorIntent: 2.0,
+    slewCost: 0.3,
+    occupancyCost: 0.5,
+  },
+  thresholds: {
+    splitAngleDeg: 0.5,
+    confidenceGate: 0.7,
+    cueValidityWindowSec: 30,
+    convergenceThreshold: 0.85,
+  },
+  policyMode: 'auto_with_veto',
+};
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -127,6 +181,8 @@ export class LiveEngine {
   private lastEoTaskingSec = 0;
   /** Tracks the active fusion mode per sensor for UI display. */
   private fusionModePerSensor = new Map<string, FusionMode>();
+  /** Investigation parameters (runtime-tunable). */
+  private currentParameters: InvestigationParameters = { ...DEFAULT_INVESTIGATION_PARAMETERS, weights: { ...DEFAULT_INVESTIGATION_PARAMETERS.weights }, thresholds: { ...DEFAULT_INVESTIGATION_PARAMETERS.thresholds } };
   /** Formal event envelopes for validation runner. */
   private eventEnvelopes: EventEnvelope[] = [];
 
@@ -150,6 +206,122 @@ export class LiveEngine {
 
   getState(): LiveState {
     return this.state;
+  }
+
+  // ── Investigation Parameters API ─────────────────────────────────────
+
+  getInvestigationParameters(): InvestigationParameters {
+    return this.currentParameters;
+  }
+
+  setInvestigationParameters(params: Partial<InvestigationParameters>): void {
+    if (params.weights) {
+      this.currentParameters.weights = { ...this.currentParameters.weights, ...params.weights };
+    }
+    if (params.thresholds) {
+      this.currentParameters.thresholds = { ...this.currentParameters.thresholds, ...params.thresholds };
+    }
+    if (params.policyMode) {
+      this.currentParameters.policyMode = params.policyMode;
+    }
+  }
+
+  resetInvestigationParameters(): void {
+    this.currentParameters = {
+      ...DEFAULT_INVESTIGATION_PARAMETERS,
+      weights: { ...DEFAULT_INVESTIGATION_PARAMETERS.weights },
+      thresholds: { ...DEFAULT_INVESTIGATION_PARAMETERS.thresholds },
+    };
+  }
+
+  getActiveInvestigations(): InvestigationSummaryWS[] {
+    const summaries: InvestigationSummaryWS[] = [];
+    // Each active cue represents an active investigation
+    for (const cue of this.activeCuesById.values()) {
+      const systemTrackId = cue.systemTrackId as string;
+      const track = this.state.tracks.find(t => (t.systemTrackId as string) === systemTrackId);
+      if (!track) continue;
+
+      // Find assigned sensors (tasks executing for this track)
+      const assignedSensors = this.state.tasks
+        .filter(t => (t.systemTrackId as string) === systemTrackId && t.status === 'executing')
+        .map(t => t.sensorId as string);
+
+      // Count bearings from eoTracks associated with this track
+      const bearingCount = this.state.eoTracks
+        .filter(et => (et.associatedSystemTrackId as string) === systemTrackId)
+        .length;
+
+      // Geometry status
+      const geoEstimate = this.state.geometryEstimates.get(systemTrackId);
+      let geometryStatus = 'bearing_only';
+      if (geoEstimate) {
+        geometryStatus = geoEstimate.classification ?? 'candidate_3d';
+      }
+
+      // Check for unresolved groups related to this track's cue
+      const relatedGroup = [...this.unresolvedGroupsById.values()].find(
+        g => (g.parentCueId as string) === (cue.cueId as string),
+      );
+      let investigationStatus = 'in_progress';
+      const hypotheses: Array<{ label: string; probability: number }> = [];
+      if (relatedGroup) {
+        if (relatedGroup.status === 'active' || relatedGroup.status === 'escalated') {
+          investigationStatus = 'split_detected';
+          // Generate hypotheses from eoTracks in the group
+          const groupTracks = relatedGroup.eoTrackIds.length;
+          if (groupTracks > 0) {
+            for (let i = 0; i < groupTracks; i++) {
+              hypotheses.push({
+                label: `Target ${i + 1}`,
+                probability: 1 / groupTracks,
+              });
+            }
+          }
+        }
+      }
+      if (track.status === 'confirmed' && bearingCount >= 2 && geoEstimate) {
+        investigationStatus = 'confirmed';
+      }
+
+      // Score breakdown from the most recent task for this track
+      const recentTask = this.state.tasks.find(
+        t => (t.systemTrackId as string) === systemTrackId && t.scoreBreakdown,
+      );
+      const scoreBreakdown = {
+        threat: recentTask?.scoreBreakdown?.threat ?? 0,
+        uncertainty: recentTask?.scoreBreakdown?.uncertaintyReduction ?? 0,
+        geometry: recentTask?.scoreBreakdown?.geometryGain ?? 0,
+        intent: recentTask?.scoreBreakdown?.operatorIntent ?? 0,
+      };
+
+      summaries.push({
+        trackId: systemTrackId,
+        trackStatus: track.status,
+        investigationStatus,
+        assignedSensors,
+        cuePriority: cue.priority,
+        bearingCount,
+        geometryStatus,
+        hypotheses,
+        scoreBreakdown,
+      });
+    }
+    return summaries;
+  }
+
+  forceResolveGroup(groupId: string): boolean {
+    const group = this.unresolvedGroupsById.get(groupId);
+    if (!group) return false;
+    // Mark group as resolved
+    const resolved: UnresolvedGroup = {
+      ...group,
+      status: 'resolved' as UnresolvedGroup['status'],
+    };
+    this.unresolvedGroupsById.set(groupId, resolved);
+    this.state.unresolvedGroups = [...this.unresolvedGroupsById.values()];
+    this.pushEvent('investigation.force_resolved', `Group ${groupId} force-resolved by operator`);
+    return true;
   }
 
   /** Returns formal EventEnvelope objects for use by the validation runner. */
@@ -914,7 +1086,7 @@ export class LiveEngine {
     }
 
     const scoredDecisions = candidates.map(candidate => {
-      const score = scoreCandidate(candidate, undefined, groupBoostedTrackIds, sensorOccupancy);
+      const score = scoreCandidate(candidate, this.currentParameters.weights as ScoringWeights, groupBoostedTrackIds, sensorOccupancy);
       return { candidate, score };
     });
 
@@ -926,12 +1098,12 @@ export class LiveEngine {
         approved: true,
         reason: 'auto',
       })),
-      'auto_with_veto',
+      this.currentParameters.policyMode,
       [],
     );
 
     // 4. Assign tasks
-    const assignments = assignTasks(decisions, 'auto_with_veto');
+    const assignments = assignTasks(decisions, this.currentParameters.policyMode);
 
     // 5. Issue cues and create tasks for each assignment
     for (const assignment of assignments) {
@@ -967,7 +1139,7 @@ export class LiveEngine {
         systemTrackId: assignment.systemTrackId,
         status: 'executing',
         scoreBreakdown: assignment.scoreBreakdown,
-        policyMode: 'auto_with_veto',
+        policyMode: this.currentParameters.policyMode,
         operatorOverride: undefined,
         createdAt: Date.now() as Timestamp,
         completedAt: undefined,
@@ -992,7 +1164,7 @@ export class LiveEngine {
           sensorId: assignment.sensorId,
           systemTrackId: assignment.systemTrackId,
           scoreBreakdown: assignment.scoreBreakdown,
-          mode: 'auto_with_veto',
+          mode: this.currentParameters.policyMode,
           operatorOverride: undefined,
         },
       } as any);
@@ -1540,6 +1712,8 @@ export class LiveEngine {
       })),
       // Phase 7: Fusion modes per sensor
       fusionModes: Object.fromEntries(this.fusionModePerSensor),
+      // Investigation summaries for InvestigationManagerPanel
+      investigationSummaries: this.getActiveInvestigations(),
     });
   }
 
