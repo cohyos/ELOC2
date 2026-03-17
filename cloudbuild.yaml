@@ -71,7 +71,7 @@ steps:
         export PATH="/workspace/node_modules/.bin:$$PATH"
 
         # Verify playwright CLI is available
-        which playwright || { echo "FATAL: playwright not in PATH"; ls -la node_modules/.bin/play* 2>/dev/null; exit 1; }
+        npx playwright --version || { echo "FATAL: playwright not available"; exit 1; }
 
         # Run all test projects: API, scenarios, desktop UI, mobile UI
         npx playwright test --config=tests/e2e/playwright.config.ts \
