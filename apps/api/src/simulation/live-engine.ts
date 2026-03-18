@@ -668,6 +668,7 @@ export class LiveEngine {
       multiSensorResolutions: this.multiSensorResolutions,
       searchModeStates: this.getSearchModeStatus().filter(s => s.active),
       convergenceStates: this.getConvergenceStates(),
+      eoModuleStatus: this.cachedEoModuleStatus ?? undefined,
     };
   }
 
@@ -1216,6 +1217,10 @@ export class LiveEngine {
     // REQ-5 Phase C: Convergence state reset
     this.convergenceState.clear();
 
+    // REQ-16: Reset EO management module
+    this.eoModule.reset();
+    this.cachedEoModuleStatus = null;
+
     this.state = this.buildInitialState();
   }
 
@@ -1322,6 +1327,11 @@ export class LiveEngine {
 
     // Multi-target bearing association (REQ-6)
     this.computeBearingAssociations();
+
+    // REQ-16: Delegate to EO Management Module (facade over existing EO logic)
+    this.eoModule.ingestTracks(this.state.tracks, this.state.sensors);
+    this.eoModule.tick(result.currentTimeSec, 1);
+    this.cachedEoModuleStatus = this.eoModule.getStatus();
 
     // REQ-12: Accumulate report timeline data
     accumulateSample(this);
@@ -4053,6 +4063,8 @@ export class LiveEngine {
       searchModeStates: this.getSearchModeStatus().filter(s => s.active),
       // Convergence states (REQ-5 Phase C)
       convergenceStates: this.getConvergenceStates(),
+      // REQ-16: EO management module status
+      eoModuleStatus: this.cachedEoModuleStatus ?? undefined,
     });
 
     // Separate ground truth broadcast
