@@ -2314,6 +2314,9 @@ export class LiveEngine {
       fusionModes: Object.fromEntries(this.fusionModePerSensor),
       // Investigation summaries for InvestigationManagerPanel
       investigationSummaries: this.getActiveInvestigations(),
+      // Dwell and revisit state
+      dwellStates: this.getDwellStates(),
+      revisitSchedule: this.getRevisitSchedule(),
       // Operator overrides
       operatorOverrides: this.getOperatorOverrides(),
     });
