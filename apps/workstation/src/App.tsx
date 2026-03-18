@@ -26,6 +26,7 @@ import { AnnotationOverlay } from './demo/AnnotationOverlay';
 import { NarrationPanel } from './demo/NarrationPanel';
 import { MetricsOverlay } from './demo/MetricsOverlay';
 import { ResizeHandle } from './components/ResizeHandle';
+import { QualityMetricsPanel } from './quality/QualityMetricsPanel';
 
 // Panel size defaults (must match ui-store defaults)
 const DEFAULT_RIGHT_PANEL_WIDTH = 380;
@@ -463,6 +464,15 @@ export function App() {
                 store.setDetailView('investigation');
               }
             }}>Investigation</button>
+          <button style={{ ...btn, background: detailView === 'quality' && detailPanelOpen ? '#4a9eff' : '#333', color: detailView === 'quality' && detailPanelOpen ? '#fff' : '#aaa' }}
+            onClick={() => {
+              const store = useUiStore.getState();
+              if (store.detailView === 'quality' && store.detailPanelOpen) {
+                store.setDetailView('none');
+              } else {
+                store.setDetailView('quality');
+              }
+            }}>Quality</button>
           <button style={{ ...btn, background: showGroundTruth ? '#0a2a2a' : '#333', color: showGroundTruth ? '#00ffff' : '#aaa', border: showGroundTruth ? '1px solid #00ffff' : '1px solid transparent' }} onClick={toggleGroundTruth} title="Toggle ground truth overlay">
             GT
           </button>
@@ -512,6 +522,7 @@ export function App() {
           {detailView === 'cue' && <CueDetailPanel />}
           {detailView === 'group' && <GroupDetailPanel />}
           {detailView === 'geometry' && <GeometryDetailPanel />}
+          {detailView === 'quality' && <QualityMetricsPanel />}
           {(detailView === 'none' || (basicHiddenPanels.includes(detailView))) && <DefaultPanel />}
         </div>
       )}
@@ -719,6 +730,7 @@ function MobileLayout() {
             {detailView === 'cue' && <CueDetailPanel />}
             {detailView === 'group' && <GroupDetailPanel />}
             {detailView === 'geometry' && <GeometryDetailPanel />}
+            {detailView === 'quality' && <QualityMetricsPanel />}
             {detailView === 'none' && <DefaultPanel />}
           </div>
         )}
