@@ -22,11 +22,24 @@
 
 ### 2.1 The Immediate Bug
 
-MapLibre GL JS v5.20.1 circle layers (`system-tracks-layer`, `sensors-layer`) were initialized correctly but **never rendered visible pixels on the WebGL canvas** in the production deployment.
+MapLibre GL JS v5.20.1 **ALL data layers** (circles, lines, fills, symbols) were initialized correctly but **never rendered visible pixels on the WebGL canvas** in the production deployment. This includes not just symbol/text layers but also:
+- Circle layers (track and sensor markers)
+- Fill layers (coverage arcs, uncertainty ellipses)
+- Line layers (EO rays, triangulation, bearing lines)
 
-### 2.2 The Underlying Mechanism
+Only raster tile layers rendered correctly because they use a separate 2D rendering path within MapLibre.
 
-The MapLibre map style includes a `glyphs` URL pointing to an external CDN:
+### 2.2 The Underlying Mechanism (Revised — Round 5 Finding)
+
+**Original hypothesis (Round 4):** The `glyphs` CDN URL in the map style stalls the WebGL pipeline when the CDN is slow/unreachable.
+
+**Revised finding (Round 5):** Removing the `glyphs` URL entirely did NOT fix the problem. The MapLibre WebGL pipeline is **completely non-functional** in the Cloud Run production environment — no data layers render at all, regardless of whether they use fonts. The root cause is broader than just glyph loading; it appears to be a WebGL context issue specific to the containerized production environment (headless Chrome, GPU acceleration unavailable, or WebGL context limits).
+
+**Evidence:** After removing the glyphs URL and ensuring symbol layers start hidden, coverage arcs (fill/line — no fonts), EO rays (line — no fonts), and track circles (circle — no fonts) still did not render. Only the raster tile layer and the HTML/SVG DebugOverlay rendered correctly.
+
+**Previous hypothesis (kept for reference):**
+
+The MapLibre map style included a `glyphs` URL pointing to an external CDN:
 
 ```javascript
 glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf'
@@ -267,18 +280,30 @@ steps:
     args: ['npx', 'playwright', 'test', '--project=desktop']  # ← Gate on E2E
 ```
 
-### Rule 7: Dual Rendering Architecture
+### Rule 7: Full HTML/SVG Rendering Architecture
 
-The workstation uses a **dual rendering architecture**:
+The workstation uses a **full HTML/SVG rendering architecture** that bypasses MapLibre's WebGL data layers entirely:
 
 | Renderer | Purpose | Technology | Reliability |
 |----------|---------|-----------|-------------|
-| DebugOverlay (primary) | Track/sensor markers, labels, selection | HTML divs + `map.project()` | **High** — no WebGL/font deps |
-| MapLibre layers (secondary) | Coverage arcs, EO rays, triangulation, trails, ellipses | GeoJSON + WebGL | **Medium** — depends on fonts CDN |
+| DebugOverlay SVG (z-index 14) | Coverage arcs, EO FOR/FOV, gimbal rays, triangulation lines | SVG polygons/lines + `map.project()` | **High** — no WebGL deps |
+| DebugOverlay HTML (z-index 15) | Track/sensor markers, labels, selection, trail dots | HTML divs + `map.project()` | **High** — no WebGL deps |
+| MapLibre raster (base) | Map tiles (CartoDB Dark Matter / OSM) | Raster tiles | **High** — simple 2D |
+| MapLibre data layers (disabled) | Originally: all of the above | GeoJSON + WebGL | **Broken in production** |
 
-**This is intentional.** The HTML overlay handles the critical rendering (tracks/sensors) because it has zero external dependencies. MapLibre handles geometric overlays (polygons, lines) which don't require fonts.
+**This is intentional and mandatory.** As of Round 5, ALL visual elements (tracks, sensors, coverage arcs, EO rays, triangulation, FOV cones, trail dots) are rendered by the DebugOverlay using HTML divs and SVG elements. MapLibre is used ONLY for raster map tiles. The MapLibre data layer code is kept as fallback but is not the active rendering path.
 
-Never remove or disable the DebugOverlay without first confirming that MapLibre circle layers render correctly in the production environment.
+**Architecture details:**
+- `DebugOverlay.tsx` returns a React Fragment with two siblings:
+  - `<svg>` element for geometric shapes (arcs, rays, lines) at z-index 14
+  - `<div>` element for point markers (tracks, sensors, labels) at z-index 15
+- All geometry uses `map.project([lon, lat])` to convert geo coords to screen pixels
+- Coverage arcs are rendered as SVG polygons with 48 segments
+- EO rays are SVG lines with dashed stroke
+- Triangulation lines are SVG lines color-coded by quality
+- All layers respect the `layerVisibility` store toggles from the Layers panel
+
+Never remove or disable the DebugOverlay. It is the ONLY functional rendering path in production.
 
 ---
 
@@ -301,19 +326,31 @@ Before any commit that touches `MapView.tsx`, layer files, or the map style:
 
 ## 7. Files Modified in This Fix
 
+### Round 4 (initial fix)
 | File | Change |
 |------|--------|
-| `apps/workstation/src/map/DebugOverlay.tsx` | Complete rewrite: short labels, layerVisibility, clickable |
+| `apps/workstation/src/map/DebugOverlay.tsx` | Rewrite: short labels, layerVisibility, clickable markers |
 | `apps/workstation/src/map/MapView.tsx` | Restore overlay as primary, pass proper props |
 | `apps/workstation/src/map/layers/track-layer.ts` | Symbol layer: `visibility:'none'`, `text-optional:true` |
 | `apps/workstation/src/map/layers/sensor-layer.ts` | Symbol layer: `visibility:'none'`, `text-optional:true` |
-| `apps/workstation/src/App.tsx` | Tasks/Investigation buttons → return to Overview |
-| `apps/workstation/src/demo/NarrationPanel.tsx` | Added X close button |
+
+### Round 5 (full SVG rendering + additional fixes)
+| File | Change |
+|------|--------|
+| `apps/workstation/src/map/DebugOverlay.tsx` | Added SVG layer for coverage arcs, EO rays, FOV/FOR cones, triangulation lines. Returns Fragment (SVG + HTML). Added trail dot rendering, pointer-events:auto for click selection |
+| `apps/workstation/src/map/MapView.tsx` | Removed glyphs URL, removed symbol layer visibility sync, pass trailHistory to overlay |
+| `apps/workstation/src/replay/ReplayController.ts` | Flush `speed` from WS broadcast to UI store |
+| `apps/api/src/simulation/live-engine.ts` | Added `speed` field to `rap.update` WS broadcast |
+| `packages/fusion-core/src/fusion/fuser.ts` | Confirmation-only mode now updates track position (with 2x inflated covariance) instead of freezing it |
 
 ---
 
-## 8. Key Lesson
+## 8. Key Lessons
 
-> **200 passing backend tests gave false confidence that the system worked. The zero frontend tests meant the most visible part of the product — what the user actually sees — had no safety net. A rendering bug that would have been caught by a single screenshot comparison test survived through 3 development rounds and multiple deployments.**
+> **Lesson 1:** 200 passing backend tests gave false confidence that the system worked. The zero frontend tests meant the most visible part of the product — what the user actually sees — had no safety net. A rendering bug that would have been caught by a single screenshot comparison test survived through 3 development rounds and multiple deployments.
 
-The fix is not just technical (dual rendering, glyph prevention). The fix is procedural: **every deployment must prove that the map shows what the data says it should show.**
+> **Lesson 2:** Never trust that a third-party rendering engine (MapLibre WebGL) will work in a containerized production environment the same way it works on a developer's machine. The WebGL pipeline broke completely in Cloud Run — not just fonts, but ALL data layers (circles, lines, fills). The fix was to remove all dependency on WebGL for data rendering and use HTML/SVG instead. Raster tiles still work because they use a simpler rendering path.
+
+> **Lesson 3:** When a fix addresses the wrong root cause (Round 4: "glyphs CDN stalls WebGL"), the symptom recurs. The real root cause (Round 5: "WebGL data layers completely non-functional in production") required a more fundamental architectural change — moving ALL geometry rendering to SVG.
+
+The fix is not just technical (SVG rendering). The fix is procedural: **every deployment must prove that the map shows what the data says it should show**, and **never depend on WebGL for mission-critical visual output when the deployment target doesn't guarantee GPU acceleration.**

@@ -122,10 +122,10 @@ The `Knowledge_Base_and_Agents_instructions/` folder contains **18 foundational 
 ## Known Issues
 
 ### Map Rendering Architecture (CRITICAL — read before touching map code)
-- **Dual rendering**: DebugOverlay (HTML divs) is the PRIMARY renderer for tracks/sensors. MapLibre GL layers are SECONDARY (handle coverage arcs, EO rays, triangulation, trails).
-- **Why**: MapLibre circle/symbol layers fail in production due to glyph CDN stalling the WebGL pipeline. The HTML overlay has zero external dependencies and always works.
-- **DebugOverlay**: Always on by default. Disable with `?nodebug` URL param for MapLibre-only testing.
-- **Symbol layers**: Init with `visibility:'none'` to prevent glyph loading on startup. Labels are rendered by the HTML overlay instead.
+- **Full HTML/SVG rendering**: DebugOverlay is the ONLY renderer for ALL visual elements. MapLibre is used ONLY for raster map tiles.
+- **Why**: MapLibre WebGL data layers (circles, lines, fills, symbols — ALL of them) are completely non-functional in the Cloud Run production environment. Not just fonts/glyphs — the entire WebGL pipeline for data layers is broken.
+- **DebugOverlay**: Returns two layers: SVG (z-index 14) for geometry (coverage arcs, EO rays, FOV, triangulation) + HTML divs (z-index 15) for markers (tracks, sensors, labels, trails).
+- **MapLibre data layer code**: Kept as fallback but NOT the active rendering path. Do not rely on it.
 - **Full post-mortem**: See `Knowledge_Base_and_Agents_instructions/Blank_Map_Postmortem_and_Testing_Lessons.md`
 
 ### Deployment (ACTIVE)
