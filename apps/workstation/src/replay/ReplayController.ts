@@ -16,6 +16,7 @@ export class ReplayController {
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private pendingData: Record<string, any> | null = null;
   private rafId: number | null = null;
+  private _firstFlush = false;
 
   connect() {
     if (this.ws) return;
@@ -104,6 +105,12 @@ export class ReplayController {
     const data = this.pendingData;
     this.pendingData = null;
     if (!data) return;
+
+    // Diagnostic: log first data flush so we know data is flowing
+    if (!this._firstFlush) {
+      this._firstFlush = true;
+      console.log(`[ReplayController] First data flush — tracks: ${(data.tracks ?? []).length}, sensors: ${(data.sensors ?? []).length}, type: ${data._type ?? 'unknown'}`);
+    }
 
     if (data.tracks && Array.isArray(data.tracks)) {
       useTrackStore.getState().setTracks(data.tracks);

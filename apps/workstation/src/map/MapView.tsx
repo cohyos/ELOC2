@@ -58,6 +58,10 @@ export function MapView() {
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
 
+    const tileUrl = darkMode
+      ? 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
+      : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
     map.current = new maplibregl.Map({
       container: mapContainer.current,
       style: {
@@ -66,7 +70,7 @@ export function MapView() {
         sources: {
           osm: {
             type: 'raster',
-            tiles: ['https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'],
+            tiles: [tileUrl],
             tileSize: 256,
             attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
           },
@@ -91,95 +95,130 @@ export function MapView() {
     map.current.addControl(new maplibregl.NavigationControl(), 'top-right');
     map.current.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
-    map.current.on('load', () => {
-      if (!map.current) return;
-      try { initCoverageLayer(map.current); } catch (e) { console.warn('Coverage layer init failed:', e); }
-      try { initTriangulationLayer(map.current); } catch (e) { console.warn('Triangulation layer init failed:', e); }
-      try { initEoRayLayer(map.current); } catch (e) { console.warn('EO ray layer init failed:', e); }
-      try { initSensorLayer(map.current); } catch (e) { console.warn('Sensor layer init failed:', e); }
-      try { initInvestigationRingLayer(map.current); } catch (e) { console.warn('Investigation ring layer init failed:', e); }
-      try { initBearingLineLayer(map.current); } catch (e) { console.warn('Bearing line layer init failed:', e); }
-      try { initAmbiguityMarkerLayer(map.current); } catch (e) { console.warn('Ambiguity marker layer init failed:', e); }
-      try { initSelectionRayLayer(map.current); } catch (e) { console.warn('Selection ray layer init failed:', e); }
-      try { initTrackLayer(map.current); } catch (e) { console.warn('Track layer init failed:', e); }
+    /** Initialize all data layers on the map — idempotent (safe to call multiple times) */
+    const initAllLayers = (m: maplibregl.Map) => {
+      try { if (!m.getSource('radar-coverage')) initCoverageLayer(m); } catch (e) { console.warn('[MapView] Coverage layer init failed:', e); }
+      try { if (!m.getSource('triangulation-rays')) initTriangulationLayer(m); } catch (e) { console.warn('[MapView] Triangulation init failed:', e); }
+      try { if (!m.getSource('eo-rays')) initEoRayLayer(m); } catch (e) { console.warn('[MapView] EO ray init failed:', e); }
+      try { if (!m.getSource('sensors')) initSensorLayer(m); } catch (e) { console.warn('[MapView] Sensor init failed:', e); }
+      try { if (!m.getSource('investigation-rings')) initInvestigationRingLayer(m); } catch (e) { console.warn('[MapView] Investigation ring init failed:', e); }
+      try { if (!m.getSource('bearing-lines')) initBearingLineLayer(m); } catch (e) { console.warn('[MapView] Bearing line init failed:', e); }
+      try { if (!m.getSource('ambiguity-markers')) initAmbiguityMarkerLayer(m); } catch (e) { console.warn('[MapView] Ambiguity marker init failed:', e); }
+      try { if (!m.getSource('selection-rays-source')) initSelectionRayLayer(m); } catch (e) { console.warn('[MapView] Selection ray init failed:', e); }
+      try { if (!m.getSource('system-tracks')) initTrackLayer(m); } catch (e) { console.warn('[MapView] Track layer init failed:', e); }
+      try { m.resize(); } catch { /* ignore */ }
+    };
 
-      // Use setState to trigger re-render so data effects re-fire
-      setLayersReady(true);
-
-      // Click handlers
-      map.current.on('click', getTrackLayerId(), (e) => {
+    /** Register click handlers for interactive layers (safe to call once) */
+    const registerClickHandlers = (m: maplibregl.Map) => {
+      m.on('click', getTrackLayerId(), (e) => {
         if (e.features && e.features.length > 0) {
           const id = e.features[0].properties?.id;
           if (id) selectTrack(id);
         }
       });
 
-      map.current.on('click', getSensorLayerId(), (e) => {
+      m.on('click', getSensorLayerId(), (e) => {
         if (e.features && e.features.length > 0) {
           const id = e.features[0].properties?.id;
           if (id) selectSensor(id);
         }
       });
 
-      // Bearing line click → find matching cue
-      map.current.on('click', 'bearing-lines-layer', (e) => {
+      m.on('click', 'bearing-lines-layer', (e) => {
         if (e.features && e.features.length > 0) {
           const sensorId = e.features[0].properties?.sensorId;
           if (sensorId) {
-            // Find cue by matching sensor to an active cue's system track
             const cues = useTaskStore.getState().activeCues;
             const eoTs = useTaskStore.getState().eoTracks;
-            // Find the eo track for this sensor/bearing
             const eoTrack = eoTs.find(t => t.sensorId === sensorId && t.bearing);
             if (eoTrack?.associatedSystemTrackId) {
               const cue = cues.find(c => c.systemTrackId === eoTrack.associatedSystemTrackId);
-              if (cue) {
-                selectCue(cue.cueId);
-                return;
-              }
+              if (cue) { selectCue(cue.cueId); return; }
             }
-            // Fallback: select first cue related to this sensor
             const anyCue = cues.find(c => eoTs.some(t => t.sensorId === sensorId && t.associatedSystemTrackId === c.systemTrackId));
             if (anyCue) selectCue(anyCue.cueId);
           }
         }
       });
 
-      // Ambiguity marker click → select group
-      map.current.on('click', 'ambiguity-markers-layer', (e) => {
+      m.on('click', 'ambiguity-markers-layer', (e) => {
         if (e.features && e.features.length > 0) {
           const groupId = e.features[0].properties?.groupId;
           if (groupId) selectGroup(groupId);
         }
       });
 
-      // Triangulation ray click → select geometry
-      map.current.on('click', 'triangulation-rays-layer', (e) => {
+      m.on('click', 'triangulation-rays-layer', (e) => {
         if (e.features && e.features.length > 0) {
           const trackId = e.features[0].properties?.trackId;
           if (trackId) selectGeometry(trackId);
         }
       });
 
-      // Cursor changes
       const interactiveLayers = [
-        getTrackLayerId(),
-        getSensorLayerId(),
-        'bearing-lines-layer',
-        'ambiguity-markers-layer',
-        'triangulation-rays-layer',
+        getTrackLayerId(), getSensorLayerId(),
+        'bearing-lines-layer', 'ambiguity-markers-layer', 'triangulation-rays-layer',
       ];
       for (const layerId of interactiveLayers) {
-        map.current.on('mouseenter', layerId, () => {
-          if (map.current) map.current.getCanvas().style.cursor = 'pointer';
-        });
-        map.current.on('mouseleave', layerId, () => {
-          if (map.current) map.current.getCanvas().style.cursor = '';
-        });
+        m.on('mouseenter', layerId, () => { if (map.current) map.current.getCanvas().style.cursor = 'pointer'; });
+        m.on('mouseleave', layerId, () => { if (map.current) map.current.getCanvas().style.cursor = ''; });
       }
-    });
+    };
+
+    let initialized = false;
+
+    /** Try to initialize layers — called from multiple triggers for reliability */
+    const tryInit = (source: string) => {
+      if (initialized || !map.current) return;
+      try {
+        initAllLayers(map.current);
+        // Verify at least one source was created
+        if (map.current.getSource('system-tracks')) {
+          initialized = true;
+          console.log(`[MapView] Layers initialized via: ${source}`);
+          registerClickHandlers(map.current);
+          setLayersReady(true);
+        } else {
+          console.warn(`[MapView] Layer init via ${source} — sources not created yet, will retry`);
+        }
+      } catch (e) {
+        console.warn(`[MapView] Layer init via ${source} failed:`, e);
+      }
+    };
+
+    // Strategy 1: on 'load' event (standard approach)
+    map.current.on('load', () => tryInit('load'));
+
+    // Strategy 2: on 'idle' event (fires after all rendering is complete)
+    map.current.once('idle', () => tryInit('idle'));
+
+    // Strategy 3: short timeout (1 second — covers most fast-loading cases)
+    const timer1 = setTimeout(() => tryInit('timeout-1s'), 1000);
+
+    // Strategy 4: medium timeout (3 seconds)
+    const timer2 = setTimeout(() => tryInit('timeout-3s'), 3000);
+
+    // Strategy 5: long timeout (8 seconds — last resort)
+    const timer3 = setTimeout(() => {
+      if (!initialized && map.current) {
+        console.error('[MapView] CRITICAL: Layers still not initialized after 8s — forcing init');
+        // Force it regardless of source existence checks
+        try {
+          initAllLayers(map.current);
+          initialized = true;
+          registerClickHandlers(map.current);
+          setLayersReady(true);
+        } catch (e) {
+          console.error('[MapView] Force init failed:', e);
+        }
+      }
+    }, 8000);
 
     return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
       map.current?.remove();
       map.current = null;
       setLayersReady(false);
@@ -445,6 +484,17 @@ export function MapView() {
           filter: darkMode ? 'none' : 'brightness(0.85) saturate(0.7)',
         }}
       />
+      {/* Layer init status indicator — visible until layers are ready */}
+      {!layersReady && (
+        <div style={{
+          position: 'absolute', bottom: 40, left: '50%', transform: 'translateX(-50%)',
+          background: '#ff6600cc', color: '#fff', padding: '6px 16px', borderRadius: '4px',
+          fontSize: '12px', fontWeight: 600, zIndex: 100, pointerEvents: 'none',
+          fontFamily: 'system-ui, sans-serif',
+        }}>
+          Initializing map layers...
+        </div>
+      )}
       <LayerFilterPanel />
       {showDebugOverlay && (
         <DebugOverlay
