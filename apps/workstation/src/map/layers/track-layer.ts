@@ -9,6 +9,8 @@ const ELLIPSE_SOURCE_ID = 'track-ellipses';
 const ELLIPSE_LAYER_ID = 'track-ellipses-layer';
 const TRAIL_SOURCE_ID = 'track-trails';
 const TRAIL_LAYER_ID = 'track-trails-layer';
+const PULSE_SOURCE_ID = 'track-selection-pulse';
+const PULSE_LAYER_ID = 'track-selection-pulse-layer';
 
 /**
  * Status to color mapping (military C2 conventions):
@@ -125,6 +127,26 @@ export function initTrackLayer(map: MaplibreMap) {
       'circle-stroke-width': 1,
       'circle-stroke-color': '#000',
       'circle-translate': [7, -7],
+    },
+  });
+
+  // Selection pulse ring (animated expanding ring around selected track)
+  map.addSource(PULSE_SOURCE_ID, {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+  });
+
+  map.addLayer({
+    id: PULSE_LAYER_ID,
+    type: 'circle',
+    source: PULSE_SOURCE_ID,
+    paint: {
+      'circle-radius': 14,
+      'circle-color': 'transparent',
+      'circle-stroke-width': 2,
+      'circle-stroke-color': '#ffffff',
+      'circle-opacity': 0.6,
+      'circle-stroke-opacity': 0.6,
     },
   });
 
@@ -246,6 +268,31 @@ export function updateTrackLayer(map: MaplibreMap, tracks: SystemTrack[], select
 
   (source as any).setData({ type: 'FeatureCollection', features });
   (ellipseSource as any).setData({ type: 'FeatureCollection', features: ellipseFeatures });
+
+  // Update selection pulse ring
+  const pulseSource = map.getSource(PULSE_SOURCE_ID);
+  if (pulseSource) {
+    if (selectedTrackId) {
+      const selectedTrack = validTracks.find(t => t.systemTrackId === selectedTrackId);
+      if (selectedTrack) {
+        (pulseSource as any).setData({
+          type: 'FeatureCollection',
+          features: [{
+            type: 'Feature',
+            properties: { color: statusColor(selectedTrack.status) },
+            geometry: { type: 'Point', coordinates: [selectedTrack.state.lon, selectedTrack.state.lat] },
+          }],
+        });
+        try {
+          if (map.getLayer(PULSE_LAYER_ID)) {
+            map.setPaintProperty(PULSE_LAYER_ID, 'circle-stroke-color', statusColor(selectedTrack.status));
+          }
+        } catch { /* ignore */ }
+      }
+    } else {
+      (pulseSource as any).setData({ type: 'FeatureCollection', features: [] });
+    }
+  }
 
   // Apply selection-based styling: dim unrelated tracks when one is selected
   if (selectedTrackId) {
