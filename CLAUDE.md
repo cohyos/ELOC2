@@ -11,6 +11,9 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 - **Fusion**: `packages/fusion-core` — TrackManager, correlator, information-matrix fuser
 - **Geometry**: `packages/geometry` — Bearing-math, triangulator, quality-scorer, time-aligner
 - **Domain types**: `packages/domain` — SystemTrack, SensorState, Position3D, etc.
+- **EO Management**: `packages/eo-management` — Modular EO module (REQ-16): ingest, sub-pixel/image pipelines, mode controller
+- **Deployment Planner**: `packages/deployment-planner` — Sensor deployment optimization (REQ-15): grid, scorers, optimizer
+- **Reports**: `apps/api/src/reports/report-generator.ts` — Scenario report generation (REQ-12)
 
 ## Key Files
 - `apps/api/src/simulation/live-engine.ts` — Main simulation loop, WS broadcast, geometry & fusion integration
@@ -28,6 +31,11 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 - `apps/workstation/src/stores/ground-truth-store.ts` — Ground truth target state
 - `apps/workstation/src/stores/quality-store.ts` — Quality metrics + allocation state
 - `apps/workstation/src/stores/cover-zone-store.ts` — Land cover zone state
+- `apps/workstation/src/deployment/DeploymentView.tsx` — Deployment planner view
+- `apps/workstation/src/deployment/deployment-store.ts` — Deployment planner state
+- `apps/api/src/routes/report-routes.ts` — Report generation API
+- `apps/api/src/routes/deployment-routes.ts` — Deployment planner API (7 endpoints)
+- `packages/eo-management/src/eo-module.ts` — EoManagementModule main class
 - `apps/workstation/src/components/ResizeHandle.tsx` — Draggable panel resize
 - `apps/api/src/routes/operator-routes.ts` — Operator override API (lock/release/classify/priority)
 - `apps/api/src/routes/quality-routes.ts` — Quality metrics + before/after + allocation API
@@ -93,8 +101,8 @@ See `Knowledge_Base_and_Agents_instructions/ELOC2_Corrections_and_Upgrades_Plan.
 | 2: UI | **Complete** | Ground truth toggle, resizable panels (REQ-4), state-aware controls |
 | 3: EO Mgmt A | **Complete** | Dwell timer, target cycling, operator override API, investigation window, EO classification (REQ-5A) |
 | 4: Quality + Land | **Complete** | QualityAssessor (REQ-8), before/after EO (REQ-9), allocation criteria (REQ-10), cover zones (REQ-11) |
-| 5: EO Mgmt B | **In Progress** | Search mode (REQ-5B), optimization loop (REQ-5C), FOV overlap + multi-target resolution (REQ-6) |
-| 6: Reports + Deploy | Pending | Report generator (REQ-12), deployment planner (REQ-15), EO module refactor (REQ-16) |
+| 5: EO Mgmt B | **Complete** | Search mode (REQ-5B), optimization loop (REQ-5C), FOV overlap + multi-target resolution (REQ-6) |
+| 6: Reports + Deploy | **Complete** | Report generator (REQ-12), deployment planner (REQ-15), EO module refactor (REQ-16) |
 | 7: Integration | Pending | E2E testing, performance validation, full scenario verification |
 
 ## Recent Fixes (Rounds 1-3, branch `claude/eloc2-development-U3sup`)
