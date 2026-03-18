@@ -178,6 +178,9 @@ export class ReplayController {
     if (data.multiSensorResolutions && Array.isArray(data.multiSensorResolutions)) {
       useFovOverlapStore.getState().setMultiSensorResolutions(data.multiSensorResolutions);
     }
+    if (data.eoModuleStatus && typeof data.eoModuleStatus === 'object') {
+      useTaskStore.getState().setEoModuleStatus(data.eoModuleStatus);
+    }
     // Update replay time from simulation
     if (typeof data.simTimeSec === 'number') {
       useUiStore.getState().setReplayTime(data.simTimeSec);

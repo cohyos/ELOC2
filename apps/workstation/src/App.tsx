@@ -73,6 +73,7 @@ function DefaultPanel() {
   const tasks = useTaskStore(s => s.tasks);
   const registrationStates = useTaskStore(s => s.registrationStates);
   const fusionModes = useTaskStore(s => s.fusionModes);
+  const eoModuleStatus = useTaskStore(s => s.eoModuleStatus);
   const selectView = useUiStore(s => s.setDetailView);
 
   const radarCount = sensors.filter(s => s.sensorType === 'radar').length;
@@ -128,6 +129,76 @@ function DefaultPanel() {
         <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Built</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{__BUILD_TIMESTAMP__}</span></div>
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// EO Module Status Badge (REQ-16)
+// ---------------------------------------------------------------------------
+
+function EoModuleBadge() {
+  const eoModuleStatus = useTaskStore(s => s.eoModuleStatus);
+  if (!eoModuleStatus) return null;
+
+  const modeColors: Record<string, string> = {
+    idle: '#888',
+    tracking: '#00cc44',
+    searching: '#ffcc00',
+    mixed: '#4a9eff',
+  };
+
+  const modeColor = modeColors[eoModuleStatus.mode] ?? '#888';
+  const pipelineCount = eoModuleStatus.activePipelines.length;
+  const subPixelCount = eoModuleStatus.activePipelines.filter(p => p.pipeline === 'sub-pixel').length;
+  const imageCount = eoModuleStatus.activePipelines.filter(p => p.pipeline === 'image').length;
+
+  const tooltipLines = [
+    `EO Module: ${eoModuleStatus.mode}`,
+    `Pipelines: ${pipelineCount} (${subPixelCount} sub-pixel, ${imageCount} image)`,
+    `Enriched tracks: ${eoModuleStatus.enrichedTrackCount}`,
+    `Ticks: ${eoModuleStatus.tickCount}`,
+    `Sensors: ${eoModuleStatus.sensorAllocations.length}`,
+  ];
+  const allocByMode = eoModuleStatus.sensorAllocations.reduce(
+    (acc, a) => { acc[a.mode] = (acc[a.mode] || 0) + 1; return acc; },
+    {} as Record<string, number>,
+  );
+  for (const [mode, count] of Object.entries(allocByMode)) {
+    tooltipLines.push(`  ${mode}: ${count}`);
+  }
+
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '4px',
+        background: '#1a2a1a',
+        border: `1px solid ${modeColor}44`,
+        borderRadius: '3px',
+        padding: '2px 8px',
+        fontSize: '10px',
+        fontWeight: 600,
+        color: modeColor,
+        cursor: 'help',
+        letterSpacing: '0.3px',
+      }}
+      title={tooltipLines.join('\n')}
+    >
+      <span style={{
+        width: '6px',
+        height: '6px',
+        borderRadius: '50%',
+        background: modeColor,
+        display: 'inline-block',
+      }} />
+      EO Module: {eoModuleStatus.mode}
+      {pipelineCount > 0 && (
+        <span style={{ color: '#aaa', fontWeight: 400 }}>
+          ({pipelineCount})
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -420,6 +491,9 @@ export function App() {
           ))}
           <span style={{ color: colors.textDim }}>{trackCount} total</span>
         </div>
+
+        {/* EO Module badge (REQ-16) */}
+        <EoModuleBadge />
 
         {/* Scenario controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '8px' }}>
