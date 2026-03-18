@@ -1496,7 +1496,7 @@ export class LiveEngine {
         );
       }
 
-      let score = scoreCandidate(
+      const score = scoreCandidate(
         candidate,
         this.currentParameters.weights as ScoringWeights,
         groupBoostedTrackIds,
@@ -1506,8 +1506,8 @@ export class LiveEngine {
       );
       // Apply operator track priority overrides
       const trackPriority = this.operatorTrackPriority.get(candidate.systemTrackId as string);
-      if (trackPriority === 'high') score += 5;
-      else if (trackPriority === 'low') score -= 3;
+      if (trackPriority === 'high') score.total += 5;
+      else if (trackPriority === 'low') score.total -= 3;
       return { candidate, score };
     });
 
