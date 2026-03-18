@@ -12,6 +12,7 @@ export type {
 
 // ── Scenarios ──────────────────────────────────────────────────────────────
 export { centralIsrael } from './scenarios/central-israel.js';
+export { fusionDemo } from './scenarios/fusion-demo.js';
 
 export {
   singleTargetConfirm,
@@ -28,10 +29,12 @@ export {
 // ── Lookup ─────────────────────────────────────────────────────────────────
 import type { ScenarioDefinition } from './types.js';
 import { centralIsrael } from './scenarios/central-israel.js';
+import { fusionDemo } from './scenarios/fusion-demo.js';
 import { simpleScenarios } from './scenarios/simple-scenarios.js';
 
 const allScenarios: readonly ScenarioDefinition[] = [
   centralIsrael,
+  fusionDemo,
   ...simpleScenarios,
 ];
 

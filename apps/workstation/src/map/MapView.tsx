@@ -36,6 +36,7 @@ export function MapView() {
   const searchModeStates = useSensorStore(s => s.searchModeStates);
   const selectTrack = useUiStore(s => s.selectTrack);
   const selectSensor = useUiStore(s => s.selectSensor);
+  const selectGroundTruth = useUiStore(s => s.selectGroundTruth);
   const selectCue = useUiStore(s => s.selectCue);
   const selectGroup = useUiStore(s => s.selectGroup);
   const selectGeometry = useUiStore(s => s.selectGeometry);
@@ -531,6 +532,7 @@ export function MapView() {
           layerVisibility={layerVisibility}
           onSelectTrack={selectTrack}
           onSelectSensor={selectSensor}
+          onSelectGroundTruth={selectGroundTruth}
           groundTruthTargets={groundTruthTargets}
           showGroundTruth={showGroundTruth}
           coverZones={coverZones}

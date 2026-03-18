@@ -80,6 +80,7 @@ interface DebugOverlayProps {
   layerVisibility: LayerVisibility;
   onSelectTrack?: (id: string) => void;
   onSelectSensor?: (id: string) => void;
+  onSelectGroundTruth?: (id: string) => void;
   groundTruthTargets?: GroundTruthTarget[];
   showGroundTruth?: boolean;
   coverZones?: CoverZone[];
@@ -91,7 +92,7 @@ interface DebugOverlayProps {
   convergedTrackIds?: Set<string>;
 }
 
-export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones, operationalZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds }: DebugOverlayProps) {
+export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor, onSelectGroundTruth, groundTruthTargets, showGroundTruth, coverZones, operationalZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds }: DebugOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const frameRef = useRef<number>(0);
@@ -517,14 +518,19 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
         if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
         const px = proj(lon, lat);
 
-        // Diamond marker (rotated square)
+        // Diamond marker (rotated square) — clickable to show details
         const el = document.createElement('div');
         el.style.cssText = `
           position:absolute; left:${px.x - 7}px; top:${px.y - 7}px;
           width:14px; height:14px; background:#00ffff;
-          border:2px solid #fff; z-index:22;
-          transform:rotate(45deg); pointer-events:none;
+          border:2px solid #fff; z-index:22; cursor:pointer;
+          transform:rotate(45deg); pointer-events:auto;
         `;
+        el.title = `GT: ${target.name} — ${target.classification ?? 'unclassified'}`;
+        if (onSelectGroundTruth) {
+          const gtId = target.targetId ?? target.name;
+          el.addEventListener('click', (e) => { e.stopPropagation(); onSelectGroundTruth(gtId); });
+        }
         container.appendChild(el);
 
         // Name label
@@ -707,7 +713,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
         }
       }
     }
-  }, [map, tracks, sensors, trailHistory, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones, operationalZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds]);
+  }, [map, tracks, sensors, trailHistory, layerVisibility, onSelectTrack, onSelectSensor, onSelectGroundTruth, groundTruthTargets, showGroundTruth, coverZones, operationalZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds]);
 
   // Re-render on map move/zoom
   useEffect(() => {

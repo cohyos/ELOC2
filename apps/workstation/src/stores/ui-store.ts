@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type DetailView = 'track' | 'sensor' | 'tasks' | 'investigation' | 'eo-window' | 'cue' | 'group' | 'geometry' | 'quality' | 'none';
+export type DetailView = 'track' | 'sensor' | 'tasks' | 'investigation' | 'eo-window' | 'cue' | 'group' | 'geometry' | 'quality' | 'ground-truth' | 'none';
 
 export interface LayerVisibility {
   tracks: boolean;
@@ -39,6 +39,7 @@ interface UiState {
   selectedCueId: string | null;
   selectedGroupId: string | null;
   selectedGeometryTrackId: string | null;
+  selectedGroundTruthId: string | null;
   investigationWindowTrackId: string | null;
   detailView: DetailView;
 
@@ -94,6 +95,7 @@ interface UiState {
   selectCue: (id: string | null) => void;
   selectGroup: (id: string | null) => void;
   selectGeometry: (trackId: string | null) => void;
+  selectGroundTruth: (id: string | null) => void;
   setInvestigationWindowTrackId: (trackId: string | null) => void;
   toggleDetailPanel: () => void;
   toggleTimelinePanel: () => void;
@@ -172,6 +174,7 @@ export const useUiStore = create<UiState>((set) => ({
   selectedCueId: null,
   selectedGroupId: null,
   selectedGeometryTrackId: null,
+  selectedGroundTruthId: null,
   investigationWindowTrackId: null,
   detailView: 'none',
   detailPanelOpen: true,
@@ -210,7 +213,10 @@ export const useUiStore = create<UiState>((set) => ({
     set({ selectedGroupId: id, selectedTrackId: null, selectedSensorId: null, selectedCueId: null, selectedGeometryTrackId: null, detailView: id ? 'group' : 'none', detailPanelOpen: !!id }),
 
   selectGeometry: (trackId) =>
-    set({ selectedGeometryTrackId: trackId, selectedTrackId: null, selectedSensorId: null, selectedCueId: null, selectedGroupId: null, detailView: trackId ? 'geometry' : 'none', detailPanelOpen: !!trackId }),
+    set({ selectedGeometryTrackId: trackId, selectedTrackId: null, selectedSensorId: null, selectedCueId: null, selectedGroupId: null, selectedGroundTruthId: null, detailView: trackId ? 'geometry' : 'none', detailPanelOpen: !!trackId }),
+
+  selectGroundTruth: (id) =>
+    set({ selectedGroundTruthId: id, selectedTrackId: null, selectedSensorId: null, selectedCueId: null, selectedGroupId: null, selectedGeometryTrackId: null, detailView: id ? 'ground-truth' : 'none', detailPanelOpen: !!id }),
 
   setInvestigationWindowTrackId: (trackId) =>
     set({ investigationWindowTrackId: trackId, detailView: trackId ? 'eo-window' : 'investigation', detailPanelOpen: true }),

@@ -15,6 +15,7 @@ import { InvestigationWindowPanel } from './investigation/InvestigationWindowPan
 import { CueDetailPanel } from './cue-detail/CueDetailPanel';
 import { GroupDetailPanel } from './group-detail/GroupDetailPanel';
 import { GeometryDetailPanel } from './geometry-detail/GeometryDetailPanel';
+import { GroundTruthDetailPanel } from './ground-truth-detail/GroundTruthDetailPanel';
 import { ScenarioEditor } from './editor/ScenarioEditor';
 import { LiveInjectionToolbar } from './injection/LiveInjectionToolbar';
 import { useDemoStore } from './stores/demo-store';
@@ -66,9 +67,11 @@ function useIsMobile(breakpoint = 768): boolean {
 // ---------------------------------------------------------------------------
 
 function DefaultPanel() {
+  const tracks = useTrackStore(s => s.tracks);
   const trackCount = useTrackStore(s => s.trackCount);
   const confirmedCount = useTrackStore(s => s.confirmedCount);
   const tentativeCount = useTrackStore(s => s.tentativeCount);
+  const selectTrack = useUiStore(s => s.selectTrack);
   const sensors = useSensorStore(s => s.sensors);
   const tasks = useTaskStore(s => s.tasks);
   const registrationStates = useTaskStore(s => s.registrationStates);
@@ -103,6 +106,27 @@ function DefaultPanel() {
         <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Total</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{trackCount}</span></div>
         <div style={row}><span style={{ color: '#00cc44', fontSize: '12px' }}>Confirmed</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#00cc44' }}>{confirmedCount}</span></div>
         <div style={row}><span style={{ color: '#ffcc00', fontSize: '12px' }}>Tentative</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#ffcc00' }}>{tentativeCount}</span></div>
+        {tracks.length > 0 && tracks.length <= 20 && (
+          <div style={{ marginTop: '6px', maxHeight: '120px', overflowY: 'auto' }}>
+            {tracks.filter(t => t.status !== 'dropped').map(t => {
+              const id = t.systemTrackId as string;
+              const color = t.status === 'confirmed' ? '#00cc44' : '#ffcc00';
+              return (
+                <div key={id} style={{ ...row, cursor: 'pointer', padding: '2px 4px', borderRadius: '2px' }}
+                  onClick={() => selectTrack(id)}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#ffffff11')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                  <span style={{ color, fontSize: '11px' }}>
+                    T{id.match(/(\d+)/)?.[1] ?? '?'}
+                  </span>
+                  <span style={{ fontFamily: 'monospace', fontSize: '10px', color: '#888' }}>
+                    {t.sources.length}src {t.confidence?.toFixed(1) ?? '-'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
       <div style={{ marginBottom: '16px' }}>
         <div style={sectionTitle}>Sensors</div>
@@ -646,6 +670,7 @@ export function App() {
           {detailView === 'group' && <GroupDetailPanel />}
           {detailView === 'geometry' && <GeometryDetailPanel />}
           {detailView === 'quality' && <QualityMetricsPanel />}
+          {detailView === 'ground-truth' && <GroundTruthDetailPanel />}
           {(detailView === 'none' || (basicHiddenPanels.includes(detailView))) && <DefaultPanel />}
         </div>
       )}
@@ -854,6 +879,7 @@ function MobileLayout() {
             {detailView === 'group' && <GroupDetailPanel />}
             {detailView === 'geometry' && <GeometryDetailPanel />}
             {detailView === 'quality' && <QualityMetricsPanel />}
+            {detailView === 'ground-truth' && <GroundTruthDetailPanel />}
             {detailView === 'none' && <DefaultPanel />}
           </div>
         )}
