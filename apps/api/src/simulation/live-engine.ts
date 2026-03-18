@@ -223,6 +223,13 @@ export class LiveEngine {
   /** Maximum revisit interval in sim seconds */
   private static readonly MAX_REVISIT_INTERVAL_SEC = 60;
 
+  /** Cycling history: ordered list of targets each sensor has visited */
+  private cyclingHistory = new Map<string, Array<{
+    trackId: string;
+    startedSec: number;
+    endedSec: number;
+  }>>();
+
   constructor(scenarioId?: string) {
     this.scenario = (scenarioId ? getScenarioById(scenarioId) : undefined) ?? centralIsrael;
     this.runner = new ScenarioRunner(this.scenario);
@@ -405,6 +412,9 @@ export class LiveEngine {
       revisitSchedule: this.getRevisitSchedule(),
       operatorOverrides: this.getOperatorOverrides(),
       groundTruth: this.getGroundTruth(),
+      cyclingHistories: Object.fromEntries(
+        [...this.cyclingHistory.entries()].map(([sensorId, history]) => [sensorId, history.slice(-5)]),
+      ),
     };
   }
 
@@ -575,6 +585,16 @@ export class LiveEngine {
       });
     }
     return result;
+  }
+
+  /** Get cycling history for a sensor */
+  getCyclingHistory(sensorId: string): Array<{ trackId: string; startedSec: number; endedSec: number }> {
+    return this.cyclingHistory.get(sensorId) ?? [];
+  }
+
+  /** Get all cycling histories */
+  getAllCyclingHistories(): Map<string, Array<{ trackId: string; startedSec: number; endedSec: number }>> {
+    return this.cyclingHistory;
   }
 
   start(): void {
@@ -889,6 +909,7 @@ export class LiveEngine {
     this.dwellState.clear();
     this.dwellDurationOverrides.clear();
     this.lastInvestigationTime.clear();
+    this.cyclingHistory.clear();
 
     this.state = this.buildInitialState();
   }
@@ -1406,6 +1427,185 @@ export class LiveEngine {
     return eoTrack;
   }
 
+  // ── EO Target Cycling ────────────────────────────────────────────────
+
+  /**
+   * Determine the next target for a sensor that just completed its dwell.
+   * Uses the same scoring logic but only for this specific sensor.
+   * Skips the track it just investigated (avoid ping-pong) unless it's the only option or overdue for revisit.
+   * Returns true if a new target was assigned, false otherwise.
+   */
+  private cycleToNextTarget(sensorId: string, previousTrackId: string): boolean {
+    const tracks = this.state.tracks;
+    const sensors = this.state.sensors;
+    const nowSec = this.state.elapsedSec;
+
+    const sensor = sensors.find(s => (s.sensorId as string) === sensorId);
+    if (!sensor || !sensor.online) return false;
+
+    // 1. Generate candidates for just this sensor
+    const candidates = generateCandidates(tracks, [sensor]);
+    if (candidates.length === 0) return false;
+
+    // 2. Score them (same as runEoTaskingCycle)
+    const groupBoostedTrackIds = new Set<string>(this.operatorPriorityTracks);
+    for (const group of this.unresolvedGroupsById.values()) {
+      if (group.status !== 'active') continue;
+      const systemTrackId = this.cueToTrack.get(group.parentCueId);
+      if (systemTrackId) groupBoostedTrackIds.add(systemTrackId);
+    }
+
+    const sensorOccupancy = new Map<string, number>();
+    for (const task of this.state.tasks) {
+      if (task.status === 'executing') {
+        sensorOccupancy.set(task.sensorId as string, (sensorOccupancy.get(task.sensorId as string) ?? 0) + 1);
+      }
+    }
+
+    // Get cycling history for anti-ping-pong penalties
+    const history = this.cyclingHistory.get(sensorId) ?? [];
+    const recentTargets = history.slice(-3).reverse(); // most recent first
+
+    const scoredCandidates = candidates.map(candidate => {
+      const trackId = candidate.systemTrack.systemTrackId as string;
+      const lastInvTime = this.lastInvestigationTime.get(trackId);
+      let timeSinceLastObs = 0;
+      if (lastInvTime !== undefined) {
+        timeSinceLastObs = nowSec - lastInvTime;
+      } else {
+        timeSinceLastObs = LiveEngine.MAX_REVISIT_INTERVAL_SEC;
+      }
+
+      const score = scoreCandidate(
+        candidate,
+        this.currentParameters.weights as ScoringWeights,
+        groupBoostedTrackIds,
+        sensorOccupancy,
+        undefined,
+        timeSinceLastObs,
+      );
+
+      // Apply operator track priority overrides
+      const trackPriority = this.operatorTrackPriority.get(trackId);
+      if (trackPriority === 'high') score.total += 5;
+      else if (trackPriority === 'low') score.total -= 3;
+
+      // 3. Anti-ping-pong: penalize recently-visited targets
+      const isOverdue = timeSinceLastObs > LiveEngine.MAX_REVISIT_INTERVAL_SEC;
+      if (!isOverdue) {
+        const penalties = [-3, -1.5, -0.5]; // most recent, second, third
+        for (let i = 0; i < recentTargets.length && i < penalties.length; i++) {
+          if (recentTargets[i].trackId === trackId) {
+            score.total += penalties[i];
+          }
+        }
+
+        // Also penalize the previous track (the one just completed)
+        if (trackId === previousTrackId) {
+          // Only apply if not already penalized via history (avoid double penalty)
+          const alreadyPenalized = recentTargets.some(r => r.trackId === previousTrackId);
+          if (!alreadyPenalized) {
+            score.total -= 3;
+          }
+        }
+      }
+
+      return { candidate, score };
+    });
+
+    // Sort by score descending
+    scoredCandidates.sort((a, b) => b.score.total - a.score.total);
+
+    // 4. Pick the highest-scoring candidate
+    const best = scoredCandidates[0];
+    if (!best || best.score.total <= 0) return false;
+
+    const track = tracks.find(t => t.systemTrackId === best.candidate.systemTrackId);
+    if (!track) return false;
+
+    // Skip if track already has a pending/active cue
+    const hasActiveCue = [...this.cueToTrack.entries()].some(
+      ([cueId, trackId]) => trackId === (best.candidate.systemTrackId as string) && this.activeCuesById.has(cueId),
+    );
+    if (hasActiveCue) return false;
+
+    // 5. Issue a new cue and create a task
+    const health = this.registrationService.getHealth(sensor.sensorId);
+    const qualityLevel = health?.spatialQuality ?? 'good';
+    const cue = issueCue(track, sensor, qualityLevel);
+
+    this.activeCuesById.set(cue.cueId, cue);
+    this.cueToTrack.set(cue.cueId, track.systemTrackId as string);
+
+    this.trackManager.setEoInvestigationStatus(track.systemTrackId, 'in_progress');
+
+    // 6. Start a new dwell
+    const dwellDuration = this.dwellDurationOverrides.get(sensorId)
+      ?? LiveEngine.DEFAULT_DWELL_SEC;
+    this.dwellState.set(sensorId, {
+      sensorId,
+      targetTrackId: track.systemTrackId as string,
+      dwellStartSec: nowSec,
+      dwellDurationSec: dwellDuration,
+    });
+
+    this.lastInvestigationTime.set(track.systemTrackId as string, nowSec);
+
+    // Create task record
+    const taskId = generateId() as TaskId;
+    const task: Task = {
+      taskId,
+      cueId: cue.cueId,
+      sensorId: sensor.sensorId,
+      systemTrackId: best.candidate.systemTrackId,
+      status: 'executing',
+      scoreBreakdown: best.score,
+      policyMode: this.currentParameters.policyMode,
+      operatorOverride: undefined,
+      createdAt: Date.now() as Timestamp,
+      completedAt: undefined,
+    };
+    this.state.tasks.push(task);
+
+    // Update sensor gimbal pointing
+    if (sensor.gimbal) {
+      sensor.gimbal.azimuthDeg = bearingDeg(
+        sensor.position.lat, sensor.position.lon,
+        track.state.lat, track.state.lon,
+      );
+      sensor.gimbal.currentTargetId = track.systemTrackId;
+    }
+
+    // Emit formal TaskDecided event for validation
+    this.eventEnvelopes.push({
+      ...createEventEnvelope('task.decided', 'live-engine', 'eo-tasking'),
+      eventType: 'task.decided',
+      data: {
+        taskId,
+        sensorId: sensor.sensorId,
+        systemTrackId: best.candidate.systemTrackId,
+        scoreBreakdown: best.score,
+        mode: this.currentParameters.policyMode,
+        operatorOverride: undefined,
+      },
+    } as any);
+
+    // 7. Log event: eo.cycling.next_target
+    this.pushEvent(
+      'eo.cycling.next_target',
+      `Cycling: ${sensorId} → track ${(track.systemTrackId as string).slice(0, 8)} (from ${previousTrackId.slice(0, 8)}, score ${best.score.total.toFixed(1)})`,
+      {
+        sensorId,
+        previousTrackId,
+        nextTrackId: track.systemTrackId,
+        score: best.score.total,
+        cueId: cue.cueId,
+      },
+    );
+
+    return true;
+  }
+
   // ── Phase 5: EO Tasking Cycle ─────────────────────────────────────────
 
   /**
@@ -1428,11 +1628,35 @@ export class LiveEngine {
       if (elapsed >= dwell.dwellDurationSec) {
         // Dwell completed — free this sensor for reassignment
         this.dwellState.delete(sensorId);
+
+        // Record completed dwell in cycling history
+        if (!this.cyclingHistory.has(sensorId)) {
+          this.cyclingHistory.set(sensorId, []);
+        }
+        const history = this.cyclingHistory.get(sensorId)!;
+        history.push({
+          trackId: dwell.targetTrackId,
+          startedSec: dwell.dwellStartSec,
+          endedSec: nowSec,
+        });
+        // Keep last 20 entries per sensor
+        if (history.length > 20) {
+          this.cyclingHistory.set(sensorId, history.slice(-20));
+        }
+
         this.pushEvent(
           'eo.dwell.completed',
           `Dwell completed: ${sensorId} on track ${dwell.targetTrackId.slice(0, 8)} after ${dwell.dwellDurationSec}s`,
           { sensorId, targetTrackId: dwell.targetTrackId, dwellDurationSec: dwell.dwellDurationSec },
         );
+
+        // Immediately cycle to next target
+        const cycled = this.cycleToNextTarget(sensorId, dwell.targetTrackId);
+        if (cycled) {
+          // Sensor is now dwelling on a new target — mark as still dwelling
+          sensorsStillDwelling.add(sensorId);
+        }
+        // If no target found, leave sensor free for normal assignment below
       } else {
         // Still dwelling — don't reassign this sensor
         sensorsStillDwelling.add(sensorId);
@@ -2319,6 +2543,10 @@ export class LiveEngine {
       revisitSchedule: this.getRevisitSchedule(),
       // Operator overrides
       operatorOverrides: this.getOperatorOverrides(),
+      // EO cycling histories (last 5 per sensor)
+      cyclingHistories: Object.fromEntries(
+        [...this.cyclingHistory.entries()].map(([sensorId, history]) => [sensorId, history.slice(-5)]),
+      ),
     });
 
     // Separate ground truth broadcast
