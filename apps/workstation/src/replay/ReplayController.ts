@@ -172,6 +172,9 @@ export class ReplayController {
     if (data.fovOverlaps && Array.isArray(data.fovOverlaps)) {
       useFovOverlapStore.getState().setFovOverlaps(data.fovOverlaps);
     }
+    if (data.bearingAssociations && Array.isArray(data.bearingAssociations)) {
+      useFovOverlapStore.getState().setBearingAssociations(data.bearingAssociations);
+    }
     // Update replay time from simulation
     if (typeof data.simTimeSec === 'number') {
       useUiStore.getState().setReplayTime(data.simTimeSec);

@@ -5,7 +5,7 @@ import type { LayerVisibility } from '../stores/ui-store';
 import type { GroundTruthTarget } from '../stores/ground-truth-store';
 import type { CoverZone } from '../stores/cover-zone-store';
 import type { SearchModeStateWS } from '../stores/sensor-store';
-import type { FovOverlap } from '../stores/fov-overlap-store';
+import type { FovOverlap, BearingAssociation } from '../stores/fov-overlap-store';
 
 /**
  * DebugOverlay — Primary HTML/SVG-based renderer.
@@ -85,10 +85,11 @@ interface DebugOverlayProps {
   coverZones?: CoverZone[];
   searchModeStates?: SearchModeStateWS[];
   fovOverlaps?: FovOverlap[];
+  bearingAssociations?: BearingAssociation[];
   convergedTrackIds?: Set<string>;
 }
 
-export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps, convergedTrackIds }: DebugOverlayProps) {
+export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps, bearingAssociations, convergedTrackIds }: DebugOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const frameRef = useRef<number>(0);
@@ -258,6 +259,67 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
           'stroke-dasharray': '6,3',
         });
         svg.appendChild(line);
+      }
+    }
+
+    // Bearing association indicators (ambiguous/low-confidence bearing rays)
+    if (bearingAssociations && bearingAssociations.length > 0 && layerVisibility.eoRays) {
+      const sensorMap = new Map(sensors.map(s => [s.sensorId as string, s]));
+      const trackMap = new Map(tracks.map(t => [t.systemTrackId as string, t]));
+
+      for (const assoc of bearingAssociations) {
+        const sensor = sensorMap.get(assoc.sensorId);
+        if (!sensor || !sensor.online) continue;
+
+        const { lon, lat } = sensor.position;
+        const endPos = geoOffset(lon, lat, assoc.bearing, 40000);
+        const p1 = proj(lon, lat);
+        const p2 = proj(endPos[0], endPos[1]);
+
+        // Low-confidence (< 0.5): dotted line instead of solid
+        if (assoc.confidence < 0.5) {
+          const line = createSvgEl('line', {
+            x1: String(p1.x), y1: String(p1.y),
+            x2: String(p2.x), y2: String(p2.y),
+            stroke: '#ff4400', 'stroke-width': '2', 'stroke-opacity': '0.6',
+            'stroke-dasharray': '2,4',
+          });
+          svg.appendChild(line);
+        }
+
+        // Ambiguous: warning icon at bearing ray midpoint
+        if (assoc.ambiguous) {
+          const midX = (p1.x + p2.x) / 2;
+          const midY = (p1.y + p2.y) / 2;
+
+          // Orange warning triangle using SVG text
+          const warning = createSvgEl('text', {
+            x: String(midX),
+            y: String(midY),
+            'text-anchor': 'middle',
+            'dominant-baseline': 'central',
+            'font-size': '14',
+            fill: '#ff8800',
+            'pointer-events': 'none',
+          });
+          warning.textContent = '\u26A0'; // ⚠
+          svg.appendChild(warning);
+
+          // Confidence label below warning
+          const confLabel = createSvgEl('text', {
+            x: String(midX),
+            y: String(midY + 14),
+            'text-anchor': 'middle',
+            'dominant-baseline': 'central',
+            'font-size': '9',
+            'font-family': 'monospace',
+            fill: '#ff8800',
+            'fill-opacity': '0.8',
+            'pointer-events': 'none',
+          });
+          confLabel.textContent = `${(assoc.confidence * 100).toFixed(0)}%`;
+          svg.appendChild(confLabel);
+        }
       }
     }
 
@@ -504,7 +566,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
         }
       }
     }
-  }, [map, tracks, sensors, trailHistory, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps, convergedTrackIds]);
+  }, [map, tracks, sensors, trailHistory, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps, bearingAssociations, convergedTrackIds]);
 
   // Re-render on map move/zoom
   useEffect(() => {
@@ -529,7 +591,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
   // Re-render when data changes
   useEffect(() => {
     render();
-  }, [tracks, sensors, trailHistory, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps, convergedTrackIds, render]);
+  }, [tracks, sensors, trailHistory, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps, bearingAssociations, convergedTrackIds, render]);
 
   return (
     <>

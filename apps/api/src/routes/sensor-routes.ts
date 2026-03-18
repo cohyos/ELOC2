@@ -56,4 +56,9 @@ export async function sensorRoutes(app: FastifyInstance) {
   app.get('/api/eo/fov-overlaps', async () => {
     return engine.getFovOverlaps();
   });
+
+  // GET /api/eo/associations — Bearing-to-track associations with confidence scores
+  app.get('/api/eo/associations', async () => {
+    return engine.getBearingAssociations();
+  });
 }

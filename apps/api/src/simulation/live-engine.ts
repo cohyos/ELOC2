@@ -430,6 +430,16 @@ export class LiveEngine {
   // ── FOV overlap detection (REQ-6) ──────────────────────────────────────
   private fovOverlaps: FovOverlap[] = [];
 
+  // ── Multi-target bearing association (REQ-6) ────────────────────────────
+  private bearingAssociations: Array<{
+    trackId: string;
+    sensorId: string;
+    bearing: number;            // azimuth degrees
+    confidence: number;         // 0-1 association confidence
+    ambiguous: boolean;         // true if multiple targets could match this bearing
+    alternateTrackIds: string[]; // other tracks this bearing could belong to
+  }> = [];
+
   // ── Convergence monitoring (REQ-5 Phase C) ────────────────────────────
   /** Tracks how triangulation quality improves over successive dwells */
   private convergenceState = new Map<string, {
@@ -635,6 +645,7 @@ export class LiveEngine {
       eoAllocationQuality: this.cachedEoAllocationQuality ?? undefined,
       beforeAfterComparison: this.getBeforeAfterComparison(),
       fovOverlaps: this.fovOverlaps,
+      bearingAssociations: this.bearingAssociations.filter(a => a.ambiguous || a.confidence < 1.0),
       searchModeStates: this.getSearchModeStatus().filter(s => s.active),
       convergenceStates: this.getConvergenceStates(),
     };
@@ -1146,6 +1157,7 @@ export class LiveEngine {
     // REQ-9: Before/after EO comparison reset
     this.eoSnapshots.clear();
     this.fovOverlaps = [];
+    this.bearingAssociations = [];
 
     // REQ-5 Phase C: Convergence state reset
     this.convergenceState.clear();
@@ -1250,6 +1262,9 @@ export class LiveEngine {
 
     // FOV overlap detection (REQ-6)
     this.computeFovOverlaps();
+
+    // Multi-target bearing association (REQ-6)
+    this.computeBearingAssociations();
 
     // Broadcast updated RAP to WebSocket clients
     this.broadcastRap();
@@ -3243,6 +3258,149 @@ export class LiveEngine {
     return this.fovOverlaps;
   }
 
+  // ── Multi-target bearing association (REQ-6) ────────────────────────────
+
+  /**
+   * Compute bearing-to-track associations for all EO sensors.
+   * For overlapping FOV regions with multiple targets, uses angular proximity
+   * to associate each bearing observation to the nearest track, with confidence
+   * scoring based on angular separation to the next-nearest target.
+   */
+  private computeBearingAssociations(): void {
+    const associations: typeof this.bearingAssociations = [];
+    const tracks = this.state.tracks.filter(t => t.status !== 'dropped');
+    if (tracks.length === 0) {
+      this.bearingAssociations = [];
+      return;
+    }
+
+    // Build a set of trackIds that are in any overlap region
+    const tracksInAnyOverlap = new Set<string>();
+    for (const overlap of this.fovOverlaps) {
+      for (const tid of overlap.tracksInOverlap) {
+        tracksInAnyOverlap.add(tid);
+      }
+    }
+
+    // For each EO sensor, get its gimbal azimuth as the "bearing"
+    const eoSensors = this.state.sensors.filter(
+      s => s.sensorType === 'eo' && s.online && s.gimbal && Number.isFinite(s.gimbal.azimuthDeg),
+    );
+
+    for (const sensor of eoSensors) {
+      const sensorId = sensor.sensorId as string;
+      const sensorBearing = sensor.gimbal!.azimuthDeg;
+      const sensorLat = sensor.position.lat;
+      const sensorLon = sensor.position.lon;
+
+      // Compute angular distance from sensor to each non-dropped track
+      const trackAngles: Array<{ trackId: string; angleDeg: number }> = [];
+      for (const track of tracks) {
+        if (!Number.isFinite(track.state.lat) || !Number.isFinite(track.state.lon)) continue;
+        const az = bearingDeg(sensorLat, sensorLon, track.state.lat, track.state.lon);
+        trackAngles.push({ trackId: track.systemTrackId as string, angleDeg: az });
+      }
+
+      if (trackAngles.length === 0) continue;
+
+      // Find closest track to the sensor's current bearing
+      let nearestIdx = 0;
+      let nearestSep = Infinity;
+      for (let i = 0; i < trackAngles.length; i++) {
+        let diff = Math.abs(trackAngles[i].angleDeg - sensorBearing);
+        if (diff > 180) diff = 360 - diff;
+        if (diff < nearestSep) {
+          nearestSep = diff;
+          nearestIdx = i;
+        }
+      }
+
+      const nearestTrackId = trackAngles[nearestIdx].trackId;
+
+      // Check if this sensor is involved in any FOV overlap with multiple tracks
+      const overlapsForSensor = this.fovOverlaps.filter(
+        o => o.sensorIds.includes(sensorId) && o.tracksInOverlap.length >= 2,
+      );
+      const inOverlap = overlapsForSensor.length > 0;
+
+      if (!inOverlap) {
+        // No overlap — clean association
+        associations.push({
+          trackId: nearestTrackId,
+          sensorId,
+          bearing: sensorBearing,
+          confidence: 1.0,
+          ambiguous: false,
+          alternateTrackIds: [],
+        });
+        continue;
+      }
+
+      // In overlap: compute separation to second-nearest track in the overlap
+      const overlapTrackIds = new Set<string>();
+      for (const o of overlapsForSensor) {
+        for (const tid of o.tracksInOverlap) overlapTrackIds.add(tid);
+      }
+
+      // Sort overlap tracks by angular distance from the bearing
+      const overlapAngles = trackAngles
+        .filter(ta => overlapTrackIds.has(ta.trackId))
+        .map(ta => {
+          let diff = Math.abs(ta.angleDeg - sensorBearing);
+          if (diff > 180) diff = 360 - diff;
+          return { trackId: ta.trackId, sep: diff };
+        })
+        .sort((a, b) => a.sep - b.sep);
+
+      if (overlapAngles.length < 2) {
+        // Only one track in overlap — still clear
+        associations.push({
+          trackId: nearestTrackId,
+          sensorId,
+          bearing: sensorBearing,
+          confidence: 1.0,
+          ambiguous: false,
+          alternateTrackIds: [],
+        });
+        continue;
+      }
+
+      const separation = overlapAngles.length >= 2
+        ? overlapAngles[1].sep - overlapAngles[0].sep
+        : 999;
+
+      let confidence: number;
+      if (separation > 5) {
+        confidence = 1.0;
+      } else if (separation >= 2) {
+        confidence = 0.7;
+      } else {
+        confidence = 0.3;
+      }
+
+      const ambiguous = confidence < 0.7;
+      const alternateTrackIds = ambiguous
+        ? overlapAngles.filter(a => a.trackId !== overlapAngles[0].trackId).map(a => a.trackId)
+        : [];
+
+      associations.push({
+        trackId: overlapAngles[0].trackId,
+        sensorId,
+        bearing: sensorBearing,
+        confidence,
+        ambiguous,
+        alternateTrackIds,
+      });
+    }
+
+    this.bearingAssociations = associations;
+  }
+
+  /** Get bearing associations (for API endpoint). */
+  getBearingAssociations(): typeof this.bearingAssociations {
+    return this.bearingAssociations;
+  }
+
   private computeEoAllocationQuality(): void {
     const tracks = this.state.tracks;
     const eoSensors = this.state.sensors.filter(s => s.type === 'eo');
@@ -3660,6 +3818,8 @@ export class LiveEngine {
       beforeAfterAggregate: this.getBeforeAfterComparison().aggregate,
       // FOV overlap detection (REQ-6)
       fovOverlaps: this.fovOverlaps,
+      // Multi-target bearing association (REQ-6)
+      bearingAssociations: this.bearingAssociations.filter(a => a.ambiguous || a.confidence < 1.0),
       // Search mode states (REQ-5 Phase B)
       searchModeStates: this.getSearchModeStatus().filter(s => s.active),
       // Convergence states (REQ-5 Phase C)
