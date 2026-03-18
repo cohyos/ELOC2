@@ -29,6 +29,8 @@ export { pointInPolygon, filterCells } from './constraints.js';
 export { coverageScore, isCellCovered } from './coverage-scorer.js';
 export { geometryScore, intersectionAngleQuality } from './geometry-scorer.js';
 export { threatScore } from './threat-scorer.js';
+export { eoCoverageScore } from './eo-coverage-scorer.js';
+export { triangulationBaselineScore } from './triangulation-baseline-scorer.js';
 
 // Optimizer
 export { optimize } from './optimizer.js';

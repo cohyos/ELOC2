@@ -26,6 +26,8 @@ export interface SearchState {
   active: boolean;
   pattern: 'sector' | 'raster';
   currentAzimuth: number;
+  /** Current elevation angle in degrees (azimuth+elevation grid scan). */
+  currentElevation?: number;
 }
 
 /** Convergence state for a track being monitored for quality improvement. */
