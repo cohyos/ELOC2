@@ -440,6 +440,16 @@ export class LiveEngine {
     alternateTrackIds: string[]; // other tracks this bearing could belong to
   }> = [];
 
+  // ── Multi-sensor 3D resolution (REQ-6) ────────────────────────────────
+  private multiSensorResolutions: Array<{
+    trackId: string;
+    sensorCount: number;        // how many sensors contributed
+    sensorIds: string[];         // which sensors
+    qualityScore: number;        // 0-1 quality of the 3D solution
+    positionEstimate: { lat: number; lon: number; alt: number } | null;
+    method: '2-sensor' | 'multi-sensor';  // which method was used
+  }> = [];
+
   // ── Convergence monitoring (REQ-5 Phase C) ────────────────────────────
   /** Tracks how triangulation quality improves over successive dwells */
   private convergenceState = new Map<string, {
@@ -646,6 +656,7 @@ export class LiveEngine {
       beforeAfterComparison: this.getBeforeAfterComparison(),
       fovOverlaps: this.fovOverlaps,
       bearingAssociations: this.bearingAssociations.filter(a => a.ambiguous || a.confidence < 1.0),
+      multiSensorResolutions: this.multiSensorResolutions,
       searchModeStates: this.getSearchModeStatus().filter(s => s.active),
       convergenceStates: this.getConvergenceStates(),
     };
@@ -1158,6 +1169,7 @@ export class LiveEngine {
     this.eoSnapshots.clear();
     this.fovOverlaps = [];
     this.bearingAssociations = [];
+    this.multiSensorResolutions = [];
 
     // REQ-5 Phase C: Convergence state reset
     this.convergenceState.clear();
@@ -1234,6 +1246,9 @@ export class LiveEngine {
 
     // Phase 6: Compute geometry estimates from EO bearings
     this.computeGeometryEstimates();
+
+    // REQ-6: Multi-sensor 3D resolution (enhance with 3+ sensors)
+    this.resolveMultiSensorTargets();
 
     // REQ-5 Phase C: Update convergence monitoring
     this.updateConvergenceState();
@@ -2262,6 +2277,173 @@ export class LiveEngine {
         // Triangulation can fail with degenerate geometry — skip
       }
     }
+  }
+
+  // ── Multi-Sensor 3D Resolution (REQ-6) ─────────────────────────────
+
+  /**
+   * Resolve multi-sensor targets: when 3+ sensors observe the same target
+   * (via bearing associations), use all available bearings for improved
+   * triangulation. Called each tick after computeGeometryEstimates().
+   */
+  private resolveMultiSensorTargets(): void {
+    const resolutions: typeof this.multiSensorResolutions = [];
+
+    // Group confident bearing associations by track
+    const bearingsByTrack = new Map<string, Array<{
+      sensorId: string;
+      bearing: number;
+      confidence: number;
+    }>>();
+
+    for (const assoc of this.bearingAssociations) {
+      if (!bearingsByTrack.has(assoc.trackId)) {
+        bearingsByTrack.set(assoc.trackId, []);
+      }
+      bearingsByTrack.get(assoc.trackId)!.push({
+        sensorId: assoc.sensorId,
+        bearing: assoc.bearing,
+        confidence: assoc.confidence,
+      });
+    }
+
+    for (const [trackId, assocs] of bearingsByTrack) {
+      // Filter to confident bearings only
+      const confidentBearings = assocs.filter(a => a.confidence > 0.5);
+      const uniqueSensors = new Set(confidentBearings.map(a => a.sensorId));
+
+      // All bearings low confidence — mark bearing_only
+      if (confidentBearings.length === 0) {
+        const existingEstimate = this.state.geometryEstimates.get(trackId);
+        if (existingEstimate) {
+          (existingEstimate as any).lowConfidence = true;
+        }
+        resolutions.push({
+          trackId,
+          sensorCount: assocs.length,
+          sensorIds: [...new Set(assocs.map(a => a.sensorId))],
+          qualityScore: 0,
+          positionEstimate: null,
+          method: '2-sensor',
+        });
+        continue;
+      }
+
+      // Need 3+ sensors for multi-sensor resolution
+      if (uniqueSensors.size < 3) {
+        // Still record 2-sensor resolution if geometry estimate exists
+        const existing = this.state.geometryEstimates.get(trackId);
+        if (existing && existing.position3D) {
+          resolutions.push({
+            trackId,
+            sensorCount: uniqueSensors.size,
+            sensorIds: [...uniqueSensors],
+            qualityScore: this.qualityScoreFromEstimate(existing),
+            positionEstimate: existing.position3D,
+            method: '2-sensor',
+          });
+        }
+        continue;
+      }
+
+      // 3+ sensors: collect sensor positions and build bearing measurements
+      const sensorPositions: Array<{ lat: number; lon: number; alt: number }> = [];
+      const bearingMeasurements: Array<{ azimuthDeg: number; elevationDeg: number; timestamp: number }> = [];
+      const sensorIds: string[] = [];
+
+      // Pick best (highest confidence) bearing per sensor
+      const bestPerSensor = new Map<string, typeof confidentBearings[0]>();
+      for (const b of confidentBearings) {
+        const existing = bestPerSensor.get(b.sensorId);
+        if (!existing || b.confidence > existing.confidence) {
+          bestPerSensor.set(b.sensorId, b);
+        }
+      }
+
+      for (const [sensorId, assoc] of bestPerSensor) {
+        const sensor = this.state.sensors.find(s => (s.sensorId as string) === sensorId);
+        if (!sensor) continue;
+        sensorPositions.push(sensor.position);
+        bearingMeasurements.push({
+          azimuthDeg: assoc.bearing,
+          elevationDeg: 0,
+          timestamp: Date.now(),
+        });
+        sensorIds.push(sensorId);
+      }
+
+      if (sensorPositions.length < 3) continue;
+
+      try {
+        const multiResult = triangulateMultiple(
+          sensorPositions,
+          bearingMeasurements as any,
+        );
+
+        // Compare against existing 2-sensor estimate
+        const existingEstimate = this.state.geometryEstimates.get(trackId);
+        const existingMissDistance = existingEstimate
+          ? ((existingEstimate as any).averageMissDistance ?? Infinity)
+          : Infinity;
+
+        // Use multi-sensor result if it's better (lower miss distance or more bearings)
+        if (!existingEstimate || multiResult.averageMissDistance <= existingMissDistance || multiResult.numBearings > 2) {
+          const estimate = buildGeometryEstimate(
+            multiResult,
+            (existingEstimate?.eoTrackIds ?? []) as any,
+            0.5,
+            0,
+          );
+
+          // Mark as confirmed_3d if intersection angle > 15 and quality is good
+          const qualityScore = this.qualityScoreFromIntersectionAngle(multiResult.intersectionAngleDeg);
+          if (multiResult.intersectionAngleDeg > 15 && qualityScore > 0.5) {
+            estimate.classification = 'confirmed_3d';
+          }
+
+          // Store the improved estimate
+          this.state.geometryEstimates.set(trackId, estimate);
+
+          resolutions.push({
+            trackId,
+            sensorCount: sensorIds.length,
+            sensorIds,
+            qualityScore,
+            positionEstimate: multiResult.position,
+            method: 'multi-sensor',
+          });
+        } else {
+          // Keep existing estimate but still record the resolution attempt
+          resolutions.push({
+            trackId,
+            sensorCount: sensorIds.length,
+            sensorIds,
+            qualityScore: this.qualityScoreFromEstimate(existingEstimate),
+            positionEstimate: existingEstimate.position3D,
+            method: '2-sensor',
+          });
+        }
+      } catch {
+        // Triangulation failed — skip
+      }
+    }
+
+    this.multiSensorResolutions = resolutions;
+  }
+
+  /** Convert intersection angle to a 0-1 quality score */
+  private qualityScoreFromIntersectionAngle(angleDeg: number): number {
+    // 0° = 0, 15° = 0.5, 45° = 0.85, 90° = 1.0
+    return Math.min(1.0, angleDeg / 90);
+  }
+
+  /** Extract a 0-1 quality score from a GeometryEstimate */
+  private qualityScoreFromEstimate(est: GeometryEstimate): number {
+    const qualityMap: Record<string, number> = {
+      excellent: 1.0, strong: 0.9, good: 0.8, acceptable: 0.6,
+      fair: 0.5, weak: 0.3, poor: 0.2, insufficient: 0.1,
+    };
+    return qualityMap[est.quality] ?? 0.5;
   }
 
   // ── Convergence Monitoring (REQ-5 Phase C) ─────────────────────────
@@ -3820,6 +4002,8 @@ export class LiveEngine {
       fovOverlaps: this.fovOverlaps,
       // Multi-target bearing association (REQ-6)
       bearingAssociations: this.bearingAssociations.filter(a => a.ambiguous || a.confidence < 1.0),
+      // Multi-sensor 3D resolutions (REQ-6)
+      multiSensorResolutions: this.multiSensorResolutions,
       // Search mode states (REQ-5 Phase B)
       searchModeStates: this.getSearchModeStatus().filter(s => s.active),
       // Convergence states (REQ-5 Phase C)

@@ -63,6 +63,7 @@ export function MapView() {
   const coverZones = useCoverZoneStore(s => s.coverZones);
   const fovOverlaps = useFovOverlapStore(s => s.fovOverlaps);
   const bearingAssociations = useFovOverlapStore(s => s.bearingAssociations);
+  const multiSensorResolutions = useFovOverlapStore(s => s.multiSensorResolutions);
   const convergenceStates = useQualityStore(s => s.convergenceStates);
 
   // Derive set of converged track IDs for DebugOverlay
@@ -535,6 +536,7 @@ export function MapView() {
           searchModeStates={searchModeStates}
           fovOverlaps={fovOverlaps}
           bearingAssociations={bearingAssociations}
+          multiSensorResolutions={multiSensorResolutions}
           convergedTrackIds={convergedTrackIds}
         />
       )}

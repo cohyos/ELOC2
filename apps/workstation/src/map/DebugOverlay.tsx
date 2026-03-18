@@ -5,7 +5,7 @@ import type { LayerVisibility } from '../stores/ui-store';
 import type { GroundTruthTarget } from '../stores/ground-truth-store';
 import type { CoverZone } from '../stores/cover-zone-store';
 import type { SearchModeStateWS } from '../stores/sensor-store';
-import type { FovOverlap, BearingAssociation } from '../stores/fov-overlap-store';
+import type { FovOverlap, BearingAssociation, MultiSensorResolution } from '../stores/fov-overlap-store';
 
 /**
  * DebugOverlay — Primary HTML/SVG-based renderer.
@@ -86,10 +86,11 @@ interface DebugOverlayProps {
   searchModeStates?: SearchModeStateWS[];
   fovOverlaps?: FovOverlap[];
   bearingAssociations?: BearingAssociation[];
+  multiSensorResolutions?: MultiSensorResolution[];
   convergedTrackIds?: Set<string>;
 }
 
-export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps, bearingAssociations, convergedTrackIds }: DebugOverlayProps) {
+export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds }: DebugOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const frameRef = useRef<number>(0);
@@ -323,6 +324,32 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
       }
     }
 
+    // Multi-sensor association links (REQ-6): thin lines from contributing sensors to resolved position
+    if (multiSensorResolutions && multiSensorResolutions.length > 0 && layerVisibility.triangulation) {
+      const sensorMap = new Map(sensors.map(s => [s.sensorId as string, s]));
+
+      for (const resolution of multiSensorResolutions) {
+        if (resolution.sensorCount < 3 || !resolution.positionEstimate) continue;
+        const { lat, lon } = resolution.positionEstimate;
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+
+        const targetPx = proj(lon, lat);
+
+        // Draw thin lines from each contributing sensor to the resolved position
+        for (const sensorId of resolution.sensorIds) {
+          const sensor = sensorMap.get(sensorId);
+          if (!sensor) continue;
+          const sensorPx = proj(sensor.position.lon, sensor.position.lat);
+          const line = createSvgEl('line', {
+            x1: String(sensorPx.x), y1: String(sensorPx.y),
+            x2: String(targetPx.x), y2: String(targetPx.y),
+            stroke: '#00cccc', 'stroke-width': '1', 'stroke-opacity': '0.3',
+          });
+          svg.appendChild(line);
+        }
+      }
+    }
+
     // Search mode sweep lines (dashed light blue from sensor in scan direction)
     if (searchModeStates && searchModeStates.length > 0 && layerVisibility.sensors) {
       const searchMap = new Map(searchModeStates.map(s => [s.sensorId, s]));
@@ -516,7 +543,17 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
       }
     }
 
-    // Draw tracks as circles
+    // Build set of multi-sensor resolved track IDs for diamond markers
+    const multiSensorTrackIds = new Set<string>();
+    if (multiSensorResolutions) {
+      for (const r of multiSensorResolutions) {
+        if (r.sensorCount >= 3 && r.method === 'multi-sensor') {
+          multiSensorTrackIds.add(r.trackId);
+        }
+      }
+    }
+
+    // Draw tracks as circles (or diamonds for multi-sensor resolved tracks)
     if (showTracks || showTrackLabels) {
       for (const track of tracks) {
         const { lon, lat } = track.state;
@@ -524,16 +561,27 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
 
         const px = proj(lon, lat);
         const color = statusColor(track.status);
+        const isMultiSensor = multiSensorTrackIds.has(track.systemTrackId as string);
 
         if (showTracks) {
           const el = document.createElement('div');
-          el.style.cssText = `
-            position:absolute; left:${px.x - 6}px; top:${px.y - 6}px;
-            width:12px; height:12px; border-radius:50%; background:${color};
-            border:2px solid #fff; z-index:22; cursor:pointer;
-            pointer-events:auto;
-          `;
-          el.title = `${shortTrackLabel(track)} — ${track.status}`;
+          if (isMultiSensor) {
+            // Diamond shape for multi-sensor resolved tracks
+            el.style.cssText = `
+              position:absolute; left:${px.x - 7}px; top:${px.y - 7}px;
+              width:12px; height:12px; background:#00ffcc;
+              border:2px solid #fff; z-index:22; cursor:pointer;
+              pointer-events:auto; transform:rotate(45deg);
+            `;
+          } else {
+            el.style.cssText = `
+              position:absolute; left:${px.x - 6}px; top:${px.y - 6}px;
+              width:12px; height:12px; border-radius:50%; background:${color};
+              border:2px solid #fff; z-index:22; cursor:pointer;
+              pointer-events:auto;
+            `;
+          }
+          el.title = `${shortTrackLabel(track)} — ${track.status}${isMultiSensor ? ' (multi-sensor)' : ''}`;
           if (onSelectTrack) {
             const tId = track.systemTrackId as string;
             el.addEventListener('click', (e) => { e.stopPropagation(); onSelectTrack(tId); });
@@ -566,7 +614,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
         }
       }
     }
-  }, [map, tracks, sensors, trailHistory, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps, bearingAssociations, convergedTrackIds]);
+  }, [map, tracks, sensors, trailHistory, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds]);
 
   // Re-render on map move/zoom
   useEffect(() => {
@@ -591,7 +639,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
   // Re-render when data changes
   useEffect(() => {
     render();
-  }, [tracks, sensors, trailHistory, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps, bearingAssociations, convergedTrackIds, render]);
+  }, [tracks, sensors, trailHistory, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds, render]);
 
   return (
     <>
