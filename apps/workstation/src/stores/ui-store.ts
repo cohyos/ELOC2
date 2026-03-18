@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type DetailView = 'track' | 'sensor' | 'tasks' | 'investigation' | 'eo-window' | 'cue' | 'group' | 'geometry' | 'none';
+export type DetailView = 'track' | 'sensor' | 'tasks' | 'investigation' | 'eo-window' | 'cue' | 'group' | 'geometry' | 'quality' | 'none';
 
 export interface LayerVisibility {
   tracks: boolean;

@@ -27,6 +27,7 @@ import type {
   BearingMeasurement,
   TargetClassification,
   ClassificationSource,
+  CoverZone,
 } from '@eloc2/domain';
 import { createLineageEntry } from '@eloc2/domain';
 import type { EventEnvelope } from '@eloc2/events';
@@ -65,8 +66,11 @@ import {
   selectFusionMode,
   type FusionMode,
 } from '@eloc2/fusion-core';
+import { EoManagementModule } from '@eloc2/eo-management';
+import type { EoModuleStatus } from '@eloc2/eo-management';
 import { SimulationStateMachine } from './state-machine.js';
 import type { SimulationState, SimulationAction } from './state-machine.js';
+import { accumulateSample, resetAccumulator } from '../reports/report-generator.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -162,6 +166,137 @@ const DEFAULT_INVESTIGATION_PARAMETERS: InvestigationParameters = {
 const EO_TASKING_INTERVAL_SEC = 5;
 
 // ---------------------------------------------------------------------------
+// Cover-zone helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Ray-casting point-in-polygon test.
+ * Returns true if (lat, lon) is inside the given polygon vertices.
+ */
+function pointInPolygon(lat: number, lon: number, polygon: Array<{ lat: number; lon: number }>): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const yi = polygon[i].lat, xi = polygon[i].lon;
+    const yj = polygon[j].lat, xj = polygon[j].lon;
+    if (((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+/**
+ * Returns the detection-probability modifier for a point given cover zones.
+ * If the point lies inside a zone, returns that zone's modifier; otherwise 1.0.
+ */
+function getDetectionModifier(lat: number, lon: number, coverZones: CoverZone[]): number {
+  for (const zone of coverZones) {
+    if (pointInPolygon(lat, lon, zone.polygon)) {
+      return zone.detectionProbabilityModifier;
+    }
+  }
+  return 1.0;
+}
+
+
+// ---------------------------------------------------------------------------
+// FOV overlap helpers
+// ---------------------------------------------------------------------------
+
+export interface FovOverlap {
+  sensorIds: [string, string];
+  overlapRegion: Array<{ lat: number; lon: number }>;
+  tracksInOverlap: string[];
+}
+
+const DEG_TO_RAD_ENGINE = Math.PI / 180;
+
+/**
+ * Project a point at rangeKm from (lat, lon) along azimuth azDeg.
+ */
+function geoProject(lat: number, lon: number, azDeg: number, rangeKm: number): { lat: number; lon: number } {
+  const rangeM = rangeKm * 1000;
+  const azRad = azDeg * DEG_TO_RAD_ENGINE;
+  const mPerDegLon = 111320 * Math.cos(lat * DEG_TO_RAD_ENGINE);
+  const mPerDegLat = 110540;
+  return {
+    lon: lon + (rangeM / mPerDegLon) * Math.sin(azRad),
+    lat: lat + (rangeM / mPerDegLat) * Math.cos(azRad),
+  };
+}
+
+/**
+ * Compute the FOV polygon for an EO sensor as a triangle:
+ * [sensorPos, leftFarPoint, rightFarPoint]
+ */
+function computeFovPolygon(sensor: SensorState, rangeKm: number): Array<{ lat: number; lon: number }> {
+  if (!sensor.gimbal || !sensor.fov) return [];
+  const azDeg = sensor.gimbal.azimuthDeg;
+  const halfAngle = sensor.fov.halfAngleHDeg;
+  const { lat, lon } = sensor.position;
+
+  const leftAz = azDeg - halfAngle;
+  const rightAz = azDeg + halfAngle;
+
+  return [
+    { lat, lon },
+    geoProject(lat, lon, leftAz, rangeKm),
+    geoProject(lat, lon, rightAz, rangeKm),
+  ];
+}
+
+/**
+ * Ray-casting point-in-polygon test for {lat, lon} points.
+ */
+function pointInFovPolygon(point: { lat: number; lon: number }, polygon: Array<{ lat: number; lon: number }>): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const yi = polygon[i].lat, xi = polygon[i].lon;
+    const yj = polygon[j].lat, xj = polygon[j].lon;
+    if (((yi > point.lat) !== (yj > point.lat)) && (point.lon < (xj - xi) * (point.lat - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+/**
+ * Check if two FOV triangles overlap by testing vertex containment.
+ */
+function fovPolygonsOverlap(fov1: Array<{ lat: number; lon: number }>, fov2: Array<{ lat: number; lon: number }>): boolean {
+  for (const v of fov1) {
+    if (pointInFovPolygon(v, fov2)) return true;
+  }
+  for (const v of fov2) {
+    if (pointInFovPolygon(v, fov1)) return true;
+  }
+  return false;
+}
+
+/**
+ * Approximate overlap region of two FOV triangles.
+ * Returns vertices from both polygons that lie inside the other.
+ */
+function computeOverlapRegion(
+  fov1: Array<{ lat: number; lon: number }>,
+  fov2: Array<{ lat: number; lon: number }>,
+): Array<{ lat: number; lon: number }> {
+  const region: Array<{ lat: number; lon: number }> = [];
+  for (const v of fov1) {
+    if (pointInFovPolygon(v, fov2)) region.push(v);
+  }
+  for (const v of fov2) {
+    if (pointInFovPolygon(v, fov1)) region.push(v);
+  }
+  if (region.length < 3) {
+    const allPts = [...fov1, ...fov2];
+    const cx = allPts.reduce((s, p) => s + p.lat, 0) / allPts.length;
+    const cy = allPts.reduce((s, p) => s + p.lon, 0) / allPts.length;
+    return [{ lat: cx, lon: cy }];
+  }
+  return region;
+}
+// ---------------------------------------------------------------------------
 // Engine
 // ---------------------------------------------------------------------------
 
@@ -229,6 +364,115 @@ export class LiveEngine {
     startedSec: number;
     endedSec: number;
   }>>();
+
+  // ── Before/After EO Comparison (REQ-9) ─────────────────────────────
+  /** Snapshots of track state before and after EO investigation */
+  private eoSnapshots = new Map<string, {
+    preEo: {
+      positionError: number;
+      covariance: number;
+      classification: string | null;
+      geometryStatus: string;
+      timestamp: number;
+    };
+    postEo: {
+      positionError: number;
+      covariance: number;
+      classification: string | null;
+      geometryStatus: string;
+      timestamp: number;
+    } | null;
+  }>();
+
+  // ── Search Mode state (REQ-5 Phase B) ────────────────────────────────
+  /** Per-sensor search mode state: when no targets exist, EO sensors scan sectors */
+  private searchModeState = new Map<string, {
+    active: boolean;
+    pattern: 'sector' | 'raster';
+    currentAzimuth: number;     // current scan direction (degrees)
+    scanStart: number;          // sector start azimuth
+    scanEnd: number;            // sector end azimuth
+    scanSpeed: number;          // degrees per second
+    scanDirection: 1 | -1;     // 1 = clockwise, -1 = counter-clockwise
+    idleTickCount: number;      // ticks with no candidates (activate after 3)
+  }>();
+
+  // ── Quality Assessment state ──────────────────────────────────────────
+  /** Time (sim seconds) when each target was first associated with a system track */
+  private firstDetectionTime = new Map<string, number>();
+  /** Time (sim seconds) when each target's associated track first reached confirmed_3d */
+  private confirmedGeometryTime = new Map<string, number>();
+  /** Accumulated sensor tasked ticks (each tick a sensor has an active dwell counts as 1) */
+  private sensorTaskedTicks = new Map<string, number>();
+  /** Total ticks elapsed (for sensor utilization denominator) */
+  private totalTicks = 0;
+  /** Cached quality metrics (recomputed each tick) */
+  private cachedQualityMetrics: {
+    trackToTruthAssociation: number;
+    positionErrorAvg: number;
+    positionErrorMax: number;
+    classificationAccuracy: number;
+    coveragePercent: number;
+    falseTrackRate: number;
+    sensorUtilization: Record<string, number>;
+    timeToFirstDetection: Record<string, number>;
+    timeToConfirmed3D: Record<string, number>;
+  } | null = null;
+
+  /** Cached EO allocation quality metrics (REQ-10, recomputed each tick) */
+  private cachedEoAllocationQuality: {
+    coverageEfficiency: number;
+    geometryOptimality: number;
+    dwellEfficiency: number;
+    revisitTimeliness: number;
+    triangulationSuccessRate: number;
+    sensorUtilization: number;
+    priorityAlignment: number;
+  } | null = null;
+
+  // ── FOV overlap detection (REQ-6) ──────────────────────────────────────
+  private fovOverlaps: FovOverlap[] = [];
+
+  // ── Multi-target bearing association (REQ-6) ────────────────────────────
+  private bearingAssociations: Array<{
+    trackId: string;
+    sensorId: string;
+    bearing: number;            // azimuth degrees
+    confidence: number;         // 0-1 association confidence
+    ambiguous: boolean;         // true if multiple targets could match this bearing
+    alternateTrackIds: string[]; // other tracks this bearing could belong to
+  }> = [];
+
+  // ── Multi-sensor 3D resolution (REQ-6) ────────────────────────────────
+  private multiSensorResolutions: Array<{
+    trackId: string;
+    sensorCount: number;        // how many sensors contributed
+    sensorIds: string[];         // which sensors
+    qualityScore: number;        // 0-1 quality of the 3D solution
+    positionEstimate: { lat: number; lon: number; alt: number } | null;
+    method: '2-sensor' | 'multi-sensor';  // which method was used
+  }> = [];
+
+  // ── EO Management Module (REQ-16) ────────────────────────────────────
+  /** Unified EO management module — delegates all EO-related processing. */
+  private eoModule = new EoManagementModule();
+  /** Cached EO module status for WS broadcast. */
+  private cachedEoModuleStatus: EoModuleStatus | null = null;
+
+  // ── Convergence monitoring (REQ-5 Phase C) ────────────────────────────
+  /** Tracks how triangulation quality improves over successive dwells */
+  private convergenceState = new Map<string, {
+    trackId: string;
+    measurements: Array<{
+      timestamp: number;
+      positionErrorEstimate: number;
+      intersectionAngle: number;
+      numBearings: number;
+    }>;
+    convergenceRate: number;
+    converged: boolean;
+    convergedAt: number | null;
+  }>();
 
   constructor(scenarioId?: string) {
     this.scenario = (scenarioId ? getScenarioById(scenarioId) : undefined) ?? centralIsrael;
@@ -412,9 +656,19 @@ export class LiveEngine {
       revisitSchedule: this.getRevisitSchedule(),
       operatorOverrides: this.getOperatorOverrides(),
       groundTruth: this.getGroundTruth(),
+      coverZones: this.scenario.coverZones ?? [],
       cyclingHistories: Object.fromEntries(
         [...this.cyclingHistory.entries()].map(([sensorId, history]) => [sensorId, history.slice(-5)]),
       ),
+      qualityMetrics: this.cachedQualityMetrics ?? undefined,
+      eoAllocationQuality: this.cachedEoAllocationQuality ?? undefined,
+      beforeAfterComparison: this.getBeforeAfterComparison(),
+      fovOverlaps: this.fovOverlaps,
+      bearingAssociations: this.bearingAssociations.filter(a => a.ambiguous || a.confidence < 1.0),
+      multiSensorResolutions: this.multiSensorResolutions,
+      searchModeStates: this.getSearchModeStatus().filter(s => s.active),
+      convergenceStates: this.getConvergenceStates(),
+      eoModuleStatus: this.cachedEoModuleStatus ?? undefined,
     };
   }
 
@@ -537,6 +791,38 @@ export class LiveEngine {
   /** Returns formal EventEnvelope objects for use by the validation runner. */
   getEventEnvelopes(): EventEnvelope[] {
     return this.eventEnvelopes;
+  }
+
+  /** Public accessor exposing scenario metadata for report generation (REQ-12). */
+  getScenarioInfo(): {
+    id: string;
+    name: string;
+    description: string;
+    durationSec: number;
+    targetCount: number;
+    sensorCount: number;
+    radarCount: number;
+    eoCount: number;
+    policyMode: string;
+    targetNames: string[];
+    sensorNames: string[];
+    hasCoverZones: boolean;
+  } {
+    const s = this.scenario;
+    return {
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      durationSec: s.durationSec,
+      targetCount: s.targets.length,
+      sensorCount: s.sensors.length,
+      radarCount: s.sensors.filter(sen => sen.type === 'radar').length,
+      eoCount: s.sensors.filter(sen => sen.type === 'eo').length,
+      policyMode: s.policyMode,
+      targetNames: s.targets.map(t => t.name),
+      sensorNames: s.sensors.map(sen => `${sen.sensorId} (${sen.type})`),
+      hasCoverZones: (s.coverZones ?? []).length > 0,
+    };
   }
 
   // ── Dwell & Revisit Public API ──────────────────────────────────────
@@ -670,6 +956,7 @@ export class LiveEngine {
       if (s) this.scenario = s;
     }
     this.resetInternalState();
+    resetAccumulator();
     // Complete the reset: resetting → idle
     this.stateMachine.tryTransition('reset');
     this.pushEvent('scenario.reset', 'Scenario reset');
@@ -911,6 +1198,29 @@ export class LiveEngine {
     this.lastInvestigationTime.clear();
     this.cyclingHistory.clear();
 
+    // Search mode reset
+    this.searchModeState.clear();
+
+    // Quality assessment reset
+    this.firstDetectionTime.clear();
+    this.confirmedGeometryTime.clear();
+    this.sensorTaskedTicks.clear();
+    this.totalTicks = 0;
+    this.cachedQualityMetrics = null;
+
+    // REQ-9: Before/after EO comparison reset
+    this.eoSnapshots.clear();
+    this.fovOverlaps = [];
+    this.bearingAssociations = [];
+    this.multiSensorResolutions = [];
+
+    // REQ-5 Phase C: Convergence state reset
+    this.convergenceState.clear();
+
+    // REQ-16: Reset EO management module
+    this.eoModule.reset();
+    this.cachedEoModuleStatus = null;
+
     this.state = this.buildInitialState();
   }
 
@@ -984,6 +1294,12 @@ export class LiveEngine {
     // Phase 6: Compute geometry estimates from EO bearings
     this.computeGeometryEstimates();
 
+    // REQ-6: Multi-sensor 3D resolution (enhance with 3+ sensors)
+    this.resolveMultiSensorTargets();
+
+    // REQ-5 Phase C: Update convergence monitoring
+    this.updateConvergenceState();
+
     if (result.currentTimeSec - this.lastEoTaskingSec >= EO_TASKING_INTERVAL_SEC) {
       this.runEoTaskingCycle();
       this.lastEoTaskingSec = result.currentTimeSec;
@@ -994,8 +1310,31 @@ export class LiveEngine {
     this.state.unresolvedGroups = [...this.unresolvedGroupsById.values()].filter(g => g.status === 'active');
     this.state.activeCues = [...this.activeCuesById.values()];
 
+    // Search mode: scan sectors when no targets available
+    this.updateSearchMode(1); // dtSec = 1 (fixed tick)
+
     // Continuous gimbal tracking: update EO sensor gimbal azimuth toward current target
     this.updateGimbalPointing();
+
+    // Quality assessment: compute metrics comparing tracks vs ground truth
+    this.computeQualityMetrics();
+
+    // EO allocation quality (REQ-10)
+    this.computeEoAllocationQuality();
+
+    // FOV overlap detection (REQ-6)
+    this.computeFovOverlaps();
+
+    // Multi-target bearing association (REQ-6)
+    this.computeBearingAssociations();
+
+    // REQ-16: Delegate to EO Management Module (facade over existing EO logic)
+    this.eoModule.ingestTracks(this.state.tracks, this.state.sensors);
+    this.eoModule.tick(result.currentTimeSec, 1);
+    this.cachedEoModuleStatus = this.eoModule.getStatus();
+
+    // REQ-12: Accumulate report timeline data
+    accumulateSample(this);
 
     // Broadcast updated RAP to WebSocket clients
     this.broadcastRap();
@@ -1015,6 +1354,16 @@ export class LiveEngine {
         const raw = simEvent.data as any;
         const obs: SourceObservation = raw?.observation ?? raw;
         if (!obs || !obs.position) break;
+
+        // Apply cover-zone detection probability modifier
+        const coverZones = this.scenario.coverZones ?? [];
+        if (coverZones.length > 0) {
+          const modifier = getDetectionModifier(obs.position.lat, obs.position.lon, coverZones);
+          if (modifier < 1.0 && Math.random() > modifier) {
+            // Target not detected due to terrain cover
+            break;
+          }
+        }
 
         // Get registration health for this sensor
         const health = this.registrationService.getHealth(obs.sensorId);
@@ -1537,6 +1886,9 @@ export class LiveEngine {
     this.activeCuesById.set(cue.cueId, cue);
     this.cueToTrack.set(cue.cueId, track.systemTrackId as string);
 
+    // REQ-9: Capture pre-EO snapshot when cue is issued
+    this.capturePreEoSnapshot(track.systemTrackId as string);
+
     this.trackManager.setEoInvestigationStatus(track.systemTrackId, 'in_progress');
 
     // 6. Start a new dwell
@@ -1628,6 +1980,9 @@ export class LiveEngine {
       if (elapsed >= dwell.dwellDurationSec) {
         // Dwell completed — free this sensor for reassignment
         this.dwellState.delete(sensorId);
+
+        // REQ-9: Capture post-EO snapshot when dwell completes
+        this.capturePostEoSnapshot(dwell.targetTrackId);
 
         // Record completed dwell in cycling history
         if (!this.cyclingHistory.has(sensorId)) {
@@ -1732,6 +2087,13 @@ export class LiveEngine {
       const trackPriority = this.operatorTrackPriority.get(candidate.systemTrackId as string);
       if (trackPriority === 'high') score.total += 5;
       else if (trackPriority === 'low') score.total -= 3;
+
+      // REQ-5 Phase C: Reduce score for converged tracks to reallocate sensors
+      const convergenceEntry = this.convergenceState.get(trackId);
+      if (convergenceEntry?.converged) {
+        score.total *= 0.3;
+      }
+
       return { candidate, score };
     });
 
@@ -1772,6 +2134,9 @@ export class LiveEngine {
       // Store cue
       this.activeCuesById.set(cue.cueId, cue);
       this.cueToTrack.set(cue.cueId, track.systemTrackId as string);
+
+      // REQ-9: Capture pre-EO snapshot when cue is issued
+      this.capturePreEoSnapshot(track.systemTrackId as string);
 
       // Mark track as under EO investigation
       this.trackManager.setEoInvestigationStatus(track.systemTrackId, 'in_progress');
@@ -1967,6 +2332,287 @@ export class LiveEngine {
         // Triangulation can fail with degenerate geometry — skip
       }
     }
+  }
+
+  // ── Multi-Sensor 3D Resolution (REQ-6) ─────────────────────────────
+
+  /**
+   * Resolve multi-sensor targets: when 3+ sensors observe the same target
+   * (via bearing associations), use all available bearings for improved
+   * triangulation. Called each tick after computeGeometryEstimates().
+   */
+  private resolveMultiSensorTargets(): void {
+    const resolutions: typeof this.multiSensorResolutions = [];
+
+    // Group confident bearing associations by track
+    const bearingsByTrack = new Map<string, Array<{
+      sensorId: string;
+      bearing: number;
+      confidence: number;
+    }>>();
+
+    for (const assoc of this.bearingAssociations) {
+      if (!bearingsByTrack.has(assoc.trackId)) {
+        bearingsByTrack.set(assoc.trackId, []);
+      }
+      bearingsByTrack.get(assoc.trackId)!.push({
+        sensorId: assoc.sensorId,
+        bearing: assoc.bearing,
+        confidence: assoc.confidence,
+      });
+    }
+
+    for (const [trackId, assocs] of bearingsByTrack) {
+      // Filter to confident bearings only
+      const confidentBearings = assocs.filter(a => a.confidence > 0.5);
+      const uniqueSensors = new Set(confidentBearings.map(a => a.sensorId));
+
+      // All bearings low confidence — mark bearing_only
+      if (confidentBearings.length === 0) {
+        const existingEstimate = this.state.geometryEstimates.get(trackId);
+        if (existingEstimate) {
+          (existingEstimate as any).lowConfidence = true;
+        }
+        resolutions.push({
+          trackId,
+          sensorCount: assocs.length,
+          sensorIds: [...new Set(assocs.map(a => a.sensorId))],
+          qualityScore: 0,
+          positionEstimate: null,
+          method: '2-sensor',
+        });
+        continue;
+      }
+
+      // Need 3+ sensors for multi-sensor resolution
+      if (uniqueSensors.size < 3) {
+        // Still record 2-sensor resolution if geometry estimate exists
+        const existing = this.state.geometryEstimates.get(trackId);
+        if (existing && existing.position3D) {
+          resolutions.push({
+            trackId,
+            sensorCount: uniqueSensors.size,
+            sensorIds: [...uniqueSensors],
+            qualityScore: this.qualityScoreFromEstimate(existing),
+            positionEstimate: existing.position3D,
+            method: '2-sensor',
+          });
+        }
+        continue;
+      }
+
+      // 3+ sensors: collect sensor positions and build bearing measurements
+      const sensorPositions: Array<{ lat: number; lon: number; alt: number }> = [];
+      const bearingMeasurements: Array<{ azimuthDeg: number; elevationDeg: number; timestamp: number }> = [];
+      const sensorIds: string[] = [];
+
+      // Pick best (highest confidence) bearing per sensor
+      const bestPerSensor = new Map<string, typeof confidentBearings[0]>();
+      for (const b of confidentBearings) {
+        const existing = bestPerSensor.get(b.sensorId);
+        if (!existing || b.confidence > existing.confidence) {
+          bestPerSensor.set(b.sensorId, b);
+        }
+      }
+
+      for (const [sensorId, assoc] of bestPerSensor) {
+        const sensor = this.state.sensors.find(s => (s.sensorId as string) === sensorId);
+        if (!sensor) continue;
+        sensorPositions.push(sensor.position);
+        bearingMeasurements.push({
+          azimuthDeg: assoc.bearing,
+          elevationDeg: 0,
+          timestamp: Date.now(),
+        });
+        sensorIds.push(sensorId);
+      }
+
+      if (sensorPositions.length < 3) continue;
+
+      try {
+        const multiResult = triangulateMultiple(
+          sensorPositions,
+          bearingMeasurements as any,
+        );
+
+        // Compare against existing 2-sensor estimate
+        const existingEstimate = this.state.geometryEstimates.get(trackId);
+        const existingMissDistance = existingEstimate
+          ? ((existingEstimate as any).averageMissDistance ?? Infinity)
+          : Infinity;
+
+        // Use multi-sensor result if it's better (lower miss distance or more bearings)
+        if (!existingEstimate || multiResult.averageMissDistance <= existingMissDistance || multiResult.numBearings > 2) {
+          const estimate = buildGeometryEstimate(
+            multiResult,
+            (existingEstimate?.eoTrackIds ?? []) as any,
+            0.5,
+            0,
+          );
+
+          // Mark as confirmed_3d if intersection angle > 15 and quality is good
+          const qualityScore = this.qualityScoreFromIntersectionAngle(multiResult.intersectionAngleDeg);
+          if (multiResult.intersectionAngleDeg > 15 && qualityScore > 0.5) {
+            estimate.classification = 'confirmed_3d';
+          }
+
+          // Store the improved estimate
+          this.state.geometryEstimates.set(trackId, estimate);
+
+          resolutions.push({
+            trackId,
+            sensorCount: sensorIds.length,
+            sensorIds,
+            qualityScore,
+            positionEstimate: multiResult.position,
+            method: 'multi-sensor',
+          });
+        } else {
+          // Keep existing estimate but still record the resolution attempt
+          resolutions.push({
+            trackId,
+            sensorCount: sensorIds.length,
+            sensorIds,
+            qualityScore: this.qualityScoreFromEstimate(existingEstimate),
+            positionEstimate: existingEstimate.position3D,
+            method: '2-sensor',
+          });
+        }
+      } catch {
+        // Triangulation failed — skip
+      }
+    }
+
+    this.multiSensorResolutions = resolutions;
+  }
+
+  /** Convert intersection angle to a 0-1 quality score */
+  private qualityScoreFromIntersectionAngle(angleDeg: number): number {
+    // 0° = 0, 15° = 0.5, 45° = 0.85, 90° = 1.0
+    return Math.min(1.0, angleDeg / 90);
+  }
+
+  /** Extract a 0-1 quality score from a GeometryEstimate */
+  private qualityScoreFromEstimate(est: GeometryEstimate): number {
+    const qualityMap: Record<string, number> = {
+      excellent: 1.0, strong: 0.9, good: 0.8, acceptable: 0.6,
+      fair: 0.5, weak: 0.3, poor: 0.2, insufficient: 0.1,
+    };
+    return qualityMap[est.quality] ?? 0.5;
+  }
+
+  // ── Convergence Monitoring (REQ-5 Phase C) ─────────────────────────
+
+  /**
+   * Update convergence state for all tracks that have geometry estimates.
+   * Called each tick after computeGeometryEstimates().
+   */
+  private updateConvergenceState(): void {
+    const nowSec = this.state.elapsedSec;
+
+    for (const [trackId, estimate] of this.state.geometryEstimates) {
+      // Compute estimated position error from covariance (if available)
+      let positionErrorEstimate: number;
+      const cov = (estimate as any).covariance3D;
+      if (cov && Array.isArray(cov) && cov.length >= 2) {
+        const varLat = typeof cov[0]?.[0] === 'number' ? cov[0][0] : 0;
+        const varLon = typeof cov[1]?.[1] === 'number' ? cov[1][1] : 0;
+        positionErrorEstimate = Math.sqrt(varLat + varLon) * 111000;
+      } else {
+        const qualityMap: Record<string, number> = {
+          excellent: 100, good: 300, fair: 700, poor: 1500,
+        };
+        positionErrorEstimate = qualityMap[estimate.quality] ?? 1000;
+      }
+
+      const intersectionAngle = estimate.intersectionAngleDeg ?? 0;
+      const numBearings = estimate.eoTrackIds?.length ?? 0;
+
+      let entry = this.convergenceState.get(trackId);
+      if (!entry) {
+        entry = {
+          trackId,
+          measurements: [],
+          convergenceRate: 0,
+          converged: false,
+          convergedAt: null,
+        };
+        this.convergenceState.set(trackId, entry);
+      }
+
+      entry.measurements.push({
+        timestamp: nowSec,
+        positionErrorEstimate,
+        intersectionAngle,
+        numBearings,
+      });
+
+      // Keep last 10 measurements
+      if (entry.measurements.length > 10) {
+        entry.measurements = entry.measurements.slice(-10);
+      }
+
+      // Compute convergence rate via linear regression slope
+      if (entry.measurements.length >= 3 && !entry.converged) {
+        const n = entry.measurements.length;
+        let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+        for (let i = 0; i < n; i++) {
+          const x = entry.measurements[i].timestamp;
+          const y = entry.measurements[i].positionErrorEstimate;
+          sumX += x;
+          sumY += y;
+          sumXY += x * y;
+          sumX2 += x * x;
+        }
+        const denom = n * sumX2 - sumX * sumX;
+        if (denom !== 0) {
+          entry.convergenceRate = (n * sumXY - sumX * sumY) / denom;
+        }
+
+        if (entry.convergenceRate < 0 && positionErrorEstimate < 500) {
+          entry.converged = true;
+          entry.convergedAt = nowSec;
+          this.pushEvent(
+            'eo.convergence.achieved',
+            `Triangulation converged for track ${trackId.slice(0, 8)} (error: ${positionErrorEstimate.toFixed(0)}m, rate: ${entry.convergenceRate.toFixed(2)})`,
+            { trackId, positionErrorEstimate, convergenceRate: entry.convergenceRate },
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Get convergence states for all tracked targets.
+   */
+  getConvergenceStates(): Array<{
+    trackId: string;
+    convergenceRate: number;
+    converged: boolean;
+    convergedAt: number | null;
+    measurementCount: number;
+    positionErrorEstimate: number;
+  }> {
+    const result: Array<{
+      trackId: string;
+      convergenceRate: number;
+      converged: boolean;
+      convergedAt: number | null;
+      measurementCount: number;
+      positionErrorEstimate: number;
+    }> = [];
+    for (const entry of this.convergenceState.values()) {
+      const lastMeasurement = entry.measurements[entry.measurements.length - 1];
+      result.push({
+        trackId: entry.trackId,
+        convergenceRate: entry.convergenceRate,
+        converged: entry.converged,
+        convergedAt: entry.convergedAt,
+        measurementCount: entry.measurements.length,
+        positionErrorEstimate: lastMeasurement?.positionErrorEstimate ?? 0,
+      });
+    }
+    return result;
   }
 
   // ── Track Dossier Methods ────────────────────────────────────────────
@@ -2364,6 +3010,182 @@ export class LiveEngine {
     return { lockedSensors, priorityTracks, manualClassifications };
   }
 
+  // ── Search Mode (REQ-5 Phase B) ────────────────────────────────────
+
+  /**
+   * Update search mode for all EO sensors.
+   * Called each tick from finalizeTick(). If an EO sensor has no valid
+   * tracking candidates for 3+ consecutive ticks, it enters search mode
+   * and systematically scans its sector. Exits when candidates appear.
+   */
+  private updateSearchMode(dtSec: number): void {
+    const tracks = this.state.tracks;
+    const sensors = this.state.sensors;
+
+    for (const sensor of sensors) {
+      if (sensor.sensorType !== 'eo' || !sensor.online || !sensor.gimbal) continue;
+      const sId = sensor.sensorId as string;
+
+      // Operator-locked sensors skip search mode
+      if (this.operatorLockedSensors.has(sId)) continue;
+
+      // Check if sensor has any valid candidates: tracks in coverage, not dropped
+      const hasCandidates = tracks.some(track => {
+        if (track.status === 'dropped') return false;
+        if (!sensor.coverage) return false;
+        // Simple range check using coverage.maxRangeM
+        const dlat = track.state.lat - sensor.position.lat;
+        const dlon = track.state.lon - sensor.position.lon;
+        const distM = Math.sqrt(dlat * dlat + dlon * dlon) * 111_000;
+        return distM <= sensor.coverage.maxRangeM;
+      });
+
+      // Also check if sensor is actively dwelling
+      const isDwelling = this.dwellState.has(sId);
+
+      let searchState = this.searchModeState.get(sId);
+
+      if (hasCandidates || isDwelling) {
+        // Candidates available — deactivate search mode
+        if (searchState?.active) {
+          searchState.active = false;
+          searchState.idleTickCount = 0;
+          this.pushEvent('eo.search.deactivated', `Search mode deactivated for ${sId} — targets available`);
+        } else if (searchState) {
+          searchState.idleTickCount = 0;
+        }
+        continue;
+      }
+
+      // No candidates and not dwelling — increment idle counter
+      if (!searchState) {
+        searchState = {
+          active: false,
+          pattern: 'sector',
+          currentAzimuth: sensor.gimbal.azimuthDeg ?? 0,
+          scanStart: 0,
+          scanEnd: 360,
+          scanSpeed: 10,
+          scanDirection: 1,
+          idleTickCount: 0,
+        };
+        this.searchModeState.set(sId, searchState);
+      }
+
+      searchState.idleTickCount++;
+
+      if (!searchState.active && searchState.idleTickCount >= 3) {
+        // Activate search mode after 3 idle ticks
+        searchState.active = true;
+        searchState.currentAzimuth = sensor.gimbal.azimuthDeg ?? 0;
+        this.pushEvent('eo.search.activated', `Search mode activated for ${sId} — no targets for ${searchState.idleTickCount} ticks`);
+      }
+
+      if (searchState.active) {
+        // Advance scan azimuth
+        const increment = searchState.scanSpeed * dtSec * searchState.scanDirection;
+        searchState.currentAzimuth += increment;
+
+        // Bounce at sector boundaries
+        if (searchState.scanEnd > searchState.scanStart) {
+          // Normal sector (e.g. 0-360)
+          if (searchState.currentAzimuth >= searchState.scanEnd) {
+            searchState.currentAzimuth = searchState.scanEnd;
+            searchState.scanDirection = -1;
+          } else if (searchState.currentAzimuth <= searchState.scanStart) {
+            searchState.currentAzimuth = searchState.scanStart;
+            searchState.scanDirection = 1;
+          }
+        }
+
+        // Normalize to [0, 360)
+        searchState.currentAzimuth = ((searchState.currentAzimuth % 360) + 360) % 360;
+
+        // Update sensor gimbal to follow search pattern
+        sensor.gimbal.azimuthDeg = searchState.currentAzimuth;
+        sensor.gimbal.currentTargetId = undefined; // no target — searching
+      }
+    }
+  }
+
+  /** Get search mode status for all EO sensors. */
+  getSearchModeStatus(): Array<{
+    sensorId: string;
+    active: boolean;
+    pattern: 'sector' | 'raster';
+    currentAzimuth: number;
+    scanStart: number;
+    scanEnd: number;
+    scanSpeed: number;
+    scanDirection: 1 | -1;
+  }> {
+    const result: Array<{
+      sensorId: string;
+      active: boolean;
+      pattern: 'sector' | 'raster';
+      currentAzimuth: number;
+      scanStart: number;
+      scanEnd: number;
+      scanSpeed: number;
+      scanDirection: 1 | -1;
+    }> = [];
+    for (const [sensorId, state] of this.searchModeState) {
+      result.push({
+        sensorId,
+        active: state.active,
+        pattern: state.pattern,
+        currentAzimuth: state.currentAzimuth,
+        scanStart: state.scanStart,
+        scanEnd: state.scanEnd,
+        scanSpeed: state.scanSpeed,
+        scanDirection: state.scanDirection,
+      });
+    }
+    return result;
+  }
+
+  /** Set search mode control for a specific sensor. */
+  setSearchModeControl(sensorId: string, control: {
+    enabled: boolean;
+    pattern?: 'sector' | 'raster';
+    scanStart?: number;
+    scanEnd?: number;
+  }): boolean {
+    const sensor = this.state.sensors.find(s => (s.sensorId as string) === sensorId && s.sensorType === 'eo');
+    if (!sensor) return false;
+
+    let searchState = this.searchModeState.get(sensorId);
+    if (!searchState) {
+      searchState = {
+        active: false,
+        pattern: 'sector',
+        currentAzimuth: sensor.gimbal?.azimuthDeg ?? 0,
+        scanStart: 0,
+        scanEnd: 360,
+        scanSpeed: 10,
+        scanDirection: 1,
+        idleTickCount: 0,
+      };
+      this.searchModeState.set(sensorId, searchState);
+    }
+
+    if (control.pattern !== undefined) searchState.pattern = control.pattern;
+    if (control.scanStart !== undefined) searchState.scanStart = control.scanStart;
+    if (control.scanEnd !== undefined) searchState.scanEnd = control.scanEnd;
+
+    if (control.enabled && !searchState.active) {
+      searchState.active = true;
+      searchState.idleTickCount = 3; // force active
+      this.pushEvent('eo.search.activated', `Search mode manually activated for ${sensorId}`);
+    } else if (!control.enabled && searchState.active) {
+      searchState.active = false;
+      searchState.idleTickCount = 0;
+      this.pushEvent('eo.search.deactivated', `Search mode manually deactivated for ${sensorId}`);
+    }
+
+    return true;
+  }
+
   /** Update EO gimbal azimuth to continuously track assigned targets. */
   private updateGimbalPointing(): void {
     const trackMap = new Map(this.state.tracks.map(t => [t.systemTrackId, t]));
@@ -2439,6 +3261,682 @@ export class LiveEngine {
       summary: event.summary,
       data: event.data,
     });
+  }
+
+  // ── Quality Assessment ─────────────────────────────────────────────
+
+  /**
+   * Haversine distance in meters between two lat/lon points.
+   */
+  private static haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6_371_000; // Earth radius in meters
+    const toRad = Math.PI / 180;
+    const dLat = (lat2 - lat1) * toRad;
+    const dLon = (lon2 - lon1) * toRad;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  /**
+   * Compute quality metrics by comparing system tracks against ground truth.
+   * Called each tick from finalizeTick().
+   */
+  private computeQualityMetrics(): void {
+    this.totalTicks++;
+
+    // Update sensor tasked ticks
+    for (const [sensorId] of this.dwellState) {
+      this.sensorTaskedTicks.set(sensorId, (this.sensorTaskedTicks.get(sensorId) ?? 0) + 1);
+    }
+
+    const groundTruth = this.getGroundTruth();
+    const tracks = this.state.tracks;
+    const timeSec = this.state.elapsedSec;
+
+    if (groundTruth.length === 0 && tracks.length === 0) {
+      this.cachedQualityMetrics = {
+        trackToTruthAssociation: 1,
+        positionErrorAvg: 0,
+        positionErrorMax: 0,
+        classificationAccuracy: 1,
+        coveragePercent: 1,
+        falseTrackRate: 0,
+        sensorUtilization: this.buildSensorUtilization(),
+        timeToFirstDetection: Object.fromEntries(this.firstDetectionTime),
+        timeToConfirmed3D: Object.fromEntries(this.confirmedGeometryTime),
+      };
+      return;
+    }
+
+    // Associate each system track to its nearest ground truth target (within 2km)
+    const MATCH_THRESHOLD_M = 2000;
+    const trackToTarget = new Map<string, string>(); // trackId → targetId
+    const targetToTrack = new Map<string, string>(); // targetId → trackId
+    const positionErrors: number[] = [];
+
+    for (const track of tracks) {
+      let bestTargetId: string | null = null;
+      let bestDist = Infinity;
+
+      for (const gt of groundTruth) {
+        const dist = LiveEngine.haversineMeters(
+          track.state.lat, track.state.lon,
+          gt.position.lat, gt.position.lon,
+        );
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestTargetId = gt.targetId;
+        }
+      }
+
+      if (bestTargetId && bestDist < MATCH_THRESHOLD_M) {
+        trackToTarget.set(track.systemTrackId as string, bestTargetId);
+        // Only keep closest track per target
+        const existingTrackId = targetToTrack.get(bestTargetId);
+        if (!existingTrackId) {
+          targetToTrack.set(bestTargetId, track.systemTrackId as string);
+        }
+        positionErrors.push(bestDist);
+
+        // Record first detection time
+        if (!this.firstDetectionTime.has(bestTargetId)) {
+          this.firstDetectionTime.set(bestTargetId, timeSec);
+        }
+
+        // Record confirmed_3d time
+        const geoEst = this.state.geometryEstimates.get(track.systemTrackId as string);
+        if (geoEst && geoEst.classification === 'confirmed_3d' && !this.confirmedGeometryTime.has(bestTargetId)) {
+          this.confirmedGeometryTime.set(bestTargetId, timeSec);
+        }
+      }
+    }
+
+    // Metrics
+    const matchedTrackCount = trackToTarget.size;
+    const trackToTruthAssociation = tracks.length > 0
+      ? matchedTrackCount / tracks.length
+      : 1;
+
+    const positionErrorAvg = positionErrors.length > 0
+      ? positionErrors.reduce((a, b) => a + b, 0) / positionErrors.length
+      : 0;
+
+    const positionErrorMax = positionErrors.length > 0
+      ? Math.max(...positionErrors)
+      : 0;
+
+    // Classification accuracy: among tracks that have a classification and are matched
+    let classifiedCorrect = 0;
+    let classifiedTotal = 0;
+    for (const track of tracks) {
+      const targetId = trackToTarget.get(track.systemTrackId as string);
+      if (!targetId) continue;
+      if (!track.classification) continue;
+      classifiedTotal++;
+      const gt = groundTruth.find(g => g.targetId === targetId);
+      if (gt && gt.classification && track.classification === gt.classification) {
+        classifiedCorrect++;
+      }
+    }
+    const classificationAccuracy = classifiedTotal > 0 ? classifiedCorrect / classifiedTotal : 1;
+
+    // Coverage: % of active targets that have an associated system track
+    const coveragePercent = groundTruth.length > 0
+      ? targetToTrack.size / groundTruth.length
+      : 1;
+
+    // False track rate: % of system tracks with no corresponding real target
+    const falseTrackRate = tracks.length > 0
+      ? (tracks.length - matchedTrackCount) / tracks.length
+      : 0;
+
+    this.cachedQualityMetrics = {
+      trackToTruthAssociation,
+      positionErrorAvg,
+      positionErrorMax,
+      classificationAccuracy,
+      coveragePercent,
+      falseTrackRate,
+      sensorUtilization: this.buildSensorUtilization(),
+      timeToFirstDetection: Object.fromEntries(this.firstDetectionTime),
+      timeToConfirmed3D: Object.fromEntries(this.confirmedGeometryTime),
+    };
+  }
+
+  private buildSensorUtilization(): Record<string, number> {
+    const result: Record<string, number> = {};
+    if (this.totalTicks === 0) return result;
+    for (const sensor of this.state.sensors) {
+      const sensorId = sensor.sensorId as string;
+      const tasked = this.sensorTaskedTicks.get(sensorId) ?? 0;
+      result[sensorId] = tasked / this.totalTicks;
+    }
+    return result;
+  }
+
+  /** Public accessor for quality metrics. */
+  getQualityMetrics(): typeof this.cachedQualityMetrics {
+    return this.cachedQualityMetrics;
+  }
+
+  /** Public accessor for EO allocation quality (REQ-10). */
+  getEoAllocationQuality(): typeof this.cachedEoAllocationQuality {
+    return this.cachedEoAllocationQuality;
+  }
+
+  /**
+   * Compute EO allocation quality metrics (REQ-10).
+   * Measures how well EO resources were allocated across 7 criteria.
+   */
+
+  // ── FOV Overlap Detection (REQ-6) ──────────────────────────────────────
+
+  /**
+   * Detect overlapping fields of view between EO sensors and identify
+   * which tracks fall within the overlap regions.
+   */
+  private computeFovOverlaps(): void {
+    const eoSensors = this.state.sensors.filter(
+      s => s.sensorType === 'eo' && s.online && s.gimbal && s.fov,
+    );
+
+    const overlaps: FovOverlap[] = [];
+
+    // Precompute FOV polygons for each EO sensor
+    const fovPolygons = new Map<string, Array<{ lat: number; lon: number }>>();
+    for (const sensor of eoSensors) {
+      const rangeKm = (sensor.coverage?.maxRangeM ?? 30000) / 1000;
+      const polygon = computeFovPolygon(sensor, rangeKm);
+      if (polygon.length >= 3) {
+        fovPolygons.set(sensor.sensorId as string, polygon);
+      }
+    }
+
+    // Check each pair of EO sensors for overlap
+    const sensorIds = [...fovPolygons.keys()];
+    for (let i = 0; i < sensorIds.length; i++) {
+      for (let j = i + 1; j < sensorIds.length; j++) {
+        const id1 = sensorIds[i];
+        const id2 = sensorIds[j];
+        const fov1 = fovPolygons.get(id1)!;
+        const fov2 = fovPolygons.get(id2)!;
+
+        if (fovPolygonsOverlap(fov1, fov2)) {
+          const overlapRegion = computeOverlapRegion(fov1, fov2);
+
+          // Find tracks within the overlap region
+          const tracksInOverlap: string[] = [];
+          for (const track of this.state.tracks) {
+            if (track.status === 'dropped') continue;
+            const tp = { lat: track.state.lat, lon: track.state.lon };
+            if (!Number.isFinite(tp.lat) || !Number.isFinite(tp.lon)) continue;
+            // Track is in overlap if it's inside both FOV polygons
+            if (pointInFovPolygon(tp, fov1) && pointInFovPolygon(tp, fov2)) {
+              tracksInOverlap.push(track.systemTrackId as string);
+            }
+          }
+
+          overlaps.push({
+            sensorIds: [id1, id2],
+            overlapRegion,
+            tracksInOverlap,
+          });
+        }
+      }
+    }
+
+    this.fovOverlaps = overlaps;
+  }
+
+  /** Get current FOV overlaps (for API endpoint). */
+  getFovOverlaps(): FovOverlap[] {
+    return this.fovOverlaps;
+  }
+
+  // ── Multi-target bearing association (REQ-6) ────────────────────────────
+
+  /**
+   * Compute bearing-to-track associations for all EO sensors.
+   * For overlapping FOV regions with multiple targets, uses angular proximity
+   * to associate each bearing observation to the nearest track, with confidence
+   * scoring based on angular separation to the next-nearest target.
+   */
+  private computeBearingAssociations(): void {
+    const associations: typeof this.bearingAssociations = [];
+    const tracks = this.state.tracks.filter(t => t.status !== 'dropped');
+    if (tracks.length === 0) {
+      this.bearingAssociations = [];
+      return;
+    }
+
+    // Build a set of trackIds that are in any overlap region
+    const tracksInAnyOverlap = new Set<string>();
+    for (const overlap of this.fovOverlaps) {
+      for (const tid of overlap.tracksInOverlap) {
+        tracksInAnyOverlap.add(tid);
+      }
+    }
+
+    // For each EO sensor, get its gimbal azimuth as the "bearing"
+    const eoSensors = this.state.sensors.filter(
+      s => s.sensorType === 'eo' && s.online && s.gimbal && Number.isFinite(s.gimbal.azimuthDeg),
+    );
+
+    for (const sensor of eoSensors) {
+      const sensorId = sensor.sensorId as string;
+      const sensorBearing = sensor.gimbal!.azimuthDeg;
+      const sensorLat = sensor.position.lat;
+      const sensorLon = sensor.position.lon;
+
+      // Compute angular distance from sensor to each non-dropped track
+      const trackAngles: Array<{ trackId: string; angleDeg: number }> = [];
+      for (const track of tracks) {
+        if (!Number.isFinite(track.state.lat) || !Number.isFinite(track.state.lon)) continue;
+        const az = bearingDeg(sensorLat, sensorLon, track.state.lat, track.state.lon);
+        trackAngles.push({ trackId: track.systemTrackId as string, angleDeg: az });
+      }
+
+      if (trackAngles.length === 0) continue;
+
+      // Find closest track to the sensor's current bearing
+      let nearestIdx = 0;
+      let nearestSep = Infinity;
+      for (let i = 0; i < trackAngles.length; i++) {
+        let diff = Math.abs(trackAngles[i].angleDeg - sensorBearing);
+        if (diff > 180) diff = 360 - diff;
+        if (diff < nearestSep) {
+          nearestSep = diff;
+          nearestIdx = i;
+        }
+      }
+
+      const nearestTrackId = trackAngles[nearestIdx].trackId;
+
+      // Check if this sensor is involved in any FOV overlap with multiple tracks
+      const overlapsForSensor = this.fovOverlaps.filter(
+        o => o.sensorIds.includes(sensorId) && o.tracksInOverlap.length >= 2,
+      );
+      const inOverlap = overlapsForSensor.length > 0;
+
+      if (!inOverlap) {
+        // No overlap — clean association
+        associations.push({
+          trackId: nearestTrackId,
+          sensorId,
+          bearing: sensorBearing,
+          confidence: 1.0,
+          ambiguous: false,
+          alternateTrackIds: [],
+        });
+        continue;
+      }
+
+      // In overlap: compute separation to second-nearest track in the overlap
+      const overlapTrackIds = new Set<string>();
+      for (const o of overlapsForSensor) {
+        for (const tid of o.tracksInOverlap) overlapTrackIds.add(tid);
+      }
+
+      // Sort overlap tracks by angular distance from the bearing
+      const overlapAngles = trackAngles
+        .filter(ta => overlapTrackIds.has(ta.trackId))
+        .map(ta => {
+          let diff = Math.abs(ta.angleDeg - sensorBearing);
+          if (diff > 180) diff = 360 - diff;
+          return { trackId: ta.trackId, sep: diff };
+        })
+        .sort((a, b) => a.sep - b.sep);
+
+      if (overlapAngles.length < 2) {
+        // Only one track in overlap — still clear
+        associations.push({
+          trackId: nearestTrackId,
+          sensorId,
+          bearing: sensorBearing,
+          confidence: 1.0,
+          ambiguous: false,
+          alternateTrackIds: [],
+        });
+        continue;
+      }
+
+      const separation = overlapAngles.length >= 2
+        ? overlapAngles[1].sep - overlapAngles[0].sep
+        : 999;
+
+      let confidence: number;
+      if (separation > 5) {
+        confidence = 1.0;
+      } else if (separation >= 2) {
+        confidence = 0.7;
+      } else {
+        confidence = 0.3;
+      }
+
+      const ambiguous = confidence < 0.7;
+      const alternateTrackIds = ambiguous
+        ? overlapAngles.filter(a => a.trackId !== overlapAngles[0].trackId).map(a => a.trackId)
+        : [];
+
+      associations.push({
+        trackId: overlapAngles[0].trackId,
+        sensorId,
+        bearing: sensorBearing,
+        confidence,
+        ambiguous,
+        alternateTrackIds,
+      });
+    }
+
+    this.bearingAssociations = associations;
+  }
+
+  /** Get bearing associations (for API endpoint). */
+  getBearingAssociations(): typeof this.bearingAssociations {
+    return this.bearingAssociations;
+  }
+
+  private computeEoAllocationQuality(): void {
+    const tracks = this.state.tracks;
+    const eoSensors = this.state.sensors.filter(s => s.type === 'eo');
+    const elapsedSec = this.state.elapsedSec;
+
+    // 1. Coverage efficiency: % of high-priority/confirmed tracks that received EO investigation
+    const highPriorityTracks = tracks.filter(t => {
+      const trackId = t.systemTrackId as string;
+      return this.operatorPriorityTracks.has(trackId)
+        || this.operatorTrackPriority.get(trackId) === 'high'
+        || t.status === 'confirmed';
+    });
+    let investigatedHighPriority = 0;
+    for (const t of highPriorityTracks) {
+      const trackId = t.systemTrackId as string;
+      const hasEoTrack = [...this.eoTracksById.values()].some(
+        et => (et.associatedSystemTrackId as string) === trackId,
+      );
+      if (hasEoTrack) investigatedHighPriority++;
+    }
+    const coverageEfficiency = highPriorityTracks.length > 0
+      ? (investigatedHighPriority / highPriorityTracks.length) * 100
+      : 100;
+
+    // 2. Geometry optimality: avg intersection angle (closer to 90 is better)
+    let angleSum = 0;
+    let angleCount = 0;
+    for (const [, est] of this.state.geometryEstimates) {
+      if (est.intersectionAngleDeg != null && Number.isFinite(est.intersectionAngleDeg)) {
+        angleSum += est.intersectionAngleDeg;
+        angleCount++;
+      }
+    }
+    const geometryOptimality = angleCount > 0 ? angleSum / angleCount : 0;
+
+    // 3. Dwell efficiency: ratio of total dwell time vs total possible sensor time
+    let totalDwellTimeSec = 0;
+    for (const [, history] of this.cyclingHistory) {
+      for (const entry of history) {
+        totalDwellTimeSec += entry.endedSec - entry.startedSec;
+      }
+    }
+    // Also add currently active dwells
+    for (const [, dwell] of this.dwellState) {
+      totalDwellTimeSec += elapsedSec - dwell.dwellStartSec;
+    }
+    const totalPossibleSec = elapsedSec * eoSensors.length;
+    const dwellEfficiency = totalPossibleSec > 0
+      ? Math.min(100, (totalDwellTimeSec / totalPossibleSec) * 100)
+      : 0;
+
+    // 4. Revisit timeliness: % of tracks whose revisit schedule is on time
+    let onTimeCount = 0;
+    let revisitTotal = 0;
+    for (const track of tracks) {
+      const trackId = track.systemTrackId as string;
+      const lastInv = this.lastInvestigationTime.get(trackId);
+      if (lastInv == null) continue; // never investigated, skip
+      revisitTotal++;
+      const nextRevisit = lastInv + LiveEngine.MAX_REVISIT_INTERVAL_SEC;
+      if (elapsedSec <= nextRevisit) {
+        onTimeCount++;
+      }
+    }
+    const revisitTimeliness = revisitTotal > 0
+      ? (onTimeCount / revisitTotal) * 100
+      : 100;
+
+    // 5. Triangulation success rate: % of investigated tracks achieving confirmed_3d
+    let investigatedCount = 0;
+    let confirmed3dCount = 0;
+    for (const track of tracks) {
+      const trackId = track.systemTrackId as string;
+      const hasEoTrack = [...this.eoTracksById.values()].some(
+        et => (et.associatedSystemTrackId as string) === trackId,
+      );
+      if (!hasEoTrack) continue;
+      investigatedCount++;
+      const geoEst = this.state.geometryEstimates.get(trackId);
+      if (geoEst && geoEst.classification === 'confirmed_3d') {
+        confirmed3dCount++;
+      }
+    }
+    const triangulationSuccessRate = investigatedCount > 0
+      ? (confirmed3dCount / investigatedCount) * 100
+      : 0;
+
+    // 6. Sensor utilization: avg % time each EO sensor is actively tasked
+    let utilizationSum = 0;
+    const sensorUtil = this.buildSensorUtilization();
+    let eoSensorCount = 0;
+    for (const sensor of eoSensors) {
+      const sensorId = sensor.sensorId as string;
+      utilizationSum += (sensorUtil[sensorId] ?? 0);
+      eoSensorCount++;
+    }
+    const sensorUtilizationPct = eoSensorCount > 0
+      ? (utilizationSum / eoSensorCount) * 100
+      : 0;
+
+    // 7. Priority alignment: rank correlation between threat priority and investigation order
+    let priorityAlignment = 100;
+    if (this.cyclingHistory.size > 0) {
+      let totalComparisons = 0;
+      let concordant = 0;
+      for (const [, history] of this.cyclingHistory) {
+        if (history.length < 2) continue;
+        // Get priority rank for each visited track (high=3, normal=2, low=1, unset=2)
+        const getRank = (trackId: string): number => {
+          if (this.operatorPriorityTracks.has(trackId)) return 3;
+          const p = this.operatorTrackPriority.get(trackId);
+          if (p === 'high') return 3;
+          if (p === 'low') return 1;
+          return 2;
+        };
+        for (let i = 0; i < history.length - 1; i++) {
+          const rankI = getRank(history[i].trackId);
+          const rankJ = getRank(history[i + 1].trackId);
+          totalComparisons++;
+          // Concordant if higher-priority visited first or same priority
+          if (rankI >= rankJ) concordant++;
+        }
+      }
+      priorityAlignment = totalComparisons > 0
+        ? (concordant / totalComparisons) * 100
+        : 100;
+    }
+
+    this.cachedEoAllocationQuality = {
+      coverageEfficiency,
+      geometryOptimality,
+      dwellEfficiency,
+      revisitTimeliness,
+      triangulationSuccessRate,
+      sensorUtilization: sensorUtilizationPct,
+      priorityAlignment,
+    };
+  }
+
+  // ── Before/After EO Comparison (REQ-9) ─────────────────────────────
+
+  /**
+   * Compute position error (meters) for a track by finding nearest ground truth target.
+   */
+  private computeTrackPositionError(track: SystemTrack): number {
+    const groundTruth = this.getGroundTruth();
+    let bestDist = Infinity;
+    for (const gt of groundTruth) {
+      const dist = LiveEngine.haversineMeters(
+        track.state.lat, track.state.lon,
+        gt.position.lat, gt.position.lon,
+      );
+      if (dist < bestDist) {
+        bestDist = dist;
+      }
+    }
+    return bestDist === Infinity ? 0 : bestDist;
+  }
+
+  /**
+   * Capture a pre-EO snapshot for a track (called when a cue is issued).
+   * Only captures if no snapshot exists yet for this track.
+   */
+  private capturePreEoSnapshot(trackId: string): void {
+    if (this.eoSnapshots.has(trackId)) return;
+
+    const track = this.state.tracks.find(t => (t.systemTrackId as string) === trackId);
+    if (!track) return;
+
+    const positionError = this.computeTrackPositionError(track);
+    const geoEst = this.state.geometryEstimates.get(trackId);
+    const geometryStatus = geoEst?.classification ?? 'bearing_only';
+    // Use covariance trace as uncertainty measure (fallback to 0)
+    const covariance = track.covariance
+      ? (track.covariance[0] ?? 0) + (track.covariance[3] ?? 0)
+      : 0;
+
+    this.eoSnapshots.set(trackId, {
+      preEo: {
+        positionError,
+        covariance,
+        classification: (track.classification as string) ?? null,
+        geometryStatus,
+        timestamp: this.state.elapsedSec,
+      },
+      postEo: null,
+    });
+  }
+
+  /**
+   * Capture a post-EO snapshot for a track (called when a dwell completes).
+   */
+  private capturePostEoSnapshot(trackId: string): void {
+    const snapshot = this.eoSnapshots.get(trackId);
+    if (!snapshot) return;
+
+    const track = this.state.tracks.find(t => (t.systemTrackId as string) === trackId);
+    if (!track) return;
+
+    const positionError = this.computeTrackPositionError(track);
+    const geoEst = this.state.geometryEstimates.get(trackId);
+    const geometryStatus = geoEst?.classification ?? 'bearing_only';
+    const covariance = track.covariance
+      ? (track.covariance[0] ?? 0) + (track.covariance[3] ?? 0)
+      : 0;
+
+    snapshot.postEo = {
+      positionError,
+      covariance,
+      classification: (track.classification as string) ?? null,
+      geometryStatus,
+      timestamp: this.state.elapsedSec,
+    };
+  }
+
+  /**
+   * Get before/after EO comparison data (REQ-9).
+   */
+  getBeforeAfterComparison(): {
+    perTrack: Array<{
+      trackId: string;
+      preEo: { positionError: number; covariance: number; classification: string | null; geometryStatus: string; timestamp: number };
+      postEo: { positionError: number; covariance: number; classification: string | null; geometryStatus: string; timestamp: number } | null;
+      improvement: {
+        positionErrorReduction: number;
+        classificationGained: boolean;
+        geometryUpgraded: boolean;
+      };
+    }>;
+    aggregate: {
+      avgPositionImprovement: number;
+      tracksWithClassification: number;
+      tracksWithGeometryUpgrade: number;
+      totalTracksInvestigated: number;
+    };
+  } {
+    const geometryRank: Record<string, number> = {
+      bearing_only: 0,
+      candidate_3d: 1,
+      confirmed_3d: 2,
+    };
+
+    const perTrack: Array<{
+      trackId: string;
+      preEo: { positionError: number; covariance: number; classification: string | null; geometryStatus: string; timestamp: number };
+      postEo: { positionError: number; covariance: number; classification: string | null; geometryStatus: string; timestamp: number } | null;
+      improvement: {
+        positionErrorReduction: number;
+        classificationGained: boolean;
+        geometryUpgraded: boolean;
+      };
+    }> = [];
+
+    let totalPositionImprovement = 0;
+    let tracksWithPositionData = 0;
+    let tracksWithClassification = 0;
+    let tracksWithGeometryUpgrade = 0;
+
+    for (const [trackId, snapshot] of this.eoSnapshots) {
+      const positionErrorReduction = snapshot.postEo
+        ? snapshot.preEo.positionError - snapshot.postEo.positionError
+        : 0;
+      const classificationGained = snapshot.postEo
+        ? snapshot.preEo.classification === null && snapshot.postEo.classification !== null
+        : false;
+      const geometryUpgraded = snapshot.postEo
+        ? (geometryRank[snapshot.postEo.geometryStatus] ?? 0) > (geometryRank[snapshot.preEo.geometryStatus] ?? 0)
+        : false;
+
+      if (snapshot.postEo) {
+        totalPositionImprovement += positionErrorReduction;
+        tracksWithPositionData++;
+        if (classificationGained) tracksWithClassification++;
+        if (geometryUpgraded) tracksWithGeometryUpgrade++;
+      }
+
+      perTrack.push({
+        trackId,
+        preEo: snapshot.preEo,
+        postEo: snapshot.postEo,
+        improvement: {
+          positionErrorReduction,
+          classificationGained,
+          geometryUpgraded,
+        },
+      });
+    }
+
+    return {
+      perTrack,
+      aggregate: {
+        avgPositionImprovement: tracksWithPositionData > 0
+          ? totalPositionImprovement / tracksWithPositionData
+          : 0,
+        tracksWithClassification,
+        tracksWithGeometryUpgrade,
+        totalTracksInvestigated: this.eoSnapshots.size,
+      },
+    };
   }
 
   private broadcastRap(force = false): void {
@@ -2547,6 +4045,26 @@ export class LiveEngine {
       cyclingHistories: Object.fromEntries(
         [...this.cyclingHistory.entries()].map(([sensorId, history]) => [sensorId, history.slice(-5)]),
       ),
+      // Cover zones (REQ-11)
+      coverZones: this.scenario.coverZones ?? [],
+      // Quality metrics (REQ-8)
+      qualityMetrics: this.cachedQualityMetrics ?? undefined,
+      // EO allocation quality (REQ-10)
+      eoAllocationQuality: this.cachedEoAllocationQuality ?? undefined,
+      // Before/after EO comparison aggregate (REQ-9)
+      beforeAfterAggregate: this.getBeforeAfterComparison().aggregate,
+      // FOV overlap detection (REQ-6)
+      fovOverlaps: this.fovOverlaps,
+      // Multi-target bearing association (REQ-6)
+      bearingAssociations: this.bearingAssociations.filter(a => a.ambiguous || a.confidence < 1.0),
+      // Multi-sensor 3D resolutions (REQ-6)
+      multiSensorResolutions: this.multiSensorResolutions,
+      // Search mode states (REQ-5 Phase B)
+      searchModeStates: this.getSearchModeStatus().filter(s => s.active),
+      // Convergence states (REQ-5 Phase C)
+      convergenceStates: this.getConvergenceStates(),
+      // REQ-16: EO management module status
+      eoModuleStatus: this.cachedEoModuleStatus ?? undefined,
     });
 
     // Separate ground truth broadcast

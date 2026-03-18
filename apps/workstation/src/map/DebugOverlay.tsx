@@ -3,6 +3,9 @@ import type maplibregl from 'maplibre-gl';
 import type { SystemTrack, SensorState } from '@eloc2/domain';
 import type { LayerVisibility } from '../stores/ui-store';
 import type { GroundTruthTarget } from '../stores/ground-truth-store';
+import type { CoverZone } from '../stores/cover-zone-store';
+import type { SearchModeStateWS } from '../stores/sensor-store';
+import type { FovOverlap, BearingAssociation, MultiSensorResolution } from '../stores/fov-overlap-store';
 
 /**
  * DebugOverlay — Primary HTML/SVG-based renderer.
@@ -79,9 +82,15 @@ interface DebugOverlayProps {
   onSelectSensor?: (id: string) => void;
   groundTruthTargets?: GroundTruthTarget[];
   showGroundTruth?: boolean;
+  coverZones?: CoverZone[];
+  searchModeStates?: SearchModeStateWS[];
+  fovOverlaps?: FovOverlap[];
+  bearingAssociations?: BearingAssociation[];
+  multiSensorResolutions?: MultiSensorResolution[];
+  convergedTrackIds?: Set<string>;
 }
 
-export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth }: DebugOverlayProps) {
+export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds }: DebugOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const frameRef = useRef<number>(0);
@@ -104,6 +113,63 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
 
     // Helper to project geo coords to screen pixel
     const proj = (lon: number, lat: number) => map.project([lon, lat]);
+
+    // Cover zone polygons (rendered first so they appear behind all other SVG)
+    if (coverZones && coverZones.length > 0) {
+      const coverTypeStyle: Record<string, { fill: string; stroke: string }> = {
+        urban:  { fill: 'rgba(255, 165, 0, 0.15)',  stroke: 'rgba(255, 165, 0, 0.4)' },
+        forest: { fill: 'rgba(34, 139, 34, 0.15)',   stroke: 'rgba(34, 139, 34, 0.4)' },
+        water:  { fill: 'rgba(0, 100, 200, 0.15)',   stroke: 'rgba(0, 100, 200, 0.4)' },
+        open:   { fill: 'rgba(200, 180, 100, 0.10)', stroke: 'rgba(200, 180, 100, 0.4)' },
+      };
+
+      for (const zone of coverZones) {
+        if (!zone.polygon || zone.polygon.length < 3) continue;
+
+        const style = coverTypeStyle[zone.coverType] ?? coverTypeStyle.open;
+        const points: string[] = [];
+        let centroidX = 0;
+        let centroidY = 0;
+
+        for (const vertex of zone.polygon) {
+          if (!Number.isFinite(vertex.lon) || !Number.isFinite(vertex.lat)) continue;
+          const p = proj(vertex.lon, vertex.lat);
+          points.push(`${p.x},${p.y}`);
+          centroidX += p.x;
+          centroidY += p.y;
+        }
+
+        if (points.length < 3) continue;
+
+        centroidX /= points.length;
+        centroidY /= points.length;
+
+        const polygon = createSvgEl('polygon', {
+          points: points.join(' '),
+          fill: style.fill,
+          stroke: style.stroke,
+          'stroke-width': '1',
+          'stroke-dasharray': '4,3',
+        });
+        svg.appendChild(polygon);
+
+        // Zone name label at centroid
+        if (zone.name) {
+          const label = createSvgEl('text', {
+            x: String(centroidX),
+            y: String(centroidY),
+            'text-anchor': 'middle',
+            'dominant-baseline': 'central',
+            'font-size': '10',
+            'font-family': 'monospace',
+            fill: style.stroke,
+            'pointer-events': 'none',
+          });
+          label.textContent = zone.name;
+          svg.appendChild(label);
+        }
+      }
+    }
 
     // Radar coverage arcs
     if (layerVisibility.radarCoverage) {
@@ -136,6 +202,48 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
       }
     }
 
+    // FOV overlap regions (semi-transparent yellow polygons)
+    if (fovOverlaps && fovOverlaps.length > 0 && layerVisibility.eoFov) {
+      for (const overlap of fovOverlaps) {
+        if (!overlap.overlapRegion || overlap.overlapRegion.length < 2) continue;
+
+        if (overlap.overlapRegion.length >= 3) {
+          // Render as polygon
+          const points: string[] = [];
+          for (const vertex of overlap.overlapRegion) {
+            if (!Number.isFinite(vertex.lon) || !Number.isFinite(vertex.lat)) continue;
+            const p = proj(vertex.lon, vertex.lat);
+            points.push(`${p.x},${p.y}`);
+          }
+          if (points.length >= 3) {
+            const polygon = createSvgEl('polygon', {
+              points: points.join(' '),
+              fill: 'rgba(255, 255, 0, 0.1)',
+              stroke: 'rgba(255, 255, 0, 0.4)',
+              'stroke-width': '1.5',
+              'stroke-dasharray': '4,3',
+            });
+            svg.appendChild(polygon);
+          }
+        } else {
+          // Single point indicator — render as a small circle
+          const pt = overlap.overlapRegion[0];
+          if (Number.isFinite(pt.lon) && Number.isFinite(pt.lat)) {
+            const p = proj(pt.lon, pt.lat);
+            const circle = createSvgEl('circle', {
+              cx: String(p.x),
+              cy: String(p.y),
+              r: '6',
+              fill: 'rgba(255, 255, 0, 0.3)',
+              stroke: 'rgba(255, 255, 0, 0.6)',
+              'stroke-width': '1.5',
+            });
+            svg.appendChild(circle);
+          }
+        }
+      }
+    }
+
     // EO gimbal rays
     if (layerVisibility.eoRays) {
       for (const sensor of sensors) {
@@ -152,6 +260,131 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
           'stroke-dasharray': '6,3',
         });
         svg.appendChild(line);
+      }
+    }
+
+    // Bearing association indicators (ambiguous/low-confidence bearing rays)
+    if (bearingAssociations && bearingAssociations.length > 0 && layerVisibility.eoRays) {
+      const sensorMap = new Map(sensors.map(s => [s.sensorId as string, s]));
+      const trackMap = new Map(tracks.map(t => [t.systemTrackId as string, t]));
+
+      for (const assoc of bearingAssociations) {
+        const sensor = sensorMap.get(assoc.sensorId);
+        if (!sensor || !sensor.online) continue;
+
+        const { lon, lat } = sensor.position;
+        const endPos = geoOffset(lon, lat, assoc.bearing, 40000);
+        const p1 = proj(lon, lat);
+        const p2 = proj(endPos[0], endPos[1]);
+
+        // Low-confidence (< 0.5): dotted line instead of solid
+        if (assoc.confidence < 0.5) {
+          const line = createSvgEl('line', {
+            x1: String(p1.x), y1: String(p1.y),
+            x2: String(p2.x), y2: String(p2.y),
+            stroke: '#ff4400', 'stroke-width': '2', 'stroke-opacity': '0.6',
+            'stroke-dasharray': '2,4',
+          });
+          svg.appendChild(line);
+        }
+
+        // Ambiguous: warning icon at bearing ray midpoint
+        if (assoc.ambiguous) {
+          const midX = (p1.x + p2.x) / 2;
+          const midY = (p1.y + p2.y) / 2;
+
+          // Orange warning triangle using SVG text
+          const warning = createSvgEl('text', {
+            x: String(midX),
+            y: String(midY),
+            'text-anchor': 'middle',
+            'dominant-baseline': 'central',
+            'font-size': '14',
+            fill: '#ff8800',
+            'pointer-events': 'none',
+          });
+          warning.textContent = '\u26A0'; // ⚠
+          svg.appendChild(warning);
+
+          // Confidence label below warning
+          const confLabel = createSvgEl('text', {
+            x: String(midX),
+            y: String(midY + 14),
+            'text-anchor': 'middle',
+            'dominant-baseline': 'central',
+            'font-size': '9',
+            'font-family': 'monospace',
+            fill: '#ff8800',
+            'fill-opacity': '0.8',
+            'pointer-events': 'none',
+          });
+          confLabel.textContent = `${(assoc.confidence * 100).toFixed(0)}%`;
+          svg.appendChild(confLabel);
+        }
+      }
+    }
+
+    // Multi-sensor association links (REQ-6): thin lines from contributing sensors to resolved position
+    if (multiSensorResolutions && multiSensorResolutions.length > 0 && layerVisibility.triangulation) {
+      const sensorMap = new Map(sensors.map(s => [s.sensorId as string, s]));
+
+      for (const resolution of multiSensorResolutions) {
+        if (resolution.sensorCount < 3 || !resolution.positionEstimate) continue;
+        const { lat, lon } = resolution.positionEstimate;
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+
+        const targetPx = proj(lon, lat);
+
+        // Draw thin lines from each contributing sensor to the resolved position
+        for (const sensorId of resolution.sensorIds) {
+          const sensor = sensorMap.get(sensorId);
+          if (!sensor) continue;
+          const sensorPx = proj(sensor.position.lon, sensor.position.lat);
+          const line = createSvgEl('line', {
+            x1: String(sensorPx.x), y1: String(sensorPx.y),
+            x2: String(targetPx.x), y2: String(targetPx.y),
+            stroke: '#00cccc', 'stroke-width': '1', 'stroke-opacity': '0.3',
+          });
+          svg.appendChild(line);
+        }
+      }
+    }
+
+    // Search mode sweep lines (dashed light blue from sensor in scan direction)
+    if (searchModeStates && searchModeStates.length > 0 && layerVisibility.sensors) {
+      const searchMap = new Map(searchModeStates.map(s => [s.sensorId, s]));
+      for (const sensor of sensors) {
+        if (sensor.sensorType !== 'eo') continue;
+        const searchState = searchMap.get(sensor.sensorId as string);
+        if (!searchState || !searchState.active) continue;
+
+        const { lon, lat } = sensor.position;
+        const endPos = geoOffset(lon, lat, searchState.currentAzimuth, 30000); // 30km line
+        const p1 = proj(lon, lat);
+        const p2 = proj(endPos[0], endPos[1]);
+        const line = createSvgEl('line', {
+          x1: String(p1.x), y1: String(p1.y),
+          x2: String(p2.x), y2: String(p2.y),
+          stroke: '#44aaff', 'stroke-width': '2', 'stroke-opacity': '0.5',
+          'stroke-dasharray': '8,4',
+        });
+        svg.appendChild(line);
+
+        // Small "SEARCH" label near sensor
+        const labelX = p1.x + (p2.x - p1.x) * 0.15;
+        const labelY = p1.y + (p2.y - p1.y) * 0.15;
+        const label = createSvgEl('text', {
+          x: String(labelX),
+          y: String(labelY - 6),
+          'font-size': '9',
+          'font-family': 'monospace',
+          fill: '#44aaff',
+          'fill-opacity': '0.7',
+          'text-anchor': 'start',
+          'pointer-events': 'none',
+        });
+        label.textContent = 'SEARCH';
+        svg.appendChild(label);
       }
     }
 
@@ -310,7 +543,17 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
       }
     }
 
-    // Draw tracks as circles
+    // Build set of multi-sensor resolved track IDs for diamond markers
+    const multiSensorTrackIds = new Set<string>();
+    if (multiSensorResolutions) {
+      for (const r of multiSensorResolutions) {
+        if (r.sensorCount >= 3 && r.method === 'multi-sensor') {
+          multiSensorTrackIds.add(r.trackId);
+        }
+      }
+    }
+
+    // Draw tracks as circles (or diamonds for multi-sensor resolved tracks)
     if (showTracks || showTrackLabels) {
       for (const track of tracks) {
         const { lon, lat } = track.state;
@@ -318,21 +561,44 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
 
         const px = proj(lon, lat);
         const color = statusColor(track.status);
+        const isMultiSensor = multiSensorTrackIds.has(track.systemTrackId as string);
 
         if (showTracks) {
           const el = document.createElement('div');
-          el.style.cssText = `
-            position:absolute; left:${px.x - 6}px; top:${px.y - 6}px;
-            width:12px; height:12px; border-radius:50%; background:${color};
-            border:2px solid #fff; z-index:22; cursor:pointer;
-            pointer-events:auto;
-          `;
-          el.title = `${shortTrackLabel(track)} — ${track.status}`;
+          if (isMultiSensor) {
+            // Diamond shape for multi-sensor resolved tracks
+            el.style.cssText = `
+              position:absolute; left:${px.x - 7}px; top:${px.y - 7}px;
+              width:12px; height:12px; background:#00ffcc;
+              border:2px solid #fff; z-index:22; cursor:pointer;
+              pointer-events:auto; transform:rotate(45deg);
+            `;
+          } else {
+            el.style.cssText = `
+              position:absolute; left:${px.x - 6}px; top:${px.y - 6}px;
+              width:12px; height:12px; border-radius:50%; background:${color};
+              border:2px solid #fff; z-index:22; cursor:pointer;
+              pointer-events:auto;
+            `;
+          }
+          el.title = `${shortTrackLabel(track)} — ${track.status}${isMultiSensor ? ' (multi-sensor)' : ''}`;
           if (onSelectTrack) {
             const tId = track.systemTrackId as string;
             el.addEventListener('click', (e) => { e.stopPropagation(); onSelectTrack(tId); });
           }
           container.appendChild(el);
+
+          // REQ-5 Phase C: Green ring around converged tracks
+          if (convergedTrackIds?.has(track.systemTrackId as string)) {
+            const ring = document.createElement('div');
+            ring.style.cssText = `
+              position:absolute; left:${px.x - 9}px; top:${px.y - 9}px;
+              width:18px; height:18px; border-radius:50%;
+              border:2px solid #00cc44; z-index:21;
+              pointer-events:none;
+            `;
+            container.appendChild(ring);
+          }
         }
 
         if (showTrackLabels) {
@@ -348,7 +614,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
         }
       }
     }
-  }, [map, tracks, sensors, trailHistory, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth]);
+  }, [map, tracks, sensors, trailHistory, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds]);
 
   // Re-render on map move/zoom
   useEffect(() => {
@@ -373,7 +639,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
   // Re-render when data changes
   useEffect(() => {
     render();
-  }, [tracks, sensors, trailHistory, groundTruthTargets, showGroundTruth, render]);
+  }, [tracks, sensors, trailHistory, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds, render]);
 
   return (
     <>

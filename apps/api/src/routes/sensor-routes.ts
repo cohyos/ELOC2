@@ -16,4 +16,49 @@ export async function sensorRoutes(app: FastifyInstance) {
     }
     return reg;
   });
+
+  // GET /api/eo/search-status — Search mode state for all EO sensors
+  app.get('/api/eo/search-status', async () => {
+    return engine.getSearchModeStatus();
+  });
+
+  // POST /api/eo/search-control — Enable/disable search mode for a sensor
+  app.post<{
+    Body: {
+      sensorId: string;
+      enabled: boolean;
+      pattern?: 'sector' | 'raster';
+      scanStart?: number;
+      scanEnd?: number;
+    };
+  }>('/api/eo/search-control', async (request, reply) => {
+    const { sensorId, enabled, pattern, scanStart, scanEnd } = request.body;
+
+    if (!sensorId || typeof enabled !== 'boolean') {
+      return reply.code(400).send({ error: 'sensorId (string) and enabled (boolean) are required' });
+    }
+
+    const success = engine.setSearchModeControl(sensorId, {
+      enabled,
+      pattern,
+      scanStart,
+      scanEnd,
+    });
+
+    if (!success) {
+      return reply.code(404).send({ error: 'EO sensor not found', sensorId });
+    }
+
+    return { ok: true, sensorId, enabled };
+  });
+
+  // GET /api/eo/fov-overlaps — Current FOV overlap data between EO sensors
+  app.get('/api/eo/fov-overlaps', async () => {
+    return engine.getFovOverlaps();
+  });
+
+  // GET /api/eo/associations — Bearing-to-track associations with confidence scores
+  app.get('/api/eo/associations', async () => {
+    return engine.getBearingAssociations();
+  });
 }

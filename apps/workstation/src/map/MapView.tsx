@@ -20,6 +20,9 @@ import type { LayerVisibility, SelectionBearingRay } from '../stores/ui-store';
 import { useDemoStore } from '../stores/demo-store';
 import { applyBasicMode } from '../demo/BasicModeFilter';
 import { useGroundTruthStore } from '../stores/ground-truth-store';
+import { useCoverZoneStore } from '../stores/cover-zone-store';
+import { useFovOverlapStore } from '../stores/fov-overlap-store';
+import { useQualityStore } from '../stores/quality-store';
 
 export function MapView() {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -30,6 +33,7 @@ export function MapView() {
   const tracks = useTrackStore(s => s.tracks);
   const trailHistory = useTrackStore(s => s.trailHistory);
   const sensors = useSensorStore(s => s.sensors);
+  const searchModeStates = useSensorStore(s => s.searchModeStates);
   const selectTrack = useUiStore(s => s.selectTrack);
   const selectSensor = useUiStore(s => s.selectSensor);
   const selectCue = useUiStore(s => s.selectCue);
@@ -56,6 +60,20 @@ export function MapView() {
   const viewMode = useDemoStore(s => s.viewMode);
   const groundTruthTargets = useGroundTruthStore(s => s.targets);
   const showGroundTruth = useGroundTruthStore(s => s.showGroundTruth);
+  const coverZones = useCoverZoneStore(s => s.coverZones);
+  const fovOverlaps = useFovOverlapStore(s => s.fovOverlaps);
+  const bearingAssociations = useFovOverlapStore(s => s.bearingAssociations);
+  const multiSensorResolutions = useFovOverlapStore(s => s.multiSensorResolutions);
+  const convergenceStates = useQualityStore(s => s.convergenceStates);
+
+  // Derive set of converged track IDs for DebugOverlay
+  const convergedTrackIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const cs of convergenceStates) {
+      if (cs.converged) ids.add(cs.trackId);
+    }
+    return ids;
+  }, [convergenceStates]);
 
   // Initialize map
   useEffect(() => {
@@ -514,6 +532,12 @@ export function MapView() {
           onSelectSensor={selectSensor}
           groundTruthTargets={groundTruthTargets}
           showGroundTruth={showGroundTruth}
+          coverZones={coverZones}
+          searchModeStates={searchModeStates}
+          fovOverlaps={fovOverlaps}
+          bearingAssociations={bearingAssociations}
+          multiSensorResolutions={multiSensorResolutions}
+          convergedTrackIds={convergedTrackIds}
         />
       )}
     </div>

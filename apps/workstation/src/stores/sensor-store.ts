@@ -1,17 +1,27 @@
 import { create } from 'zustand';
 import type { SensorState } from '@eloc2/domain';
 
+export interface SearchModeStateWS {
+  sensorId: string;
+  active: boolean;
+  pattern: 'sector' | 'raster';
+  currentAzimuth: number;
+}
+
 interface SensorStoreState {
   sensors: SensorState[];
+  searchModeStates: SearchModeStateWS[];
   loading: boolean;
   error: string | null;
 
   fetchSensors: () => Promise<void>;
   setSensors: (sensors: SensorState[]) => void;
+  setSearchModeStates: (states: SearchModeStateWS[]) => void;
 }
 
 export const useSensorStore = create<SensorStoreState>((set) => ({
   sensors: [],
+  searchModeStates: [],
   loading: false,
   error: null,
 
@@ -29,5 +39,9 @@ export const useSensorStore = create<SensorStoreState>((set) => ({
 
   setSensors: (sensors: SensorState[]) => {
     set({ sensors });
+  },
+
+  setSearchModeStates: (states: SearchModeStateWS[]) => {
+    set({ searchModeStates: states });
   },
 }));

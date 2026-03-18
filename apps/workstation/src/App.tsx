@@ -26,6 +26,8 @@ import { AnnotationOverlay } from './demo/AnnotationOverlay';
 import { NarrationPanel } from './demo/NarrationPanel';
 import { MetricsOverlay } from './demo/MetricsOverlay';
 import { ResizeHandle } from './components/ResizeHandle';
+import { QualityMetricsPanel } from './quality/QualityMetricsPanel';
+import { DeploymentView } from './deployment/DeploymentView';
 
 // Panel size defaults (must match ui-store defaults)
 const DEFAULT_RIGHT_PANEL_WIDTH = 380;
@@ -71,6 +73,7 @@ function DefaultPanel() {
   const tasks = useTaskStore(s => s.tasks);
   const registrationStates = useTaskStore(s => s.registrationStates);
   const fusionModes = useTaskStore(s => s.fusionModes);
+  const eoModuleStatus = useTaskStore(s => s.eoModuleStatus);
   const selectView = useUiStore(s => s.setDetailView);
 
   const radarCount = sensors.filter(s => s.sensorType === 'radar').length;
@@ -119,6 +122,21 @@ function DefaultPanel() {
         <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Active Tasks</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{activeTasks}</span></div>
         <button onClick={() => selectView('tasks')} style={{ marginTop: '6px', background: '#333', color: '#aaa', border: 'none', padding: '4px 12px', borderRadius: '3px', cursor: 'pointer', fontSize: '11px', width: '100%' }}>View Tasks</button>
       </div>
+      {eoModuleStatus && (
+        <div style={{ marginBottom: '16px' }}>
+          <div style={sectionTitle}>EO Module (REQ-16)</div>
+          <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Mode</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: eoModuleStatus.mode === 'tracking' ? '#00cc44' : eoModuleStatus.mode === 'searching' ? '#ffcc00' : eoModuleStatus.mode === 'mixed' ? '#4a9eff' : '#888' }}>{eoModuleStatus.mode}</span></div>
+          <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Active Pipelines</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{eoModuleStatus.activePipelines.length}</span></div>
+          <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Enriched Tracks</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{eoModuleStatus.enrichedTrackCount}</span></div>
+          <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Ticks</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{eoModuleStatus.tickCount}</span></div>
+          {eoModuleStatus.activePipelines.length > 0 && (
+            <>
+              <div style={row}><span style={{ color: '#ff8800', fontSize: '12px' }}>Sub-pixel</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{eoModuleStatus.activePipelines.filter(p => p.pipeline === 'sub-pixel').length}</span></div>
+              <div style={row}><span style={{ color: '#aa44ff', fontSize: '12px' }}>Image</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{eoModuleStatus.activePipelines.filter(p => p.pipeline === 'image').length}</span></div>
+            </>
+          )}
+        </div>
+      )}
       <div style={{ marginBottom: '16px' }}>
         <div style={sectionTitle}>Build Info</div>
         <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Git SHA</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{__APP_REVISION__}</span></div>
@@ -126,6 +144,76 @@ function DefaultPanel() {
         <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Built</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{__BUILD_TIMESTAMP__}</span></div>
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// EO Module Status Badge (REQ-16)
+// ---------------------------------------------------------------------------
+
+function EoModuleBadge() {
+  const eoModuleStatus = useTaskStore(s => s.eoModuleStatus);
+  if (!eoModuleStatus) return null;
+
+  const modeColors: Record<string, string> = {
+    idle: '#888',
+    tracking: '#00cc44',
+    searching: '#ffcc00',
+    mixed: '#4a9eff',
+  };
+
+  const modeColor = modeColors[eoModuleStatus.mode] ?? '#888';
+  const pipelineCount = eoModuleStatus.activePipelines.length;
+  const subPixelCount = eoModuleStatus.activePipelines.filter(p => p.pipeline === 'sub-pixel').length;
+  const imageCount = eoModuleStatus.activePipelines.filter(p => p.pipeline === 'image').length;
+
+  const tooltipLines = [
+    `EO Module: ${eoModuleStatus.mode}`,
+    `Pipelines: ${pipelineCount} (${subPixelCount} sub-pixel, ${imageCount} image)`,
+    `Enriched tracks: ${eoModuleStatus.enrichedTrackCount}`,
+    `Ticks: ${eoModuleStatus.tickCount}`,
+    `Sensors: ${eoModuleStatus.sensorAllocations.length}`,
+  ];
+  const allocByMode = eoModuleStatus.sensorAllocations.reduce(
+    (acc, a) => { acc[a.mode] = (acc[a.mode] || 0) + 1; return acc; },
+    {} as Record<string, number>,
+  );
+  for (const [mode, count] of Object.entries(allocByMode)) {
+    tooltipLines.push(`  ${mode}: ${count}`);
+  }
+
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '4px',
+        background: '#1a2a1a',
+        border: `1px solid ${modeColor}44`,
+        borderRadius: '3px',
+        padding: '2px 8px',
+        fontSize: '10px',
+        fontWeight: 600,
+        color: modeColor,
+        cursor: 'help',
+        letterSpacing: '0.3px',
+      }}
+      title={tooltipLines.join('\n')}
+    >
+      <span style={{
+        width: '6px',
+        height: '6px',
+        borderRadius: '50%',
+        background: modeColor,
+        display: 'inline-block',
+      }} />
+      EO Module: {eoModuleStatus.mode}
+      {pipelineCount > 0 && (
+        <span style={{ color: '#aaa', fontWeight: 400 }}>
+          ({pipelineCount})
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -151,7 +239,7 @@ const btnBase = (isMobile: boolean): React.CSSProperties => ({
 
 export function App() {
   const isMobile = useIsMobile();
-  const [view, setView] = useState<'workstation' | 'editor'>('workstation');
+  const [view, setView] = useState<'workstation' | 'editor' | 'deployment'>('workstation');
   const detailView = useUiStore(s => s.detailView);
   const detailPanelOpen = useUiStore(s => s.detailPanelOpen);
   const timelinePanelOpen = useUiStore(s => s.timelinePanelOpen);
@@ -195,6 +283,25 @@ export function App() {
   const [simElapsed, setSimElapsed] = useState(0);
   const [currentScenarioId, setCurrentScenarioId] = useState('');
   const [availableScenarios, setAvailableScenarios] = useState<Array<{ id: string; name: string; description: string }>>([]);
+  const [reportGenerating, setReportGenerating] = useState(false);
+  const [reportUrl, setReportUrl] = useState<string | null>(null);
+
+  const handleGenerateReport = useCallback(async () => {
+    setReportGenerating(true);
+    setReportUrl(null);
+    try {
+      const res = await fetch('/api/report/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ format: 'md' }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setReportUrl(data.downloadUrl);
+      }
+    } catch { /* ignore */ }
+    setReportGenerating(false);
+  }, []);
 
   // Fetch available scenarios on mount
   useEffect(() => {
@@ -308,6 +415,10 @@ export function App() {
     return <ScenarioEditor onBack={() => setView('workstation')} />;
   }
 
+  if (view === 'deployment') {
+    return <DeploymentView onBack={() => setView('workstation')} />;
+  }
+
   if (isMobile) return <MobileLayout />;
 
   // ─── Desktop Layout ───────────────────────────────────────────────────
@@ -357,6 +468,7 @@ export function App() {
           </select>
         )}
         <button style={{ ...btn, background: '#2a2a4e', color: '#aa88ff', border: '1px solid #aa88ff44' }} onClick={() => setView('editor')}>Editor</button>
+        <button style={{ ...btn, background: '#2a2a4e', color: '#44ddaa', border: '1px solid #44ddaa44' }} onClick={() => setView('deployment')}>Deploy</button>
         <button
           style={{ ...btn, background: demoActive ? '#4a9eff' : '#2a2a4e', color: demoActive ? '#fff' : '#4a9eff', border: '1px solid #4a9eff44' }}
           onClick={() => {
@@ -370,6 +482,15 @@ export function App() {
           }}
           title="Presenter Dashboard (Ctrl+D)"
         >Demo</button>
+        <button
+          style={{ ...btn, background: reportGenerating ? '#555' : '#2a4e2a', color: '#88ff88', border: '1px solid #88ff8844', opacity: reportGenerating ? 0.6 : 1 }}
+          onClick={reportGenerating ? undefined : handleGenerateReport}
+          disabled={reportGenerating}
+          title="Generate scenario report (Markdown)"
+        >{reportGenerating ? 'Generating...' : 'Report'}</button>
+        {reportUrl && (
+          <a href={reportUrl} download style={{ fontSize: '10px', color: '#88ff88', textDecoration: 'underline', cursor: 'pointer' }} title="Download generated report">Download</a>
+        )}
 
         {/* Track summary with filter toggles */}
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center', fontSize: '11px' }}>
@@ -385,6 +506,9 @@ export function App() {
           ))}
           <span style={{ color: colors.textDim }}>{trackCount} total</span>
         </div>
+
+        {/* EO Module badge (REQ-16) */}
+        <EoModuleBadge />
 
         {/* Scenario controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '8px' }}>
@@ -463,6 +587,15 @@ export function App() {
                 store.setDetailView('investigation');
               }
             }}>Investigation</button>
+          <button style={{ ...btn, background: detailView === 'quality' && detailPanelOpen ? '#4a9eff' : '#333', color: detailView === 'quality' && detailPanelOpen ? '#fff' : '#aaa' }}
+            onClick={() => {
+              const store = useUiStore.getState();
+              if (store.detailView === 'quality' && store.detailPanelOpen) {
+                store.setDetailView('none');
+              } else {
+                store.setDetailView('quality');
+              }
+            }}>Quality</button>
           <button style={{ ...btn, background: showGroundTruth ? '#0a2a2a' : '#333', color: showGroundTruth ? '#00ffff' : '#aaa', border: showGroundTruth ? '1px solid #00ffff' : '1px solid transparent' }} onClick={toggleGroundTruth} title="Toggle ground truth overlay">
             GT
           </button>
@@ -512,6 +645,7 @@ export function App() {
           {detailView === 'cue' && <CueDetailPanel />}
           {detailView === 'group' && <GroupDetailPanel />}
           {detailView === 'geometry' && <GeometryDetailPanel />}
+          {detailView === 'quality' && <QualityMetricsPanel />}
           {(detailView === 'none' || (basicHiddenPanels.includes(detailView))) && <DefaultPanel />}
         </div>
       )}
@@ -719,6 +853,7 @@ function MobileLayout() {
             {detailView === 'cue' && <CueDetailPanel />}
             {detailView === 'group' && <GroupDetailPanel />}
             {detailView === 'geometry' && <GeometryDetailPanel />}
+            {detailView === 'quality' && <QualityMetricsPanel />}
             {detailView === 'none' && <DefaultPanel />}
           </div>
         )}

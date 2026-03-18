@@ -17,6 +17,8 @@ export type {
   BearingMeasurement,
   TargetClassification,
   ClassificationSource,
+  CoverType,
+  CoverZone,
 } from './common-types.js';
 
 // Source track

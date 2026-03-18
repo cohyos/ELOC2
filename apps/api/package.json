@@ -7,12 +7,14 @@
     "build": "tsup src/server.ts --format esm",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
-    "test": "echo No tests",
+    "test": "vitest run",
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@eloc2/deployment-planner": "workspace:*",
     "@eloc2/domain": "workspace:*",
     "@eloc2/eo-investigation": "workspace:*",
+    "@eloc2/eo-management": "workspace:*",
     "@eloc2/eo-tasking": "workspace:*",
     "@eloc2/events": "workspace:*",
     "@eloc2/fusion-core": "workspace:*",

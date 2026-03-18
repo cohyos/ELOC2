@@ -22,9 +22,79 @@ steps:
       - '--all-tags'
       - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}'
 
-  # NOTE: Unit tests, integration tests, and E2E tests are disabled during
-  # this deployment phase. Re-enable when CI stabilization is complete.
-  # See tests/integration/ and tests/e2e/ for available test suites.
+  # ── DISABLED: Unit tests inside built image ──────────────────────────────
+  # Re-enable when CI stabilization is complete.
+  # - name: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}'
+  #   entrypoint: 'sh'
+  #   args:
+  #     - '-c'
+  #     - 'cd /app && pnpm test'
+
+  # ── DISABLED: Copy built app to shared volume for E2E step ──────────────
+  # - name: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}'
+  #   entrypoint: 'sh'
+  #   args:
+  #     - '-c'
+  #     - 'cp -a /app/. /shared_app/'
+  #   volumes:
+  #     - name: 'app'
+  #       path: '/shared_app'
+
+  # ── DISABLED: E2E tests (API + scenarios + browser UI) ──────────────────
+  # API serves frontend static files when NODE_ENV=production
+  # - name: 'mcr.microsoft.com/playwright:v1.58.2-noble'
+  #   entrypoint: 'bash'
+  #   env:
+  #     - 'NODE_ENV=production'
+  #   args:
+  #     - '-c'
+  #     - |
+  #       set -e
+  #       cd /shared_app
+  #       NODE_ENV=production node apps/api/dist/server.js &
+  #       SERVER_PID=$$!
+  #       for i in $$(seq 1 30); do
+  #         if curl -sf http://localhost:3001/api/health > /dev/null 2>&1; then
+  #           echo "Server ready after $${i}s"
+  #           break
+  #         fi
+  #         sleep 1
+  #       done
+  #       HTTP_CODE=$$(curl -sf -o /dev/null -w "%{http_code}" http://localhost:3001/)
+  #       echo "Frontend check: HTTP $$HTTP_CODE"
+  #       cd /workspace
+  #       npm install --save-dev playwright @playwright/test ws tsx 2>&1 | tail -3
+  #       ./node_modules/.bin/playwright --version || { echo "FATAL: playwright not in node_modules/.bin"; exit 1; }
+  #       ./node_modules/.bin/playwright test --config=tests/e2e/playwright.config.ts \
+  #         --project=api --project=scenarios --project=desktop --project=mobile
+  #       TEST_EXIT=$$?
+  #       ./node_modules/.bin/tsx tests/e2e/reporting/html-dashboard.ts 2>/dev/null || true
+  #       kill $$SERVER_PID 2>/dev/null || true
+  #       exit $$TEST_EXIT
+  #   volumes:
+  #     - name: 'app'
+  #       path: '/shared_app'
+
+  # ── DISABLED: Upload QA report to Cloud Storage ─────────────────────────
+  # - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  #   entrypoint: 'bash'
+  #   args:
+  #     - '-c'
+  #     - |
+  #       BUCKET="gs://${PROJECT_ID}-qa-reports"
+  #       gsutil ls "$$BUCKET" 2>/dev/null || \
+  #         gsutil mb -l ${_REGION} "$$BUCKET" && \
+  #         gsutil iam ch allUsers:objectViewer "$$BUCKET" 2>/dev/null || true
+  #       BUILD_DIR="$$BUCKET/builds/${SHORT_SHA}"
+  #       if [ -f tests/e2e/output/qa-report.html ]; then
+  #         gsutil -h "Content-Type:text/html" cp tests/e2e/output/qa-report.html "$$BUILD_DIR/qa-report.html"
+  #         gsutil -h "Content-Type:application/json" cp tests/e2e/output/qa-report.json "$$BUILD_DIR/qa-report.json"
+  #         gsutil -h "Content-Type:text/html" cp tests/e2e/output/qa-report.html "$$BUCKET/latest/qa-report.html"
+  #         gsutil -h "Content-Type:application/json" cp tests/e2e/output/qa-report.json "$$BUCKET/latest/qa-report.json"
+  #         echo "QA Report uploaded to $$BUILD_DIR"
+  #       else
+  #         echo "No QA report found — skipping upload"
+  #       fi
 
   # Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'

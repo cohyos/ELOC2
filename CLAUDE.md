@@ -11,6 +11,9 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 - **Fusion**: `packages/fusion-core` — TrackManager, correlator, information-matrix fuser
 - **Geometry**: `packages/geometry` — Bearing-math, triangulator, quality-scorer, time-aligner
 - **Domain types**: `packages/domain` — SystemTrack, SensorState, Position3D, etc.
+- **EO Management**: `packages/eo-management` — Modular EO module (REQ-16): ingest, sub-pixel/image pipelines, mode controller
+- **Deployment Planner**: `packages/deployment-planner` — Sensor deployment optimization (REQ-15): grid, scorers, optimizer
+- **Reports**: `apps/api/src/reports/report-generator.ts` — Scenario report generation (REQ-12)
 
 ## Key Files
 - `apps/api/src/simulation/live-engine.ts` — Main simulation loop, WS broadcast, geometry & fusion integration
@@ -23,6 +26,20 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 - `apps/workstation/src/stores/track-store.ts` — Zustand track state
 - `apps/workstation/src/stores/ui-store.ts` — UI state (selected track, panels, replay time)
 - `apps/workstation/src/App.tsx` — Main layout, header, scenario controls
+- `apps/workstation/src/quality/QualityMetricsPanel.tsx` — Quality metrics + EO allocation display
+- `apps/workstation/src/investigation/InvestigationWindowPanel.tsx` — EO investigation detail view
+- `apps/workstation/src/stores/ground-truth-store.ts` — Ground truth target state
+- `apps/workstation/src/stores/quality-store.ts` — Quality metrics + allocation state
+- `apps/workstation/src/stores/cover-zone-store.ts` — Land cover zone state
+- `apps/workstation/src/deployment/DeploymentView.tsx` — Deployment planner view
+- `apps/workstation/src/deployment/deployment-store.ts` — Deployment planner state
+- `apps/api/src/routes/report-routes.ts` — Report generation API
+- `apps/api/src/routes/deployment-routes.ts` — Deployment planner API (7 endpoints)
+- `packages/eo-management/src/eo-module.ts` — EoManagementModule main class
+- `apps/workstation/src/components/ResizeHandle.tsx` — Draggable panel resize
+- `apps/api/src/routes/operator-routes.ts` — Operator override API (lock/release/classify/priority)
+- `apps/api/src/routes/quality-routes.ts` — Quality metrics + before/after + allocation API
+- `apps/api/src/simulation/state-machine.ts` — Simulation state machine (5 states)
 
 ## Data Flow
 1. `ScenarioRunner.step()` generates `SimulationEvent[]` (observations, bearings, faults)
@@ -59,8 +76,9 @@ The `Knowledge_Base_and_Agents_instructions/` folder contains **18 foundational 
 | `Claude_agent_build_prompts.md` | Detailed agent prompts with scope + done criteria | Agent execution |
 | `Chunk_index.md` | Index of all knowledge base chunks for retrieval | Reference |
 
-## Current Completion (as of 2026-03-17)
+## Current Completion (as of 2026-03-18)
 
+### Original Build Phases (0–9)
 | Phase | Status | Notes |
 |-------|--------|-------|
 | 0: Bootstrap | **Complete** | Monorepo builds, dev server works |
@@ -73,6 +91,19 @@ The `Knowledge_Base_and_Agents_instructions/` folder contains **18 foundational 
 | 7: Advanced Fusion | **Complete** | fusion-mode-selector active, conservative/centralized modes |
 | 8: Workstation | **~95%** | Map, panels, layers, dark mode, trails, actions, responsive layout |
 | 9: Scenarios | **Partial** | central-israel exists; no integration tests |
+
+### Corrections & Upgrades Plan Phases (1–7)
+See `Knowledge_Base_and_Agents_instructions/ELOC2_Corrections_and_Upgrades_Plan.md` for full details.
+
+| Phase | Status | Key Deliverables |
+|-------|--------|-----------------|
+| 1: Foundation | **Complete** | Build info (REQ-2), ground truth WS (REQ-1), classifications (REQ-7), state machine (REQ-13) |
+| 2: UI | **Complete** | Ground truth toggle, resizable panels (REQ-4), state-aware controls |
+| 3: EO Mgmt A | **Complete** | Dwell timer, target cycling, operator override API, investigation window, EO classification (REQ-5A) |
+| 4: Quality + Land | **Complete** | QualityAssessor (REQ-8), before/after EO (REQ-9), allocation criteria (REQ-10), cover zones (REQ-11) |
+| 5: EO Mgmt B | **Complete** | Search mode (REQ-5B), optimization loop (REQ-5C), FOV overlap + multi-target resolution (REQ-6) |
+| 6: Reports + Deploy | **Complete** | Report generator (REQ-12), deployment planner (REQ-15), EO module refactor (REQ-16) |
+| 7: Integration | **Complete** | E2E testing (33 integration + 12 deploy + 8 report + 9 perf = 62 new tests) |
 
 ## Recent Fixes (Rounds 1-3, branch `claude/eloc2-development-U3sup`)
 
@@ -143,8 +174,8 @@ The `Knowledge_Base_and_Agents_instructions/` folder contains **18 foundational 
 ## Development
 - Package manager: pnpm (v9.15.0) with workspaces
 - Build: `pnpm build` (uses Turbo)
-- Test: `pnpm test` (146+ tests, all passing)
-- Dev branch: `claude/eloc2-development-ElpmM`
+- Test: `pnpm test` (398+ tests, all passing)
+- Dev branch: `claude/eloc2-handover-deployment-XSyf8`
 - Dockerfile: 2-stage build, serves workstation static files from API on port 3001
 - Vite dev server on port 3000 proxies `/api` and `/ws` to 3001
 

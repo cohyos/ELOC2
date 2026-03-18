@@ -4,6 +4,9 @@ import { useSensorStore } from '../stores/sensor-store';
 import { useTaskStore } from '../stores/task-store';
 import { useInvestigationStore } from '../stores/investigation-store';
 import { useGroundTruthStore } from '../stores/ground-truth-store';
+import { useCoverZoneStore } from '../stores/cover-zone-store';
+import { useQualityStore } from '../stores/quality-store';
+import { useFovOverlapStore } from '../stores/fov-overlap-store';
 
 /**
  * ReplayController manages the WebSocket connection for real-time event streaming
@@ -150,6 +153,33 @@ export class ReplayController {
     }
     if (data.groundTruth && Array.isArray(data.groundTruth)) {
       useGroundTruthStore.getState().setTargets(data.groundTruth);
+    }
+    if (data.coverZones && Array.isArray(data.coverZones)) {
+      useCoverZoneStore.getState().setCoverZones(data.coverZones);
+    }
+    if (data.qualityMetrics && typeof data.qualityMetrics === 'object') {
+      useQualityStore.getState().setMetrics(data.qualityMetrics);
+    }
+    if (data.eoAllocationQuality && typeof data.eoAllocationQuality === 'object') {
+      useQualityStore.getState().setEoAllocationQuality(data.eoAllocationQuality);
+    }
+    if (data.convergenceStates && Array.isArray(data.convergenceStates)) {
+      useQualityStore.getState().setConvergenceStates(data.convergenceStates);
+    }
+    if (data.searchModeStates && Array.isArray(data.searchModeStates)) {
+      useSensorStore.getState().setSearchModeStates(data.searchModeStates);
+    }
+    if (data.fovOverlaps && Array.isArray(data.fovOverlaps)) {
+      useFovOverlapStore.getState().setFovOverlaps(data.fovOverlaps);
+    }
+    if (data.bearingAssociations && Array.isArray(data.bearingAssociations)) {
+      useFovOverlapStore.getState().setBearingAssociations(data.bearingAssociations);
+    }
+    if (data.multiSensorResolutions && Array.isArray(data.multiSensorResolutions)) {
+      useFovOverlapStore.getState().setMultiSensorResolutions(data.multiSensorResolutions);
+    }
+    if (data.eoModuleStatus && typeof data.eoModuleStatus === 'object') {
+      useTaskStore.getState().setEoModuleStatus(data.eoModuleStatus);
     }
     // Update replay time from simulation
     if (typeof data.simTimeSec === 'number') {
