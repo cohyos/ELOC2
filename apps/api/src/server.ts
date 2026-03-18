@@ -12,6 +12,7 @@ import { scenarioRoutes } from './routes/scenario-routes.js';
 import { registerEditorRoutes } from './routes/editor-routes.js';
 import { registerInvestigationRoutes } from './routes/investigation-routes.js';
 import { registerOperatorRoutes } from './routes/operator-routes.js';
+import { registerQualityRoutes } from './routes/quality-routes.js';
 import { wsEventsRoute } from './routes/ws-events.js';
 import { engine } from './simulation/live-engine.js';
 
@@ -58,6 +59,7 @@ await server.register(scenarioRoutes);
 registerEditorRoutes(server, engine);
 registerInvestigationRoutes(server, engine);
 registerOperatorRoutes(server, engine);
+registerQualityRoutes(server, engine);
 await server.register(wsEventsRoute);
 
 const start = async () => {
