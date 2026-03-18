@@ -11,6 +11,7 @@ import { groupRoutes } from './routes/group-routes.js';
 import { scenarioRoutes } from './routes/scenario-routes.js';
 import { registerEditorRoutes } from './routes/editor-routes.js';
 import { registerInvestigationRoutes } from './routes/investigation-routes.js';
+import { registerOperatorRoutes } from './routes/operator-routes.js';
 import { wsEventsRoute } from './routes/ws-events.js';
 import { engine } from './simulation/live-engine.js';
 
@@ -56,6 +57,7 @@ await server.register(groupRoutes);
 await server.register(scenarioRoutes);
 registerEditorRoutes(server, engine);
 registerInvestigationRoutes(server, engine);
+registerOperatorRoutes(server, engine);
 await server.register(wsEventsRoute);
 
 const start = async () => {

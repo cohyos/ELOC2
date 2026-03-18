@@ -173,16 +173,25 @@ function HypothesisChart({ hypotheses }: { hypotheses: Array<{ label: string; pr
 // Investigation card
 // ---------------------------------------------------------------------------
 
-function InvestigationCard({ inv, dimmed }: { inv: InvestigationSummary; dimmed?: boolean }) {
+function InvestigationCard({ inv, dimmed, selected, onSelect }: { inv: InvestigationSummary; dimmed?: boolean; selected?: boolean; onSelect?: () => void }) {
   const selectTrack = useUiStore(s => s.selectTrack);
 
   return (
-    <div style={{ ...styles.card, opacity: dimmed ? 0.6 : 1 }}>
+    <div
+      style={{
+        ...styles.card,
+        opacity: dimmed ? 0.6 : 1,
+        cursor: onSelect ? 'pointer' : 'default',
+        border: selected ? '1px solid #4a9eff' : styles.card.border,
+        boxShadow: selected ? '0 0 6px #4a9eff44' : 'none',
+      }}
+      onClick={onSelect}
+    >
       <div style={styles.row}>
         <span style={styles.label}>Track</span>
         <span
           style={{ ...styles.value, color: '#4a9eff', cursor: 'pointer' }}
-          onClick={() => selectTrack(inv.trackId)}
+          onClick={(e) => { e.stopPropagation(); selectTrack(inv.trackId); }}
         >
           {inv.trackId.slice(0, 8)}
         </span>
@@ -229,7 +238,7 @@ function InvestigationCard({ inv, dimmed }: { inv: InvestigationSummary; dimmed?
         <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
           <button
             style={styles.actionBtn('#4a9eff')}
-            onClick={() => selectTrack(inv.trackId)}
+            onClick={(e) => { e.stopPropagation(); selectTrack(inv.trackId); }}
           >
             View on Map
           </button>
@@ -381,6 +390,8 @@ export function InvestigationManagerPanel() {
   const activeInvestigations = useInvestigationStore(s => s.activeInvestigations);
   const resolvedInvestigations = useInvestigationStore(s => s.resolvedInvestigations);
   const fetchParameters = useInvestigationStore(s => s.fetchParameters);
+  const setInvestigationWindowTrackId = useUiStore(s => s.setInvestigationWindowTrackId);
+  const investigationWindowTrackId = useUiStore(s => s.investigationWindowTrackId);
 
   // Fetch parameters on mount
   useEffect(() => {
@@ -410,7 +421,12 @@ export function InvestigationManagerPanel() {
             <p style={styles.emptyText}>No active investigations</p>
           ) : (
             activeInvestigations.map(inv => (
-              <InvestigationCard key={inv.trackId} inv={inv} />
+              <InvestigationCard
+                key={inv.trackId}
+                inv={inv}
+                selected={inv.trackId === investigationWindowTrackId}
+                onSelect={() => setInvestigationWindowTrackId(inv.trackId)}
+              />
             ))
           )}
         </div>

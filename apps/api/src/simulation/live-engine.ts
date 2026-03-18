@@ -185,6 +185,15 @@ export class LiveEngine {
   /** Maps cueId → systemTrackId for cue-to-track lookup. */
   private cueToTrack = new Map<string, string>();
   private operatorPriorityTracks = new Set<string>();
+  /** Sensors locked by operator — excluded from auto-assignment */
+  private operatorLockedSensors = new Map<string, {
+    sensorId: string;
+    targetTrackId?: string;
+    position?: { lat: number; lon: number; alt: number };
+    lockedAt: number; // sim time
+  }>();
+  /** Track priority overrides (high/normal/low) */
+  private operatorTrackPriority = new Map<string, 'high' | 'normal' | 'low'>();
   /** Accumulates bearings per cueId within a tick for batch processing. */
   private pendingBearings = new Map<string, EoBearingObservation[]>();
   private lastEoTaskingSec = 0;
@@ -194,6 +203,32 @@ export class LiveEngine {
   private currentParameters: InvestigationParameters = { ...DEFAULT_INVESTIGATION_PARAMETERS, weights: { ...DEFAULT_INVESTIGATION_PARAMETERS.weights }, thresholds: { ...DEFAULT_INVESTIGATION_PARAMETERS.thresholds } };
   /** Formal event envelopes for validation runner. */
   private eventEnvelopes: EventEnvelope[] = [];
+
+  /** Dwell state: tracks how long each sensor has been dwelling on its current target */
+  private dwellState = new Map<string, {
+    sensorId: string;
+    targetTrackId: string;
+    dwellStartSec: number;      // sim time when dwell started
+    dwellDurationSec: number;    // configured dwell (default 15s)
+  }>();
+
+  /** Default dwell time in simulation seconds */
+  private static readonly DEFAULT_DWELL_SEC = 15;
+
+  /** Per-sensor dwell duration overrides (operator control) */
+  private dwellDurationOverrides = new Map<string, number>();
+
+  /** Revisit tracking: last investigation time per track */
+  private lastInvestigationTime = new Map<string, number>(); // trackId → sim time
+  /** Maximum revisit interval in sim seconds */
+  private static readonly MAX_REVISIT_INTERVAL_SEC = 60;
+
+  /** Cycling history: ordered list of targets each sensor has visited */
+  private cyclingHistory = new Map<string, Array<{
+    trackId: string;
+    startedSec: number;
+    endedSec: number;
+  }>>();
 
   constructor(scenarioId?: string) {
     this.scenario = (scenarioId ? getScenarioById(scenarioId) : undefined) ?? centralIsrael;
@@ -262,6 +297,35 @@ export class LiveEngine {
     }
 
     return result;
+  }
+
+  /** Look up the true classification of the target associated with a system track. */
+  private getTargetClassificationForTrack(
+    systemTrackId: string,
+  ): TargetClassification | undefined {
+    const track = this.state.tracks.find(
+      t => (t.systemTrackId as string) === systemTrackId,
+    );
+    if (!track) return undefined;
+
+    const groundTruth = this.getGroundTruth();
+    let bestTarget: (typeof groundTruth)[number] | null = null;
+    let bestDist = Infinity;
+    for (const gt of groundTruth) {
+      const dlat = gt.position.lat - track.state.lat;
+      const dlon = gt.position.lon - track.state.lon;
+      const dist = Math.sqrt(dlat * dlat + dlon * dlon);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestTarget = gt;
+      }
+    }
+
+    // Only use if reasonably close (within ~5 km ≈ 0.045 degrees)
+    if (bestTarget && bestDist < 0.045) {
+      return bestTarget.classification as TargetClassification | undefined;
+    }
+    return undefined;
   }
 
   /** Build a full snapshot payload identical to broadcastRap() format. */
@@ -344,7 +408,13 @@ export class LiveEngine {
       })),
       fusionModes: Object.fromEntries(this.fusionModePerSensor),
       investigationSummaries: this.getActiveInvestigations(),
+      dwellStates: this.getDwellStates(),
+      revisitSchedule: this.getRevisitSchedule(),
+      operatorOverrides: this.getOperatorOverrides(),
       groundTruth: this.getGroundTruth(),
+      cyclingHistories: Object.fromEntries(
+        [...this.cyclingHistory.entries()].map(([sensorId, history]) => [sensorId, history.slice(-5)]),
+      ),
     };
   }
 
@@ -467,6 +537,64 @@ export class LiveEngine {
   /** Returns formal EventEnvelope objects for use by the validation runner. */
   getEventEnvelopes(): EventEnvelope[] {
     return this.eventEnvelopes;
+  }
+
+  // ── Dwell & Revisit Public API ──────────────────────────────────────
+
+  /** Get current dwell states for all sensors */
+  getDwellStates(): Array<{ sensorId: string; targetTrackId: string; dwellStartSec: number; remainingSec: number }> {
+    const nowSec = this.state.elapsedSec;
+    const result: Array<{ sensorId: string; targetTrackId: string; dwellStartSec: number; remainingSec: number }> = [];
+    for (const [, dwell] of this.dwellState) {
+      const elapsed = nowSec - dwell.dwellStartSec;
+      const remaining = Math.max(0, dwell.dwellDurationSec - elapsed);
+      result.push({
+        sensorId: dwell.sensorId,
+        targetTrackId: dwell.targetTrackId,
+        dwellStartSec: dwell.dwellStartSec,
+        remainingSec: remaining,
+      });
+    }
+    return result;
+  }
+
+  /** Set dwell duration for a specific sensor (operator control) */
+  setDwellDuration(sensorId: string, durationSec: number): void {
+    this.dwellDurationOverrides.set(sensorId, Math.max(1, durationSec));
+    // If sensor is currently dwelling, update the active dwell's duration
+    const activeDwell = this.dwellState.get(sensorId);
+    if (activeDwell) {
+      activeDwell.dwellDurationSec = Math.max(1, durationSec);
+    }
+  }
+
+  /** Get revisit schedule */
+  getRevisitSchedule(): Array<{ trackId: string; lastInvestigatedSec: number; nextRevisitSec: number; overdue: boolean }> {
+    const nowSec = this.state.elapsedSec;
+    const result: Array<{ trackId: string; lastInvestigatedSec: number; nextRevisitSec: number; overdue: boolean }> = [];
+    for (const track of this.state.tracks) {
+      const trackId = track.systemTrackId as string;
+      const lastInv = this.lastInvestigationTime.get(trackId) ?? 0;
+      const nextRevisit = lastInv + LiveEngine.MAX_REVISIT_INTERVAL_SEC;
+      const overdue = nowSec > nextRevisit;
+      result.push({
+        trackId,
+        lastInvestigatedSec: lastInv,
+        nextRevisitSec: nextRevisit,
+        overdue,
+      });
+    }
+    return result;
+  }
+
+  /** Get cycling history for a sensor */
+  getCyclingHistory(sensorId: string): Array<{ trackId: string; startedSec: number; endedSec: number }> {
+    return this.cyclingHistory.get(sensorId) ?? [];
+  }
+
+  /** Get all cycling histories */
+  getAllCyclingHistories(): Map<string, Array<{ trackId: string; startedSec: number; endedSec: number }>> {
+    return this.cyclingHistory;
   }
 
   start(): void {
@@ -776,6 +904,12 @@ export class LiveEngine {
     this.lastEoTaskingSec = 0;
     this.fusionModePerSensor.clear();
     this.eventEnvelopes = [];
+    this.operatorLockedSensors.clear();
+    this.operatorTrackPriority.clear();
+    this.dwellState.clear();
+    this.dwellDurationOverrides.clear();
+    this.lastInvestigationTime.clear();
+    this.cyclingHistory.clear();
 
     this.state = this.buildInitialState();
   }
@@ -1101,7 +1235,14 @@ export class LiveEngine {
           // Single target confirmed — generate EO report
           const eoTrack = cueEoTracks[0];
           if (eoTrack && systemTrackId) {
-            const idResult = assessIdentification(eoTrack.bearing, eoTrack.imageQuality);
+            // Look up true classification from scenario ground truth
+            const trueClassification = this.getTargetClassificationForTrack(systemTrackId);
+            const idResult = assessIdentification(
+              eoTrack.bearing,
+              eoTrack.imageQuality,
+              undefined,
+              trueClassification,
+            );
             eoTrack.identificationSupport = idResult;
             const report = createEoReport({
               cueId: cueId as CueId,
@@ -1116,6 +1257,36 @@ export class LiveEngine {
 
             // Apply report to system track
             handleEoReport(report, this.trackManager, systemTrackId);
+
+            // Propagate EO classification to system track
+            if (idResult.type && idResult.type !== 'unidentified') {
+              const trackObj = this.state.tracks.find(
+                t => (t.systemTrackId as string) === systemTrackId,
+              );
+              if (trackObj) {
+                // Only update if EO confidence is higher than existing, or no existing classification
+                if (
+                  !trackObj.classification ||
+                  trackObj.classification === 'unknown' ||
+                  (trackObj.classificationConfidence ?? 0) < idResult.confidence
+                ) {
+                  trackObj.classification = idResult.type as TargetClassification;
+                  trackObj.classificationSource = 'eo_identification';
+                  trackObj.classificationConfidence = idResult.confidence;
+
+                  this.pushEvent(
+                    'track.classified',
+                    `Track ${systemTrackId.slice(0, 8)} classified as ${idResult.type} (${(idResult.confidence * 100).toFixed(0)}% confidence) via EO`,
+                    {
+                      systemTrackId,
+                      classification: idResult.type,
+                      confidence: idResult.confidence,
+                      source: 'eo_identification',
+                    },
+                  );
+                }
+              }
+            }
 
             this.pushEvent(
               'eo.report.received',
@@ -1256,6 +1427,185 @@ export class LiveEngine {
     return eoTrack;
   }
 
+  // ── EO Target Cycling ────────────────────────────────────────────────
+
+  /**
+   * Determine the next target for a sensor that just completed its dwell.
+   * Uses the same scoring logic but only for this specific sensor.
+   * Skips the track it just investigated (avoid ping-pong) unless it's the only option or overdue for revisit.
+   * Returns true if a new target was assigned, false otherwise.
+   */
+  private cycleToNextTarget(sensorId: string, previousTrackId: string): boolean {
+    const tracks = this.state.tracks;
+    const sensors = this.state.sensors;
+    const nowSec = this.state.elapsedSec;
+
+    const sensor = sensors.find(s => (s.sensorId as string) === sensorId);
+    if (!sensor || !sensor.online) return false;
+
+    // 1. Generate candidates for just this sensor
+    const candidates = generateCandidates(tracks, [sensor]);
+    if (candidates.length === 0) return false;
+
+    // 2. Score them (same as runEoTaskingCycle)
+    const groupBoostedTrackIds = new Set<string>(this.operatorPriorityTracks);
+    for (const group of this.unresolvedGroupsById.values()) {
+      if (group.status !== 'active') continue;
+      const systemTrackId = this.cueToTrack.get(group.parentCueId);
+      if (systemTrackId) groupBoostedTrackIds.add(systemTrackId);
+    }
+
+    const sensorOccupancy = new Map<string, number>();
+    for (const task of this.state.tasks) {
+      if (task.status === 'executing') {
+        sensorOccupancy.set(task.sensorId as string, (sensorOccupancy.get(task.sensorId as string) ?? 0) + 1);
+      }
+    }
+
+    // Get cycling history for anti-ping-pong penalties
+    const history = this.cyclingHistory.get(sensorId) ?? [];
+    const recentTargets = history.slice(-3).reverse(); // most recent first
+
+    const scoredCandidates = candidates.map(candidate => {
+      const trackId = candidate.systemTrack.systemTrackId as string;
+      const lastInvTime = this.lastInvestigationTime.get(trackId);
+      let timeSinceLastObs = 0;
+      if (lastInvTime !== undefined) {
+        timeSinceLastObs = nowSec - lastInvTime;
+      } else {
+        timeSinceLastObs = LiveEngine.MAX_REVISIT_INTERVAL_SEC;
+      }
+
+      const score = scoreCandidate(
+        candidate,
+        this.currentParameters.weights as ScoringWeights,
+        groupBoostedTrackIds,
+        sensorOccupancy,
+        undefined,
+        timeSinceLastObs,
+      );
+
+      // Apply operator track priority overrides
+      const trackPriority = this.operatorTrackPriority.get(trackId);
+      if (trackPriority === 'high') score.total += 5;
+      else if (trackPriority === 'low') score.total -= 3;
+
+      // 3. Anti-ping-pong: penalize recently-visited targets
+      const isOverdue = timeSinceLastObs > LiveEngine.MAX_REVISIT_INTERVAL_SEC;
+      if (!isOverdue) {
+        const penalties = [-3, -1.5, -0.5]; // most recent, second, third
+        for (let i = 0; i < recentTargets.length && i < penalties.length; i++) {
+          if (recentTargets[i].trackId === trackId) {
+            score.total += penalties[i];
+          }
+        }
+
+        // Also penalize the previous track (the one just completed)
+        if (trackId === previousTrackId) {
+          // Only apply if not already penalized via history (avoid double penalty)
+          const alreadyPenalized = recentTargets.some(r => r.trackId === previousTrackId);
+          if (!alreadyPenalized) {
+            score.total -= 3;
+          }
+        }
+      }
+
+      return { candidate, score };
+    });
+
+    // Sort by score descending
+    scoredCandidates.sort((a, b) => b.score.total - a.score.total);
+
+    // 4. Pick the highest-scoring candidate
+    const best = scoredCandidates[0];
+    if (!best || best.score.total <= 0) return false;
+
+    const track = tracks.find(t => t.systemTrackId === best.candidate.systemTrackId);
+    if (!track) return false;
+
+    // Skip if track already has a pending/active cue
+    const hasActiveCue = [...this.cueToTrack.entries()].some(
+      ([cueId, trackId]) => trackId === (best.candidate.systemTrackId as string) && this.activeCuesById.has(cueId),
+    );
+    if (hasActiveCue) return false;
+
+    // 5. Issue a new cue and create a task
+    const health = this.registrationService.getHealth(sensor.sensorId);
+    const qualityLevel = health?.spatialQuality ?? 'good';
+    const cue = issueCue(track, sensor, qualityLevel);
+
+    this.activeCuesById.set(cue.cueId, cue);
+    this.cueToTrack.set(cue.cueId, track.systemTrackId as string);
+
+    this.trackManager.setEoInvestigationStatus(track.systemTrackId, 'in_progress');
+
+    // 6. Start a new dwell
+    const dwellDuration = this.dwellDurationOverrides.get(sensorId)
+      ?? LiveEngine.DEFAULT_DWELL_SEC;
+    this.dwellState.set(sensorId, {
+      sensorId,
+      targetTrackId: track.systemTrackId as string,
+      dwellStartSec: nowSec,
+      dwellDurationSec: dwellDuration,
+    });
+
+    this.lastInvestigationTime.set(track.systemTrackId as string, nowSec);
+
+    // Create task record
+    const taskId = generateId() as TaskId;
+    const task: Task = {
+      taskId,
+      cueId: cue.cueId,
+      sensorId: sensor.sensorId,
+      systemTrackId: best.candidate.systemTrackId,
+      status: 'executing',
+      scoreBreakdown: best.score,
+      policyMode: this.currentParameters.policyMode,
+      operatorOverride: undefined,
+      createdAt: Date.now() as Timestamp,
+      completedAt: undefined,
+    };
+    this.state.tasks.push(task);
+
+    // Update sensor gimbal pointing
+    if (sensor.gimbal) {
+      sensor.gimbal.azimuthDeg = bearingDeg(
+        sensor.position.lat, sensor.position.lon,
+        track.state.lat, track.state.lon,
+      );
+      sensor.gimbal.currentTargetId = track.systemTrackId;
+    }
+
+    // Emit formal TaskDecided event for validation
+    this.eventEnvelopes.push({
+      ...createEventEnvelope('task.decided', 'live-engine', 'eo-tasking'),
+      eventType: 'task.decided',
+      data: {
+        taskId,
+        sensorId: sensor.sensorId,
+        systemTrackId: best.candidate.systemTrackId,
+        scoreBreakdown: best.score,
+        mode: this.currentParameters.policyMode,
+        operatorOverride: undefined,
+      },
+    } as any);
+
+    // 7. Log event: eo.cycling.next_target
+    this.pushEvent(
+      'eo.cycling.next_target',
+      `Cycling: ${sensorId} → track ${(track.systemTrackId as string).slice(0, 8)} (from ${previousTrackId.slice(0, 8)}, score ${best.score.total.toFixed(1)})`,
+      {
+        sensorId,
+        previousTrackId,
+        nextTrackId: track.systemTrackId,
+        score: best.score.total,
+        cueId: cue.cueId,
+      },
+    );
+
+    return true;
+  }
+
   // ── Phase 5: EO Tasking Cycle ─────────────────────────────────────────
 
   /**
@@ -1269,9 +1619,63 @@ export class LiveEngine {
   private runEoTaskingCycle(): void {
     const tracks = this.state.tracks;
     const sensors = this.state.sensors;
+    const nowSec = this.state.elapsedSec;
 
-    // 1. Generate candidates
-    const candidates = generateCandidates(tracks, sensors);
+    // ── Dwell management: check which sensors have completed their dwell ──
+    const sensorsStillDwelling = new Set<string>();
+    for (const [sensorId, dwell] of this.dwellState) {
+      const elapsed = nowSec - dwell.dwellStartSec;
+      if (elapsed >= dwell.dwellDurationSec) {
+        // Dwell completed — free this sensor for reassignment
+        this.dwellState.delete(sensorId);
+
+        // Record completed dwell in cycling history
+        if (!this.cyclingHistory.has(sensorId)) {
+          this.cyclingHistory.set(sensorId, []);
+        }
+        const history = this.cyclingHistory.get(sensorId)!;
+        history.push({
+          trackId: dwell.targetTrackId,
+          startedSec: dwell.dwellStartSec,
+          endedSec: nowSec,
+        });
+        // Keep last 20 entries per sensor
+        if (history.length > 20) {
+          this.cyclingHistory.set(sensorId, history.slice(-20));
+        }
+
+        this.pushEvent(
+          'eo.dwell.completed',
+          `Dwell completed: ${sensorId} on track ${dwell.targetTrackId.slice(0, 8)} after ${dwell.dwellDurationSec}s`,
+          { sensorId, targetTrackId: dwell.targetTrackId, dwellDurationSec: dwell.dwellDurationSec },
+        );
+
+        // Immediately cycle to next target
+        const cycled = this.cycleToNextTarget(sensorId, dwell.targetTrackId);
+        if (cycled) {
+          // Sensor is now dwelling on a new target — mark as still dwelling
+          sensorsStillDwelling.add(sensorId);
+        }
+        // If no target found, leave sensor free for normal assignment below
+      } else {
+        // Still dwelling — don't reassign this sensor
+        sensorsStillDwelling.add(sensorId);
+      }
+    }
+
+    // ── Update lastInvestigationTime for tracks with active EO investigations ──
+    for (const task of this.state.tasks) {
+      if (task.status === 'executing') {
+        this.lastInvestigationTime.set(task.systemTrackId as string, nowSec);
+      }
+    }
+
+    // 1. Generate candidates — exclude operator-locked sensors and sensors still dwelling
+    const availableSensors = sensors.filter(s =>
+      !this.operatorLockedSensors.has(s.sensorId as string) &&
+      !sensorsStillDwelling.has(s.sensorId as string),
+    );
+    const candidates = generateCandidates(tracks, availableSensors);
     if (candidates.length === 0) return;
 
     // 2. Score each candidate
@@ -1291,8 +1695,43 @@ export class LiveEngine {
       }
     }
 
+    // Track which tracks have already had revisit events logged this cycle
+    const revisitTriggeredTracks = new Set<string>();
+
     const scoredDecisions = candidates.map(candidate => {
-      const score = scoreCandidate(candidate, this.currentParameters.weights as ScoringWeights, groupBoostedTrackIds, sensorOccupancy);
+      // Compute revisit boost: time since last investigation for this track
+      const trackId = candidate.systemTrack.systemTrackId as string;
+      const lastInvTime = this.lastInvestigationTime.get(trackId);
+      let timeSinceLastObs = 0;
+      if (lastInvTime !== undefined) {
+        timeSinceLastObs = nowSec - lastInvTime;
+      } else {
+        // Never investigated — treat as maximally overdue for revisit
+        timeSinceLastObs = LiveEngine.MAX_REVISIT_INTERVAL_SEC;
+      }
+
+      // If overdue for revisit, log a revisit trigger event (once per track per cycle)
+      if (timeSinceLastObs > LiveEngine.MAX_REVISIT_INTERVAL_SEC && !revisitTriggeredTracks.has(trackId)) {
+        revisitTriggeredTracks.add(trackId);
+        this.pushEvent(
+          'eo.revisit.triggered',
+          `Revisit overdue for track ${trackId.slice(0, 8)} (${timeSinceLastObs.toFixed(0)}s since last investigation)`,
+          { trackId, timeSinceLastObs },
+        );
+      }
+
+      const score = scoreCandidate(
+        candidate,
+        this.currentParameters.weights as ScoringWeights,
+        groupBoostedTrackIds,
+        sensorOccupancy,
+        undefined, // activeBearings
+        timeSinceLastObs,
+      );
+      // Apply operator track priority overrides
+      const trackPriority = this.operatorTrackPriority.get(candidate.systemTrackId as string);
+      if (trackPriority === 'high') score.total += 5;
+      else if (trackPriority === 'low') score.total -= 3;
       return { candidate, score };
     });
 
@@ -1336,6 +1775,19 @@ export class LiveEngine {
 
       // Mark track as under EO investigation
       this.trackManager.setEoInvestigationStatus(track.systemTrackId, 'in_progress');
+
+      // Record dwell start for this sensor
+      const dwellDuration = this.dwellDurationOverrides.get(assignment.sensorId as string)
+        ?? LiveEngine.DEFAULT_DWELL_SEC;
+      this.dwellState.set(assignment.sensorId as string, {
+        sensorId: assignment.sensorId as string,
+        targetTrackId: track.systemTrackId as string,
+        dwellStartSec: nowSec,
+        dwellDurationSec: dwellDuration,
+      });
+
+      // Record investigation time for revisit tracking
+      this.lastInvestigationTime.set(track.systemTrackId as string, nowSec);
 
       // Create task record
       const task: Task = {
@@ -1827,11 +2279,119 @@ export class LiveEngine {
     return track;
   }
 
+  /** Lock a sensor to a target or position, preventing auto-reassignment. */
+  lockSensor(sensorId: string, targetId?: string, position?: { lat: number; lon: number; alt: number }): boolean {
+    const sensor = this.state.sensors.find(s => s.sensorId === sensorId);
+    if (!sensor) return false;
+
+    this.operatorLockedSensors.set(sensorId, {
+      sensorId,
+      targetTrackId: targetId,
+      position,
+      lockedAt: this.state.elapsedSec,
+    });
+
+    // Point gimbal immediately if target exists
+    if (sensor.gimbal && targetId) {
+      const track = this.state.tracks.find(t => t.systemTrackId === targetId);
+      if (track) {
+        sensor.gimbal.azimuthDeg = bearingDeg(
+          sensor.position.lat, sensor.position.lon,
+          track.state.lat, track.state.lon,
+        );
+        sensor.gimbal.currentTargetId = targetId;
+      }
+    } else if (sensor.gimbal && position) {
+      sensor.gimbal.azimuthDeg = bearingDeg(
+        sensor.position.lat, sensor.position.lon,
+        position.lat, position.lon,
+      );
+      sensor.gimbal.currentTargetId = undefined;
+    }
+
+    this.pushEvent('operator.sensor.locked', `Sensor ${sensorId} locked by operator`, {
+      sensorId,
+      targetTrackId: targetId,
+      position,
+    });
+    return true;
+  }
+
+  /** Release a locked sensor back to auto mode. */
+  releaseSensor(sensorId: string): boolean {
+    if (!this.operatorLockedSensors.has(sensorId)) return false;
+    this.operatorLockedSensors.delete(sensorId);
+    this.pushEvent('operator.sensor.released', `Sensor ${sensorId} released by operator`, { sensorId });
+    return true;
+  }
+
+  /** Set priority level for a track. */
+  setTrackPriority(trackId: string, priority: 'high' | 'normal' | 'low'): boolean {
+    const track = this.state.tracks.find(t => t.systemTrackId === trackId);
+    if (!track) return false;
+
+    if (priority === 'normal') {
+      this.operatorTrackPriority.delete(trackId);
+      this.operatorPriorityTracks.delete(trackId);
+    } else {
+      this.operatorTrackPriority.set(trackId, priority);
+      if (priority === 'high') {
+        this.operatorPriorityTracks.add(trackId);
+      } else {
+        this.operatorPriorityTracks.delete(trackId);
+      }
+    }
+
+    this.pushEvent('operator.priority.set', `Track ${trackId} priority set to ${priority}`, { trackId, priority });
+    return true;
+  }
+
+  /** Get all active operator overrides. */
+  getOperatorOverrides(): {
+    lockedSensors: Array<{ sensorId: string; targetTrackId?: string; position?: { lat: number; lon: number; alt: number }; lockedAt: number }>;
+    priorityTracks: Array<{ trackId: string; priority: 'high' | 'normal' | 'low' }>;
+    manualClassifications: Array<{ trackId: string; classification: string; confidence: number }>;
+  } {
+    const lockedSensors = [...this.operatorLockedSensors.values()];
+    const priorityTracks = [...this.operatorTrackPriority.entries()].map(([trackId, priority]) => ({ trackId, priority }));
+    const manualClassifications = this.state.tracks
+      .filter(t => t.classificationSource === 'operator' && t.classification)
+      .map(t => ({
+        trackId: t.systemTrackId as string,
+        classification: t.classification!,
+        confidence: t.classificationConfidence ?? 1.0,
+      }));
+    return { lockedSensors, priorityTracks, manualClassifications };
+  }
+
   /** Update EO gimbal azimuth to continuously track assigned targets. */
   private updateGimbalPointing(): void {
     const trackMap = new Map(this.state.tracks.map(t => [t.systemTrackId, t]));
     for (const sensor of this.state.sensors) {
-      if (!sensor.gimbal || !sensor.gimbal.currentTargetId || !sensor.online) continue;
+      if (!sensor.gimbal || !sensor.online) continue;
+
+      // Operator-locked sensors: continuously point at locked target/position
+      const lockInfo = this.operatorLockedSensors.get(sensor.sensorId as string);
+      if (lockInfo) {
+        if (lockInfo.targetTrackId) {
+          const track = trackMap.get(lockInfo.targetTrackId);
+          if (track && track.status !== 'dropped') {
+            sensor.gimbal.azimuthDeg = bearingDeg(
+              sensor.position.lat, sensor.position.lon,
+              track.state.lat, track.state.lon,
+            );
+            sensor.gimbal.currentTargetId = lockInfo.targetTrackId;
+          }
+        } else if (lockInfo.position) {
+          sensor.gimbal.azimuthDeg = bearingDeg(
+            sensor.position.lat, sensor.position.lon,
+            lockInfo.position.lat, lockInfo.position.lon,
+          );
+        }
+        continue; // Skip normal auto-tracking for locked sensors
+      }
+
+      if (!sensor.gimbal.currentTargetId) continue;
       const track = trackMap.get(sensor.gimbal.currentTargetId as string);
       if (!track || track.status === 'dropped') {
         // Target lost — clear assignment
@@ -1978,6 +2538,15 @@ export class LiveEngine {
       fusionModes: Object.fromEntries(this.fusionModePerSensor),
       // Investigation summaries for InvestigationManagerPanel
       investigationSummaries: this.getActiveInvestigations(),
+      // Dwell and revisit state
+      dwellStates: this.getDwellStates(),
+      revisitSchedule: this.getRevisitSchedule(),
+      // Operator overrides
+      operatorOverrides: this.getOperatorOverrides(),
+      // EO cycling histories (last 5 per sensor)
+      cyclingHistories: Object.fromEntries(
+        [...this.cyclingHistory.entries()].map(([sensorId, history]) => [sensorId, history.slice(-5)]),
+      ),
     });
 
     // Separate ground truth broadcast

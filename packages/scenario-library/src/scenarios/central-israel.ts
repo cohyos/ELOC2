@@ -104,7 +104,7 @@ export const centralIsrael: ScenarioDefinition = {
       targetId: 'TGT-1',
       name: 'Straight Inbound North',
       description: 'Straight-line inbound from north at 8 000 m altitude.',
-      classification: 'unknown',
+      classification: 'civilian_aircraft',
       startTime: 0,
       waypoints: [
         { time: 0, position: { lat: 32.5, lon: 34.6, alt: 8000 }, velocity: { vx: 0, vy: -130, vz: 0 } },
@@ -117,7 +117,7 @@ export const centralIsrael: ScenarioDefinition = {
       targetId: 'TGT-2',
       name: 'NE Inbound with Turn',
       description: 'Approaches from NE, turns west at T+200 s. 6 000 m altitude.',
-      classification: 'unknown',
+      classification: 'fighter_aircraft',
       startTime: 30,
       waypoints: [
         { time: 0, position: { lat: 32.3, lon: 35.2, alt: 6000 }, velocity: { vx: -80, vy: -100, vz: 0 } },
@@ -145,7 +145,7 @@ export const centralIsrael: ScenarioDefinition = {
       targetId: 'TGT-4a',
       name: 'Formation Pair A',
       description: 'Formation pair member A, closely spaced with TGT-4b (0.05 deg).',
-      classification: 'unknown',
+      classification: 'uav',
       startTime: 120,
       waypoints: [
         { time: 0, position: { lat: 32.2, lon: 34.4, alt: 5000 }, velocity: { vx: 30, vy: -100, vz: 0 } },
@@ -158,7 +158,7 @@ export const centralIsrael: ScenarioDefinition = {
       targetId: 'TGT-4b',
       name: 'Formation Pair B',
       description: 'Formation pair member B, closely spaced with TGT-4a (0.05 deg).',
-      classification: 'unknown',
+      classification: 'uav',
       startTime: 120,
       waypoints: [
         { time: 0, position: { lat: 32.25, lon: 34.4, alt: 5000 }, velocity: { vx: 30, vy: -100, vz: 0 } },
@@ -184,7 +184,7 @@ export const centralIsrael: ScenarioDefinition = {
       targetId: 'TGT-6',
       name: 'Perpendicular Crosser',
       description: 'Crosses N→S through the sensor triangle at 7 000 m.',
-      classification: 'unknown',
+      classification: 'helicopter',
       startTime: 240,
       waypoints: [
         { time: 0, position: { lat: 32.0, lon: 34.5, alt: 7000 }, velocity: { vx: 0, vy: -120, vz: 0 } },
@@ -197,7 +197,7 @@ export const centralIsrael: ScenarioDefinition = {
       targetId: 'TGT-7',
       name: 'Eastern Intruder',
       description: 'Approaches from the east, enters EO-1 FOV at the same time as TGT-2.',
-      classification: 'unknown',
+      classification: 'civilian_aircraft',
       startTime: 300,
       waypoints: [
         { time: 0, position: { lat: 31.0, lon: 35.3, alt: 6000 }, velocity: { vx: -100, vy: 0, vz: 0 } },

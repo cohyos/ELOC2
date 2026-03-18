@@ -11,6 +11,7 @@ import { useTaskStore } from './stores/task-store';
 import { useUiStore } from './stores/ui-store';
 import { TaskPanel } from './task-panel/TaskPanel';
 import { InvestigationManagerPanel } from './investigation/InvestigationManagerPanel';
+import { InvestigationWindowPanel } from './investigation/InvestigationWindowPanel';
 import { CueDetailPanel } from './cue-detail/CueDetailPanel';
 import { GroupDetailPanel } from './group-detail/GroupDetailPanel';
 import { GeometryDetailPanel } from './geometry-detail/GeometryDetailPanel';
@@ -507,6 +508,7 @@ export function App() {
           {detailView === 'sensor' && <SensorDetailPanel />}
           {!basicHiddenPanels.includes('tasks') && detailView === 'tasks' && <TaskPanel />}
           {!basicHiddenPanels.includes('investigation') && detailView === 'investigation' && <InvestigationManagerPanel />}
+          {detailView === 'eo-window' && <InvestigationWindowPanel />}
           {detailView === 'cue' && <CueDetailPanel />}
           {detailView === 'group' && <GroupDetailPanel />}
           {detailView === 'geometry' && <GeometryDetailPanel />}
@@ -713,6 +715,7 @@ function MobileLayout() {
             {detailView === 'sensor' && <SensorDetailPanel />}
             {detailView === 'tasks' && <TaskPanel />}
             {detailView === 'investigation' && <InvestigationManagerPanel />}
+            {detailView === 'eo-window' && <InvestigationWindowPanel />}
             {detailView === 'cue' && <CueDetailPanel />}
             {detailView === 'group' && <GroupDetailPanel />}
             {detailView === 'geometry' && <GeometryDetailPanel />}
