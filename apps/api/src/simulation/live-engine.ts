@@ -292,6 +292,35 @@ export class LiveEngine {
     return result;
   }
 
+  /** Look up the true classification of the target associated with a system track. */
+  private getTargetClassificationForTrack(
+    systemTrackId: string,
+  ): TargetClassification | undefined {
+    const track = this.state.tracks.find(
+      t => (t.systemTrackId as string) === systemTrackId,
+    );
+    if (!track) return undefined;
+
+    const groundTruth = this.getGroundTruth();
+    let bestTarget: (typeof groundTruth)[number] | null = null;
+    let bestDist = Infinity;
+    for (const gt of groundTruth) {
+      const dlat = gt.position.lat - track.state.lat;
+      const dlon = gt.position.lon - track.state.lon;
+      const dist = Math.sqrt(dlat * dlat + dlon * dlon);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestTarget = gt;
+      }
+    }
+
+    // Only use if reasonably close (within ~5 km ≈ 0.045 degrees)
+    if (bestTarget && bestDist < 0.045) {
+      return bestTarget.classification as TargetClassification | undefined;
+    }
+    return undefined;
+  }
+
   /** Build a full snapshot payload identical to broadcastRap() format. */
   getFullSnapshot(): Record<string, unknown> {
     const tracks = this.state.tracks;
@@ -372,6 +401,7 @@ export class LiveEngine {
       })),
       fusionModes: Object.fromEntries(this.fusionModePerSensor),
       investigationSummaries: this.getActiveInvestigations(),
+      operatorOverrides: this.getOperatorOverrides(),
       groundTruth: this.getGroundTruth(),
     };
   }
@@ -495,6 +525,54 @@ export class LiveEngine {
   /** Returns formal EventEnvelope objects for use by the validation runner. */
   getEventEnvelopes(): EventEnvelope[] {
     return this.eventEnvelopes;
+  }
+
+  // ── Dwell & Revisit Public API ──────────────────────────────────────
+
+  /** Get current dwell states for all sensors */
+  getDwellStates(): Array<{ sensorId: string; targetTrackId: string; dwellStartSec: number; remainingSec: number }> {
+    const nowSec = this.state.elapsedSec;
+    const result: Array<{ sensorId: string; targetTrackId: string; dwellStartSec: number; remainingSec: number }> = [];
+    for (const [, dwell] of this.dwellState) {
+      const elapsed = nowSec - dwell.dwellStartSec;
+      const remaining = Math.max(0, dwell.dwellDurationSec - elapsed);
+      result.push({
+        sensorId: dwell.sensorId,
+        targetTrackId: dwell.targetTrackId,
+        dwellStartSec: dwell.dwellStartSec,
+        remainingSec: remaining,
+      });
+    }
+    return result;
+  }
+
+  /** Set dwell duration for a specific sensor (operator control) */
+  setDwellDuration(sensorId: string, durationSec: number): void {
+    this.dwellDurationOverrides.set(sensorId, Math.max(1, durationSec));
+    // If sensor is currently dwelling, update the active dwell's duration
+    const activeDwell = this.dwellState.get(sensorId);
+    if (activeDwell) {
+      activeDwell.dwellDurationSec = Math.max(1, durationSec);
+    }
+  }
+
+  /** Get revisit schedule */
+  getRevisitSchedule(): Array<{ trackId: string; lastInvestigatedSec: number; nextRevisitSec: number; overdue: boolean }> {
+    const nowSec = this.state.elapsedSec;
+    const result: Array<{ trackId: string; lastInvestigatedSec: number; nextRevisitSec: number; overdue: boolean }> = [];
+    for (const track of this.state.tracks) {
+      const trackId = track.systemTrackId as string;
+      const lastInv = this.lastInvestigationTime.get(trackId) ?? 0;
+      const nextRevisit = lastInv + LiveEngine.MAX_REVISIT_INTERVAL_SEC;
+      const overdue = nowSec > nextRevisit;
+      result.push({
+        trackId,
+        lastInvestigatedSec: lastInv,
+        nextRevisitSec: nextRevisit,
+        overdue,
+      });
+    }
+    return result;
   }
 
   start(): void {
@@ -804,6 +882,8 @@ export class LiveEngine {
     this.lastEoTaskingSec = 0;
     this.fusionModePerSensor.clear();
     this.eventEnvelopes = [];
+    this.operatorLockedSensors.clear();
+    this.operatorTrackPriority.clear();
 
     this.state = this.buildInitialState();
   }
@@ -1129,7 +1209,14 @@ export class LiveEngine {
           // Single target confirmed — generate EO report
           const eoTrack = cueEoTracks[0];
           if (eoTrack && systemTrackId) {
-            const idResult = assessIdentification(eoTrack.bearing, eoTrack.imageQuality);
+            // Look up true classification from scenario ground truth
+            const trueClassification = this.getTargetClassificationForTrack(systemTrackId);
+            const idResult = assessIdentification(
+              eoTrack.bearing,
+              eoTrack.imageQuality,
+              undefined,
+              trueClassification,
+            );
             eoTrack.identificationSupport = idResult;
             const report = createEoReport({
               cueId: cueId as CueId,
@@ -1144,6 +1231,36 @@ export class LiveEngine {
 
             // Apply report to system track
             handleEoReport(report, this.trackManager, systemTrackId);
+
+            // Propagate EO classification to system track
+            if (idResult.type && idResult.type !== 'unidentified') {
+              const trackObj = this.state.tracks.find(
+                t => (t.systemTrackId as string) === systemTrackId,
+              );
+              if (trackObj) {
+                // Only update if EO confidence is higher than existing, or no existing classification
+                if (
+                  !trackObj.classification ||
+                  trackObj.classification === 'unknown' ||
+                  (trackObj.classificationConfidence ?? 0) < idResult.confidence
+                ) {
+                  trackObj.classification = idResult.type as TargetClassification;
+                  trackObj.classificationSource = 'eo_identification';
+                  trackObj.classificationConfidence = idResult.confidence;
+
+                  this.pushEvent(
+                    'track.classified',
+                    `Track ${systemTrackId.slice(0, 8)} classified as ${idResult.type} (${(idResult.confidence * 100).toFixed(0)}% confidence) via EO`,
+                    {
+                      systemTrackId,
+                      classification: idResult.type,
+                      confidence: idResult.confidence,
+                      source: 'eo_identification',
+                    },
+                  );
+                }
+              }
+            }
 
             this.pushEvent(
               'eo.report.received',
@@ -1297,9 +1414,38 @@ export class LiveEngine {
   private runEoTaskingCycle(): void {
     const tracks = this.state.tracks;
     const sensors = this.state.sensors;
+    const nowSec = this.state.elapsedSec;
 
-    // 1. Generate candidates — exclude operator-locked sensors
-    const availableSensors = sensors.filter(s => !this.operatorLockedSensors.has(s.sensorId as string));
+    // ── Dwell management: check which sensors have completed their dwell ──
+    const sensorsStillDwelling = new Set<string>();
+    for (const [sensorId, dwell] of this.dwellState) {
+      const elapsed = nowSec - dwell.dwellStartSec;
+      if (elapsed >= dwell.dwellDurationSec) {
+        // Dwell completed — free this sensor for reassignment
+        this.dwellState.delete(sensorId);
+        this.pushEvent(
+          'eo.dwell.completed',
+          `Dwell completed: ${sensorId} on track ${dwell.targetTrackId.slice(0, 8)} after ${dwell.dwellDurationSec}s`,
+          { sensorId, targetTrackId: dwell.targetTrackId, dwellDurationSec: dwell.dwellDurationSec },
+        );
+      } else {
+        // Still dwelling — don't reassign this sensor
+        sensorsStillDwelling.add(sensorId);
+      }
+    }
+
+    // ── Update lastInvestigationTime for tracks with active EO investigations ──
+    for (const task of this.state.tasks) {
+      if (task.status === 'executing') {
+        this.lastInvestigationTime.set(task.systemTrackId as string, nowSec);
+      }
+    }
+
+    // 1. Generate candidates — exclude operator-locked sensors and sensors still dwelling
+    const availableSensors = sensors.filter(s =>
+      !this.operatorLockedSensors.has(s.sensorId as string) &&
+      !sensorsStillDwelling.has(s.sensorId as string),
+    );
     const candidates = generateCandidates(tracks, availableSensors);
     if (candidates.length === 0) return;
 
@@ -1320,8 +1466,39 @@ export class LiveEngine {
       }
     }
 
+    // Track which tracks have already had revisit events logged this cycle
+    const revisitTriggeredTracks = new Set<string>();
+
     const scoredDecisions = candidates.map(candidate => {
-      let score = scoreCandidate(candidate, this.currentParameters.weights as ScoringWeights, groupBoostedTrackIds, sensorOccupancy);
+      // Compute revisit boost: time since last investigation for this track
+      const trackId = candidate.systemTrack.systemTrackId as string;
+      const lastInvTime = this.lastInvestigationTime.get(trackId);
+      let timeSinceLastObs = 0;
+      if (lastInvTime !== undefined) {
+        timeSinceLastObs = nowSec - lastInvTime;
+      } else {
+        // Never investigated — treat as maximally overdue for revisit
+        timeSinceLastObs = LiveEngine.MAX_REVISIT_INTERVAL_SEC;
+      }
+
+      // If overdue for revisit, log a revisit trigger event (once per track per cycle)
+      if (timeSinceLastObs > LiveEngine.MAX_REVISIT_INTERVAL_SEC && !revisitTriggeredTracks.has(trackId)) {
+        revisitTriggeredTracks.add(trackId);
+        this.pushEvent(
+          'eo.revisit.triggered',
+          `Revisit overdue for track ${trackId.slice(0, 8)} (${timeSinceLastObs.toFixed(0)}s since last investigation)`,
+          { trackId, timeSinceLastObs },
+        );
+      }
+
+      let score = scoreCandidate(
+        candidate,
+        this.currentParameters.weights as ScoringWeights,
+        groupBoostedTrackIds,
+        sensorOccupancy,
+        undefined, // activeBearings
+        timeSinceLastObs,
+      );
       // Apply operator track priority overrides
       const trackPriority = this.operatorTrackPriority.get(candidate.systemTrackId as string);
       if (trackPriority === 'high') score += 5;
@@ -1369,6 +1546,19 @@ export class LiveEngine {
 
       // Mark track as under EO investigation
       this.trackManager.setEoInvestigationStatus(track.systemTrackId, 'in_progress');
+
+      // Record dwell start for this sensor
+      const dwellDuration = this.dwellDurationOverrides.get(assignment.sensorId as string)
+        ?? LiveEngine.DEFAULT_DWELL_SEC;
+      this.dwellState.set(assignment.sensorId as string, {
+        sensorId: assignment.sensorId as string,
+        targetTrackId: track.systemTrackId as string,
+        dwellStartSec: nowSec,
+        dwellDurationSec: dwellDuration,
+      });
+
+      // Record investigation time for revisit tracking
+      this.lastInvestigationTime.set(track.systemTrackId as string, nowSec);
 
       // Create task record
       const task: Task = {
@@ -1949,7 +2139,30 @@ export class LiveEngine {
   private updateGimbalPointing(): void {
     const trackMap = new Map(this.state.tracks.map(t => [t.systemTrackId, t]));
     for (const sensor of this.state.sensors) {
-      if (!sensor.gimbal || !sensor.gimbal.currentTargetId || !sensor.online) continue;
+      if (!sensor.gimbal || !sensor.online) continue;
+
+      // Operator-locked sensors: continuously point at locked target/position
+      const lockInfo = this.operatorLockedSensors.get(sensor.sensorId as string);
+      if (lockInfo) {
+        if (lockInfo.targetTrackId) {
+          const track = trackMap.get(lockInfo.targetTrackId);
+          if (track && track.status !== 'dropped') {
+            sensor.gimbal.azimuthDeg = bearingDeg(
+              sensor.position.lat, sensor.position.lon,
+              track.state.lat, track.state.lon,
+            );
+            sensor.gimbal.currentTargetId = lockInfo.targetTrackId;
+          }
+        } else if (lockInfo.position) {
+          sensor.gimbal.azimuthDeg = bearingDeg(
+            sensor.position.lat, sensor.position.lon,
+            lockInfo.position.lat, lockInfo.position.lon,
+          );
+        }
+        continue; // Skip normal auto-tracking for locked sensors
+      }
+
+      if (!sensor.gimbal.currentTargetId) continue;
       const track = trackMap.get(sensor.gimbal.currentTargetId as string);
       if (!track || track.status === 'dropped') {
         // Target lost — clear assignment
@@ -2096,6 +2309,8 @@ export class LiveEngine {
       fusionModes: Object.fromEntries(this.fusionModePerSensor),
       // Investigation summaries for InvestigationManagerPanel
       investigationSummaries: this.getActiveInvestigations(),
+      // Operator overrides
+      operatorOverrides: this.getOperatorOverrides(),
     });
 
     // Separate ground truth broadcast
