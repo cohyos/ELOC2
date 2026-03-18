@@ -5,6 +5,7 @@ import {
   getReport,
   addSnapshot,
 } from '../reports/report-generator.js';
+import { markdownToPdf } from '../reports/pdf-generator.js';
 
 /**
  * REQ-12: Report generation API routes.
@@ -12,12 +13,12 @@ import {
 export function registerReportRoutes(app: FastifyInstance, engine: LiveEngine) {
   // POST /api/report/generate — Generate a scenario report
   app.post<{
-    Body: { format?: 'md'; sections?: string[] };
+    Body: { format?: 'md' | 'pdf'; sections?: string[] };
   }>('/api/report/generate', async (request, reply) => {
     const { format = 'md', sections } = request.body ?? {};
 
-    if (format !== 'md') {
-      return reply.code(400).send({ error: 'Only "md" format is currently supported' });
+    if (format !== 'md' && format !== 'pdf') {
+      return reply.code(400).send({ error: 'Supported formats: "md", "pdf"' });
     }
 
     try {
@@ -63,6 +64,20 @@ export function registerReportRoutes(app: FastifyInstance, engine: LiveEngine) {
     const report = getReport(request.params.id);
     if (!report) {
       return reply.code(404).send({ error: 'Report not found' });
+    }
+
+    const requestedFormat = (request.query as any)?.format ?? 'md';
+
+    if (requestedFormat === 'pdf') {
+      try {
+        const pdfBuffer = await markdownToPdf(report.content);
+        const filename = `eloc2-report-${new Date(report.generatedAt).toISOString().slice(0, 10)}.pdf`;
+        reply.header('Content-Type', 'application/pdf');
+        reply.header('Content-Disposition', `attachment; filename="${filename}"`);
+        return pdfBuffer;
+      } catch (err: any) {
+        return reply.code(500).send({ error: 'PDF generation failed', details: err.message });
+      }
     }
 
     const filename = `eloc2-report-${new Date(report.generatedAt).toISOString().slice(0, 10)}.md`;

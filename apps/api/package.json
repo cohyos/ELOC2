@@ -26,7 +26,8 @@
     "@eloc2/simulator": "workspace:*",
     "@fastify/static": "^9.0.0",
     "@fastify/websocket": "^11.0.0",
-    "fastify": "^5.2.0"
+    "fastify": "^5.2.0",
+    "pdfmake": "^0.3.7"
   },
   "devDependencies": {
     "tsup": "^8.3.0",

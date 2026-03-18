@@ -137,4 +137,48 @@ export function registerDeploymentRoutes(app: FastifyInstance) {
     }
     return deployment;
   });
+
+  // POST /api/deployment/export-to-scenario — Export deployment as scenario sensor config
+  // Takes a deployment result and converts placed sensors to a scenario-compatible format.
+  // User can then override sensor positions before running the scenario.
+  app.post<{
+    Body: {
+      deploymentId?: string;
+      placedSensors?: PlacedSensor[];
+      scenarioName?: string;
+      durationSec?: number;
+    };
+  }>('/api/deployment/export-to-scenario', async (request, reply) => {
+    let sensors: PlacedSensor[];
+
+    if (request.body.deploymentId) {
+      const deployment = savedDeployments.get(request.body.deploymentId);
+      if (!deployment) {
+        reply.code(404);
+        return { error: 'Deployment not found' };
+      }
+      sensors = deployment.result.placedSensors;
+    } else if (request.body.placedSensors) {
+      sensors = request.body.placedSensors;
+    } else {
+      reply.code(400);
+      return { error: 'Must provide either deploymentId or placedSensors' };
+    }
+
+    // Convert placed sensors to scenario SensorDefinition format
+    const sensorDefinitions = exportToSensorDefinitions(sensors);
+    const scenarioId = `deployment-${Date.now()}`;
+
+    return {
+      id: scenarioId,
+      name: request.body.scenarioName ?? 'Deployment Export',
+      description: `Scenario generated from deployment with ${sensors.length} sensors`,
+      durationSec: request.body.durationSec ?? 600,
+      policyMode: 'auto_with_veto',
+      sensors: sensorDefinitions,
+      targets: [],  // User adds targets via scenario editor or injection
+      faults: [],
+      operatorActions: [],
+    };
+  });
 }
