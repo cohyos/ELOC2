@@ -3,7 +3,7 @@ import { useDemoStore } from '../stores/demo-store';
 import { TOUR_STEPS } from './guided-tour-steps';
 
 export function NarrationPanel() {
-  const { active, showNarrationPanel, narrativeMode, tourStep, totalSteps, nextStep, prevStep } =
+  const { active, showNarrationPanel, narrativeMode, tourStep, totalSteps, nextStep, prevStep, toggleNarrationPanel } =
     useDemoStore();
 
   if (!active || !showNarrationPanel) return null;
@@ -45,9 +45,26 @@ export function NarrationPanel() {
         }}
       >
         <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>Narration</span>
-        <span style={{ fontSize: '11px', color: '#4a9eff', fontWeight: 600 }}>
-          {tourStep}/{totalSteps}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '11px', color: '#4a9eff', fontWeight: 600 }}>
+            {tourStep}/{totalSteps}
+          </span>
+          <button
+            onClick={toggleNarrationPanel}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#888',
+              fontSize: '18px',
+              cursor: 'pointer',
+              padding: '0 4px',
+              lineHeight: 1,
+            }}
+            title="Close narration panel"
+          >
+            &times;
+          </button>
+        </div>
       </div>
 
       {/* Scrollable step list */}

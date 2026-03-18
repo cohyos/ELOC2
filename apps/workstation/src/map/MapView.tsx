@@ -18,7 +18,7 @@ import { DebugOverlay } from './DebugOverlay';
 import { LayerFilterPanel } from './LayerFilterPanel';
 import type { LayerVisibility, SelectionBearingRay } from '../stores/ui-store';
 import { useDemoStore } from '../stores/demo-store';
-import { applyBasicMode, applyFullMode } from '../demo/BasicModeFilter';
+import { applyBasicMode } from '../demo/BasicModeFilter';
 
 export function MapView() {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -368,13 +368,13 @@ export function MapView() {
     }
   }, [selectedTrackId, tracks, sensors, eoTracks, activeCues, layersReady]);
 
-  // Sync MapLibre layer visibility with store
+  // Sync MapLibre layer visibility with store + demo mode
   useEffect(() => {
     if (!map.current || !layersReady) return;
     const m = map.current;
 
     const layerMap: Array<[keyof LayerVisibility, string[]]> = [
-      ['tracks', ['system-tracks-layer', 'track-eo-badge', 'investigation-rings-layer', 'investigation-rings-outer']],
+      ['tracks', ['system-tracks-layer', 'track-eo-badge', 'track-trails-layer', 'track-selection-pulse-layer', 'investigation-rings-layer', 'investigation-rings-outer']],
       ['trackLabels', ['system-tracks-labels']],
       ['trackEllipses', ['track-ellipses-layer']],
       ['sensors', ['sensors-layer', 'sensors-degraded', 'sensors-highlight-ring']],
@@ -388,6 +388,7 @@ export function MapView() {
       ['ambiguityMarkers', ['ambiguity-markers-layer', 'ambiguity-markers-pulse']],
     ];
 
+    // First: apply layer filter visibility from store
     for (const [key, layerIds] of layerMap) {
       const vis = layerVisibility[key] ? 'visible' : 'none';
       for (const id of layerIds) {
@@ -398,17 +399,12 @@ export function MapView() {
         } catch { /* layer may not exist */ }
       }
     }
-  }, [layerVisibility, layersReady]);
 
-  // Demo mode: toggle between basic and full ELOC2 view
-  useEffect(() => {
-    if (!map.current || !layersReady || !demoActive) return;
-    if (viewMode === 'basic') {
-      applyBasicMode(map.current);
-    } else {
-      applyFullMode(map.current);
+    // Then: if demo is active in basic mode, force-hide EO/advanced layers on top
+    if (demoActive && viewMode === 'basic') {
+      applyBasicMode(m);
     }
-  }, [viewMode, demoActive, layersReady]);
+  }, [layerVisibility, layersReady, demoActive, viewMode]);
 
   // Spawn-target map click interception
   const spawnMarkerRef = useRef<maplibregl.Marker | null>(null);
@@ -464,15 +460,22 @@ export function MapView() {
     }
   }, [spawnTargetPosition]);
 
-  // DebugOverlay: only show when ?debug=1 URL param is set
+  // DebugOverlay: always show HTML markers (bypasses GL layers entirely)
+  // This verifies data flow independently of MapLibre layer init.
+  // Gate behind ?nodebug to disable if needed.
   const showDebugOverlay = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
   const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
 
+  // Set map instance as soon as the map exists (don't wait for layersReady)
   useEffect(() => {
-    if (layersReady && map.current) {
-      setMapInstance(map.current);
+    if (map.current && !mapInstance) {
+      // Small delay to ensure map is rendered
+      const t = setTimeout(() => {
+        if (map.current) setMapInstance(map.current);
+      }, 500);
+      return () => clearTimeout(t);
     }
-  }, [layersReady]);
+  }, [layersReady, mapInstance]);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -484,17 +487,6 @@ export function MapView() {
           filter: darkMode ? 'none' : 'brightness(0.85) saturate(0.7)',
         }}
       />
-      {/* Layer init status indicator — visible until layers are ready */}
-      {!layersReady && (
-        <div style={{
-          position: 'absolute', bottom: 40, left: '50%', transform: 'translateX(-50%)',
-          background: '#ff6600cc', color: '#fff', padding: '6px 16px', borderRadius: '4px',
-          fontSize: '12px', fontWeight: 600, zIndex: 100, pointerEvents: 'none',
-          fontFamily: 'system-ui, sans-serif',
-        }}>
-          Initializing map layers...
-        </div>
-      )}
       <LayerFilterPanel />
       {showDebugOverlay && (
         <DebugOverlay
@@ -502,10 +494,10 @@ export function MapView() {
           tracks={tracks}
           sensors={sensors}
           layersReady={layersReady}
-          showTracks={layerVisibility.tracks}
-          showTrackLabels={layerVisibility.trackLabels}
-          showSensors={layerVisibility.sensors}
-          showSensorLabels={layerVisibility.sensorLabels}
+          showTracks={true}
+          showTrackLabels={true}
+          showSensors={true}
+          showSensorLabels={true}
         />
       )}
     </div>

@@ -382,7 +382,7 @@ export function App() {
             onClick={() => {
               const store = useUiStore.getState();
               if (store.detailView === 'tasks' && store.detailPanelOpen) {
-                store.toggleDetailPanel();
+                store.setDetailView('none');
               } else {
                 store.setDetailView('tasks');
               }
@@ -391,7 +391,7 @@ export function App() {
             onClick={() => {
               const store = useUiStore.getState();
               if (store.detailView === 'investigation' && store.detailPanelOpen) {
-                store.toggleDetailPanel();
+                store.setDetailView('none');
               } else {
                 store.setDetailView('investigation');
               }
