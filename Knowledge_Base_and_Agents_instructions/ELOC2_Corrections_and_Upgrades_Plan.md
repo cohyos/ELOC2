@@ -9,6 +9,7 @@
 
 ## Table of Contents
 
+0. [Requirements Traceability Matrix](#0-requirements-traceability-matrix)
 1. [Executive Summary](#1-executive-summary)
 2. [Current System State](#2-current-system-state)
 3. [Requirements Breakdown (Items 1–16)](#3-requirements-breakdown)
@@ -17,6 +18,29 @@
 6. [Agent Work Breakdown](#6-agent-work-breakdown)
 7. [Testing Strategy](#7-testing-strategy)
 8. [Risk Register](#8-risk-register)
+
+---
+
+## 0. Requirements Traceability Matrix
+
+| # | Original Request | REQ ID | Plan Section | Phase | Depth | Key Deliverables |
+|---|-----------------|--------|-------------|-------|-------|------------------|
+| 1 | Ground Truth / World Picture toggle | REQ-1 | §3 REQ-1 | Phase 1 (backend), Phase 2 (frontend) | Full design | Separate `groundTruth.update` WS channel; toggle button; dual rendering mode (truth vs system); true target positions from scenario waypoints |
+| 2 | Build version identification | REQ-2 | §3 REQ-2 | Phase 1 | Full design | Git SHA, build timestamp, branch name, build number displayed in header + System Overview panel; Vite defines + Dockerfile build args + cloudbuild.yaml substitutions |
+| 3 | LOROP_MPS map comparison (research only) | REQ-3 | §4 (full section) | Phase 2 (prep) | Full comparison delivered | 11-aspect comparison table; rendering pipeline, layer modularity, data flow, interactivity, state management, decimation, performance — with recommendations (no impl without approval) |
+| 4 | Resizable panel layout (drag borders) | REQ-4 | §3 REQ-4 | Phase 2 | Full design | `<ResizeHandle>` components; mouse/touch drag; CSS Grid state-driven sizes; localStorage persistence; min/max constraints (250–600px right, 80–400px timeline) |
+| 5 | Autonomous EO management with operator override | REQ-5 | §3 REQ-5, §16.3–16.5 | Phase 3 (cycling/dwell/override), Phase 5 (search/optimization) | Deep design in 3 sub-phases | **Phase A**: dwell timer, revisit scheduler, target cycling, operator lock/release API, investigation window with true data. **Phase B**: search mode (wide/narrow scan patterns, auto-detect→track transition). **Phase C**: optimization loop, convergence-based reallocation, triangulation data display. Scoring enhanced with predicted detection range, geometry quality, ASR threat level, convergence rate |
+| 6 | Multi-target FOV resolution | REQ-6 | §3 REQ-6 | Phase 5 | Full design | FOV overlap detector (geometric intersection); multi-target bearing association (combinatorial matching); 3D resolution per target with information-matrix fusion for >2 sensors; association confidence scoring; graceful degradation for fast targets without FOV overlap |
+| 7 | Target classifications taxonomy | REQ-7 | §3 REQ-7, Appendix D | Phase 1 (types), Phase 3 (integration) | Full design | 14-type taxonomy (`civilian_aircraft` through `drone`); `TargetDefinition.classification` in scenario; `SystemTrack.classification` + `classificationSource` + `classificationConfidence`; operator classify API; EO identification integration |
+| 8 | Algorithm quality testing (ground truth vs system) | REQ-8 | §3 REQ-8, §16.5 | Phase 4 | Full design | `QualityAssessor` module; metrics: position error, classification accuracy, coverage %, false track rate, time to first detection, time to confirmed 3D; real-time panel + API endpoint |
+| 9 | Before/after EO comparison | REQ-9 | §3 REQ-9, §16.5 | Phase 4 | Full design | Snapshot at EO investigation start; per-track: covariance reduction, position refinement, classification gain; aggregate picture quality score; comparison panel |
+| 10 | EO allocation quality criteria | REQ-10 | §3 REQ-10, §16.5 | Phase 4 | Full design | 7 criteria: coverage efficiency, geometry optimality (avg intersection angle), dwell efficiency, revisit timeliness, triangulation success rate, sensor utilization, priority alignment |
+| 11 | Land cover / terrain integration | REQ-11 | §3 REQ-11 | Phase 4 | Phase 1 design (simple mask) + Phase 2 interface | Phase 1: `CoverZone` in scenario (polygon + cover type + detection probability modifier); applied to radar + EO sensor models; displayed on map. Phase 2 interface: designed for LOS + clutter model extensibility |
+| 12 | Scenario report export (PDF/MD) | REQ-12 | §3 REQ-12 | Phase 6 | Full design | Backend `ReportGenerator` (PDFKit for PDF, template for MD); frontend map screenshot capture (html2canvas); report includes: scenario def, ground truth, performance timeline, EO summary, quality metrics, snapshots, before/after, conclusions. API: generate/snapshot/download |
+| 13 | Scenario/timeline dependency management | REQ-13 | §3 REQ-13 | Phase 1 (backend), Phase 2 (frontend) | Full design | `SimulationStateMachine` with 5 states (idle/running/paused/seeking/resetting); transition rules preventing conflicts; API returns 409 on invalid operations; frontend disables invalid buttons |
+| 14 | Implementation stages with verification | REQ-14 | §5 (7 phases) | All | Full plan | 7 phases, each ending with joint verification checkpoint. Quality gate: no phase starts until previous passes. Per-phase acceptance criteria defined |
+| 15 | EO sensor deployment planning module | REQ-15 | §3 REQ-15 (expanded) | Phase 6 | **Deep design** — algorithm, UI layout, API, package structure | Parallel to scenario editor; inputs: scanned area, threat corridors, constraint zones (inclusion/exclusion), sensor inventory, terrain, required Pd; **Optimization**: grid discretization → per-cell scoring (coverage × geometry × threat × terrain − redundancy) → greedy placement → LP refinement → validation; **Interactive**: click-to-place with live scoring, drag-to-reposition, hybrid manual+auto workflow; **Export**: `SensorDeployment` → `ScenarioDefinition.sensors`; 7 API endpoints; dedicated package + frontend view |
+| 16 | Modular EO management architecture | REQ-16 | §3 REQ-16 (expanded) | Phase 5 (refactor), Phase 6 (finalize) | **Deep design** — full architecture, interfaces, sub-modules, pipeline design | **Architecture**: C4ISR bus → EO Module (add-on) → enriched tracks back to C4ISR; clean interface boundary (`EoManagementModule`); **Sub-pixel pipeline**: bearing + SNR + temporal signature + kinematic classification (confidence 0.2–0.6); **Image pipeline**: shape + size + features + direct classification (confidence 0.5–0.95); **Dynamic transition**: `angular_size ≥ IFOV` triggers sub-pixel→image, reversible; target size table for 14 classifications; **Module structure**: 6 sub-modules (ingest, scheduler, search, processing, triangulation, quality) in `@eloc2/eo-management`; **Demonstration narrative**: split-screen before/after, enrichment badges, value scoreboard, detection mode indicators; **Refactoring plan**: existing `@eloc2/eo-tasking` + `@eloc2/eo-investigation` composed behind module interface; LiveEngine reduced from ~200 LOC EO logic to ~20 LOC delegation |
 
 ---
 
@@ -306,109 +330,718 @@ uav | small_uav | drone
 
 See Section 5 (7 phases with verification checkpoints).
 
-### REQ-15: Sensor Deployment Planning Module
+### REQ-15: EO Sensor Deployment Planning Module
 
-**Description:** Interactive + algorithmic optimal EO sensor placement.
+**Description:** A standalone planning module (parallel to the scenario editor) that enables optimal deployment of electro-optical detection devices. The planner accounts for coverage requirements, threat definitions, the scanned area, and installation constraints. Its output is a sensor deployment that feeds directly into an activated scenario.
 
-**Capabilities:**
-1. **Interactive placement**: operator places sensors on map, gets real-time scoring feedback
-2. **Constraint zones**: define areas where sensors can/cannot be installed
-3. **Grid optimization**: divide area into cells, score each by coverage + geometry + threat exposure
-4. **Automated suggestion**: system recommends optimal positions given constraints
-5. **Export to scenario**: planned deployment feeds into activated scenario
+**Relationship to Scenario Editor:** The Deployment Planner and Scenario Editor are siblings in the application navigation. The Scenario Editor defines targets, faults, and timing. The Deployment Planner defines WHERE sensors are placed. The planner's output (sensor positions + configurations) is exported as the `sensors[]` array of a `ScenarioDefinition`, which the Scenario Editor can then augment with targets and faults.
 
-**Implementation:**
-- New view: "Deployment Planner" (alongside workstation and editor)
-- `DeploymentPlanner` React component with:
-  - Interactive map (click to place sensors)
-  - Constraint zone drawing (inclusion/exclusion polygons)
-  - Coverage visualization (heatmap showing detection probability)
-  - Geometry quality map (triangulation potential between sensor pairs)
-  - Threat overlay (where high-priority targets are expected)
-- Backend: `DeploymentOptimizer` module
-  - Grid-based scoring: coverage × geometry × threat for each cell
-  - Greedy placement: iteratively place sensor at highest-scoring position
-  - Constraint satisfaction: exclude forbidden zones, include only allowed zones
-  - Mathematical optimization: LP/convex relaxation for sensor count minimization
-- API: `POST /api/deployment/optimize` with constraints → returns ranked positions
-- API: `POST /api/deployment/export-scenario` → generates ScenarioDefinition
+#### 15.1 Inputs to the Planner
+
+| Input | Source | Description |
+|-------|--------|-------------|
+| **Scanned area** | Operator draws on map | Polygon defining the area to be covered by EO sensors |
+| **Threat corridors** | Operator draws or imports | Polygons/lines defining expected threat approach directions and intensity levels |
+| **Threat definitions** | Operator configures | Target types (REQ-7 classifications), expected altitudes, speeds, RCS, approach directions |
+| **Installation constraint zones** | Operator draws on map | **Inclusion zones**: areas where sensors CAN be installed (e.g., military bases, hilltops). **Exclusion zones**: areas where sensors CANNOT be installed (e.g., civilian areas, enemy territory) |
+| **Sensor inventory** | Operator selects | Number and type of available EO sensors, each with known FOV, detection range, slew rate |
+| **Terrain/cover data** | REQ-11 | Land cover zones that affect detection probability (from REQ-11) |
+| **Required detection probability** | Operator sets | Minimum probability of detection across the scanned area (e.g., Pd ≥ 0.8) |
+| **Required triangulation coverage** | Operator sets | Minimum percentage of scanned area where ≥2 sensors overlap for triangulation |
+
+#### 15.2 Optimization Algorithm
+
+**Step 1: Grid Discretization**
+- Divide the scanned area into a grid of candidate positions (configurable resolution: 500m–2km)
+- Filter out cells that fall in exclusion zones
+- Keep only cells that fall in inclusion zones (if defined)
+
+**Step 2: Per-Cell Scoring Function**
+
+For each candidate position `p` and each sensor type `s`:
+
+```
+CellScore(p, s) = w₁·Coverage(p, s) + w₂·GeometryValue(p) + w₃·ThreatExposure(p) + w₄·TerrainAdvantage(p) - w₅·Redundancy(p)
+```
+
+Where:
+- **Coverage(p, s)**: Fraction of the scanned area visible from position `p` with sensor `s`, considering FOV, detection range, elevation, and land cover (REQ-11). Uses the sensor's `CoverageArc` and `maxRangeM` from the domain model.
+- **GeometryValue(p)**: Triangulation potential — how much this position improves intersection angles with already-placed sensors. Computes the average sin(intersection_angle) across the scanned area between this sensor and each existing sensor. Perpendicular baselines (90°) score highest [San01, Fer13].
+- **ThreatExposure(p)**: How many threat corridor cells are within detection range. Weighted by threat intensity (higher threat = more value in covering it).
+- **TerrainAdvantage(p)**: Elevation advantage — higher positions see further. Bonus for positions on elevation, penalty for positions in valleys (simplified; full LOS in REQ-11 Phase 2).
+- **Redundancy(p)**: Penalty for overlap with already-placed sensors beyond the triangulation minimum. Prevents clustering.
+
+**Step 3: Greedy Placement Algorithm**
+```
+sensors_placed = []
+while sensors_remaining > 0:
+    best_score = -inf
+    best_position = null
+    for each candidate cell p in grid:
+        score = CellScore(p, next_sensor_type)
+        if score > best_score:
+            best_score = score
+            best_position = p
+    place sensor at best_position
+    sensors_placed.append(best_position)
+    update GeometryValue and Redundancy for all remaining cells
+    sensors_remaining -= 1
+```
+
+**Step 4: Refinement (Mathematical Optimization)**
+- After greedy placement, run a local search (hill climbing) that adjusts each sensor position within a neighborhood to improve overall coverage score
+- Optionally: formulate as set-cover LP relaxation to find theoretical minimum sensor count for the required detection probability
+
+**Step 5: Validation**
+- Compute aggregate metrics:
+  - Total area coverage percentage (at Pd ≥ threshold)
+  - Triangulation coverage percentage (≥2 sensor overlap)
+  - Worst-case detection gap (largest uncovered region)
+  - Average geometry quality across scanned area
+- Warn operator if requirements cannot be met with available sensors
+
+#### 15.3 Interactive Placement Mode
+
+In addition to automated optimization, the operator can:
+
+1. **Click to place** a sensor on the map → system immediately shows:
+   - Coverage footprint (shaded arc from sensor position)
+   - Detection probability heatmap (color-coded by Pd)
+   - Triangulation potential with existing sensors (intersection angle quality map)
+   - Score breakdown: what this position contributes to overall coverage
+
+2. **Drag to reposition** a placed sensor → all visualizations update in real-time
+
+3. **Compare modes**: "My Placement" vs "Optimized Suggestion" side-by-side scoring
+
+4. **Hybrid workflow**: operator places some sensors manually (e.g., constrained to specific bases), then asks the optimizer to place the remaining sensors optimally around the fixed ones
+
+#### 15.4 Export to Scenario
+
+The planner produces a `SensorDeployment`:
+```typescript
+interface SensorDeployment {
+  deploymentId: string;
+  name: string;
+  sensors: SensorDefinition[];    // Ready for ScenarioDefinition.sensors
+  scannedArea: Position3D[];      // Polygon vertices
+  inclusionZones: Position3D[][]; // Allowed installation areas
+  exclusionZones: Position3D[][]; // Forbidden installation areas
+  threatCorridors: ThreatCorridor[];
+  optimizationMetrics: {
+    coveragePercent: number;
+    triangulationCoveragePercent: number;
+    worstCaseGapM: number;
+    averageGeometryQuality: number;
+  };
+}
+```
+
+`POST /api/deployment/export-scenario` converts this to a `ScenarioDefinition` with the sensor array populated, ready for the Scenario Editor to add targets, faults, and timing.
+
+#### 15.5 UI Layout
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  ELOC2  │  Workstation  │  Scenario Editor  │ ★Deployment │
+├──────────┬───────────────────────────────────────────────┤
+│          │                                               │
+│ Planner  │              Interactive Map                  │
+│ Panel    │   ┌─ Scanned area polygon (blue outline)     │
+│          │   ├─ Inclusion zones (green fill)             │
+│ [Sensors]│   ├─ Exclusion zones (red fill)               │
+│ EO-1 ●   │   ├─ Threat corridors (orange gradient)      │
+│ EO-2 ●   │   ├─ Placed sensors (★ icons)                │
+│ EO-3 ●   │   ├─ Coverage arcs (semi-transparent fans)   │
+│          │   ├─ Detection Pd heatmap                     │
+│ [Zones]  │   └─ Triangulation quality overlay            │
+│ Draw Inc │                                               │
+│ Draw Exc │                                               │
+│          │                                               │
+│ [Threats]│                                               │
+│ Corridor │                                               │
+│ Alt range│                                               │
+│          ├───────────────────────────────────────────────┤
+│ [Actions]│  Metrics: Coverage 87% │ Tri-cover 72% │     │
+│ Optimize │  Gap: 2.3km │ Geo-quality: 0.78              │
+│ Export   │  [Optimize] [Export to Scenario] [Compare]    │
+│ Clear    │                                               │
+└──────────┴───────────────────────────────────────────────┘
+```
+
+#### 15.6 Package Structure
+
+```
+packages/deployment-planner/
+├── src/
+│   ├── grid.ts              # Grid discretization of scanned area
+│   ├── coverage-scorer.ts   # Per-cell coverage computation
+│   ├── geometry-scorer.ts   # Triangulation potential between sensor pairs
+│   ├── threat-scorer.ts     # Threat exposure scoring
+│   ├── terrain-scorer.ts    # Elevation/terrain advantage
+│   ├── optimizer.ts         # Greedy + refinement placement algorithm
+│   ├── constraints.ts       # Inclusion/exclusion zone filtering
+│   ├── validator.ts         # Aggregate metrics + requirement validation
+│   ├── export.ts            # Convert deployment → ScenarioDefinition
+│   └── index.ts             # Public API
+├── __tests__/
+│   ├── grid.test.ts
+│   ├── coverage-scorer.test.ts
+│   ├── geometry-scorer.test.ts
+│   ├── optimizer.test.ts
+│   └── export.test.ts
+└── package.json
+
+apps/workstation/src/deployment/
+├── DeploymentView.tsx        # Main planner view (top-level route)
+├── DeploymentMap.tsx         # Interactive map with drawing tools
+├── DeploymentPanel.tsx       # Left panel: sensors, zones, actions
+├── DeploymentMetrics.tsx     # Bottom bar: aggregate metrics
+├── SensorPlacer.tsx          # Click/drag sensor placement
+├── ZoneDrawer.tsx            # Polygon drawing for zones
+├── CoverageHeatmap.tsx       # Pd heatmap overlay
+├── GeometryOverlay.tsx       # Triangulation quality overlay
+└── deployment-store.ts       # Zustand store for planner state
+```
+
+#### 15.7 API Endpoints
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/api/deployment/optimize` | Run optimization with constraints → returns ranked positions |
+| POST | `/api/deployment/score-position` | Score a single candidate position (for interactive feedback) |
+| POST | `/api/deployment/validate` | Check if deployment meets coverage requirements |
+| POST | `/api/deployment/export-scenario` | Convert deployment → ScenarioDefinition |
+| GET | `/api/deployment/list` | List saved deployments |
+| POST | `/api/deployment/save` | Save a deployment plan |
+| GET | `/api/deployment/:id` | Load a saved deployment |
 
 ### REQ-16: Modular EO Management Architecture
 
-**Description:** Design EO management as a separate, add-on module to C4ISR.
+**Description:** The EO management system must be architecturally separate from the C4ISR system — an add-on that adds an information enrichment layer. The demonstration must clearly show that the C4ISR system works independently, and the EO module enhances the air picture by maximizing electro-optical and algorithmic capabilities. The module must distinguish between sub-pixel detections and image-resolvable targets, as these require fundamentally different processing pipelines.
 
-**Architecture:**
+**Key demonstration narrative:** "The C4ISR system provides the initial air picture. The ELOC2 EO management module plugs in as an add-on, receives that picture, and systematically improves it through intelligent EO sensor allocation, triangulation, and image investigation. The value added by the EO layer is measurable and demonstrable."
+
+#### 16.1 Architecture Overview
+
 ```
-┌─────────────────────────────────────────────────────┐
-│                    C4ISR System                      │
-│  ┌─────────────┐  ┌──────────┐  ┌───────────────┐  │
-│  │ Radar Fusion │  │ Track Mgr│  │ ASR Database  │  │
-│  └──────┬──────┘  └────┬─────┘  └───────┬───────┘  │
-│         │              │                │           │
-│    ─────┴──────────────┴────────────────┴────       │
-│         │      System Track Bus (events)            │
-│    ─────┬───────────────────────────────────        │
-│         │                                           │
-│  ┌──────┴──────────────────────────────────────┐    │
-│  │    EO Management Module (ELOC2 Add-on)      │    │
-│  │                                              │    │
-│  │  ┌────────────────────────────────────────┐  │    │
-│  │  │  Target Classification Engine          │  │    │
-│  │  │  ├─ Sub-pixel detector (bearing-only)  │  │    │
-│  │  │  │   Point targets, no resolved image  │  │    │
-│  │  │  │   Outputs: bearing, SNR, temporal   │  │    │
-│  │  │  │   Uses: triangulation, kinematics   │  │    │
-│  │  │  │                                     │  │    │
-│  │  │  └─ Image target processor             │  │    │
-│  │  │      Resolved targets (>1 pixel)       │  │    │
-│  │  │      Outputs: shape, size, features    │  │    │
-│  │  │      Uses: classification, ID          │  │    │
-│  │  └────────────────────────────────────────┘  │    │
-│  │                                              │    │
-│  │  ┌──────────────┐  ┌──────────────────────┐  │    │
-│  │  │ EO Tasking   │  │ Triangulation Engine │  │    │
-│  │  │ Scheduler    │  │ (multi-bearing)      │  │    │
-│  │  └──────────────┘  └──────────────────────┘  │    │
-│  │                                              │    │
-│  │  ┌──────────────┐  ┌──────────────────────┐  │    │
-│  │  │ Search Mode  │  │ Quality Assessor     │  │    │
-│  │  │ Controller   │  │ (metrics + reports)  │  │    │
-│  │  └──────────────┘  └──────────────────────┘  │    │
-│  │                                              │    │
-│  │  Interface: receives SystemTracks, emits     │    │
-│  │  EO-enriched tracks + quality reports        │    │
-│  └──────────────────────────────────────────────┘    │
-│                                                     │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                         C4ISR SYSTEM                                 │
+│                                                                      │
+│   ┌──────────────┐   ┌─────────────┐   ┌─────────────────────────┐  │
+│   │ Radar Sensors │   │ C4ISR Feed  │   │ ASR Track Database      │  │
+│   │ (detection)   │   │ (external)  │   │ (authoritative tracks)  │  │
+│   └──────┬───────┘   └──────┬──────┘   └───────────┬─────────────┘  │
+│          │                  │                       │                │
+│   ═══════╪══════════════════╪═══════════════════════╪════════        │
+│          │        System Track Event Bus            │                │
+│   ═══════╪══════════════════════════════════════════╪════════        │
+│          │                                          │                │
+│          │   ┌─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤                │
+│          │   │   ELOC2 INTERFACE BOUNDARY           │                │
+│          │                                          │                │
+│   ┌──────┴──────────────────────────────────────────┴──────────────┐ │
+│   │              ELOC2 — EO MANAGEMENT MODULE                      │ │
+│   │              (Add-on / Plug-in to C4ISR)                       │ │
+│   │                                                                │ │
+│   │  ╔════════════════════════════════════════════════════════════╗ │ │
+│   │  ║              INGEST LAYER                                 ║ │ │
+│   │  ║                                                           ║ │ │
+│   │  ║  TrackIngester: receives SystemTrack[] from C4ISR bus     ║ │ │
+│   │  ║  SensorRegistry: knows available EO sensors + state       ║ │ │
+│   │  ║  OperatorCommandQueue: buffers operator override cmds     ║ │ │
+│   │  ╚═══════════════════════╤═══════════════════════════════════╝ │ │
+│   │                          │                                     │ │
+│   │           ┌──────────────┼──────────────┐                      │ │
+│   │           ▼              ▼              ▼                      │ │
+│   │  ┌────────────────┐ ┌──────────┐ ┌──────────────────────────┐ │ │
+│   │  │  EO TASKING    │ │ SEARCH   │ │ TARGET PROCESSING        │ │ │
+│   │  │  SCHEDULER     │ │ MODE     │ │ ENGINE                   │ │ │
+│   │  │                │ │ CTRL     │ │                          │ │ │
+│   │  │ • Dwell mgmt   │ │          │ │ ┌──────────────────────┐ │ │ │
+│   │  │ • Revisit sched│ │ • Wide   │ │ │ SUB-PIXEL PIPELINE   │ │ │ │
+│   │  │ • Priority calc│ │   scan   │ │ │                      │ │ │ │
+│   │  │ • Cycling logic│ │ • Narrow │ │ │ • Bearing extraction │ │ │ │
+│   │  │ • Sensor alloc │ │   scan   │ │ │ • SNR measurement    │ │ │ │
+│   │  │ • Operator     │ │ • Search │ │ │ • Temporal analysis  │ │ │ │
+│   │  │   overrides    │ │   bound- │ │ │ • Kinematic class.   │ │ │ │
+│   │  │                │ │   aries  │ │ │ • Triangulation      │ │ │ │
+│   │  └───────┬────────┘ │ • Auto   │ │ │                      │ │ │ │
+│   │          │          │   detect  │ │ └──────────┬───────────┘ │ │ │
+│   │          │          │   →track  │ │            │             │ │ │
+│   │          │          └────┬─────┘ │ ┌──────────▼───────────┐ │ │ │
+│   │          │               │       │ │ IMAGE TARGET PIPELINE│ │ │ │
+│   │          │               │       │ │                      │ │ │ │
+│   │          │               │       │ │ • Shape extraction   │ │ │ │
+│   │          │               │       │ │ • Size estimation    │ │ │ │
+│   │          │               │       │ │ • Feature matching   │ │ │ │
+│   │          │               │       │ │ • Direct classif.    │ │ │ │
+│   │          │               │       │ │ • ID confidence      │ │ │ │
+│   │          │               │       │ └──────────┬───────────┘ │ │ │
+│   │          │               │       │            │             │ │ │
+│   │          │               │       └────────────┤             │ │
+│   │          │               │                    │               │ │
+│   │  ┌───────▼───────────────▼────────────────────▼─────────────┐ │ │
+│   │  │              TRIANGULATION & FUSION ENGINE                │ │ │
+│   │  │                                                          │ │ │
+│   │  │  • Multi-bearing triangulation (@eloc2/geometry)         │ │ │
+│   │  │  • Quality scoring (intersection angle, time alignment)  │ │ │
+│   │  │  • Information-matrix fusion for >2 sensors              │ │ │
+│   │  │  • 3D position estimation with uncertainty               │ │ │
+│   │  │  • Convergence detection (when to stop dwelling)         │ │ │
+│   │  └──────────────────────────┬───────────────────────────────┘ │ │
+│   │                             │                                  │ │
+│   │  ┌──────────────────────────▼───────────────────────────────┐ │ │
+│   │  │              QUALITY ASSESSOR                            │ │ │
+│   │  │                                                          │ │ │
+│   │  │  • Ground truth comparison (REQ-8)                       │ │ │
+│   │  │  • Before/after EO metrics (REQ-9)                       │ │ │
+│   │  │  • Allocation quality criteria (REQ-10)                  │ │ │
+│   │  │  • Report data accumulation (REQ-12)                     │ │ │
+│   │  └──────────────────────────┬───────────────────────────────┘ │ │
+│   │                             │                                  │ │
+│   │  ╔══════════════════════════╧═══════════════════════════════╗ │ │
+│   │  ║              OUTPUT LAYER                                ║ │ │
+│   │  ║                                                          ║ │ │
+│   │  ║  EnrichedTrack[]: original track + EO enrichment data    ║ │ │
+│   │  ║  QualityMetrics: real-time assessment of EO value added  ║ │ │
+│   │  ║  EoModuleStatus: sensor states, task queue, mode         ║ │ │
+│   │  ║  Events: emitted to C4ISR bus for track database update  ║ │ │
+│   │  ╚═════════════════════════════════════════════════════════ ╝ │ │
+│   │                                                                │ │
+│   └────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
-**Sub-pixel vs Image target distinction:**
+#### 16.2 Sub-pixel vs Image Target — Detailed Pipeline Design
 
-| Aspect | Sub-pixel Detection | Image Target |
-|--------|-------------------|--------------|
-| Definition | Target subtends <1 pixel at sensor range | Target subtends ≥1 pixel, shape features resolvable |
-| EO output | Bearing angle + SNR + temporal signature | Bearing + shape + size + features + possible classification |
-| Processing | Triangulation from bearings, kinematic filtering | Image analysis, feature extraction, template matching |
-| Classification | Inferred from kinematics (speed, altitude, maneuver) | Direct from image features (wing shape, size, engine count) |
-| Resolution trigger | Always (default mode) | When range decreases OR zoom changes to resolve pixels |
-| Domain type | `EoDetection { type: 'sub_pixel', bearing, snr, temporalSignature }` | `EoDetection { type: 'image', bearing, shape, size, features, classificationHint }` |
+**The distinction is fundamental:** it determines which processing pipeline a target enters, what data the EO sensor produces, and how classification is achieved.
 
-**Module interface (package boundary):**
+**Physical basis:** Whether a target is sub-pixel or image-resolvable depends on:
+```
+angular_size = physical_size / range
+pixel_size = IFOV (instantaneous field of view of one pixel)
+
+if angular_size < pixel_size → SUB-PIXEL
+if angular_size ≥ pixel_size → IMAGE TARGET
+```
+
+This is DYNAMIC — the same target transitions from sub-pixel to image as range decreases (target approaches) or as the sensor zooms in (narrow FOV mode).
+
+##### 16.2.1 Sub-pixel Detection Pipeline
+
+**When active:** Default mode. All EO detections start here. The target appears as a point source (single bright pixel or small cluster with no resolved shape).
+
+**Sensor outputs:**
 ```typescript
-// @eloc2/eo-management — new package
-interface EoManagementModule {
-  // Input: system tracks from C4ISR
-  ingestTracks(tracks: SystemTrack[]): void;
-  // Input: operator commands
-  operatorOverride(command: OperatorCommand): void;
-  // Output: enriched tracks with EO data
-  getEnrichedTracks(): EnrichedTrack[];
-  // Output: quality assessment
-  getQualityMetrics(): QualityMetrics;
-  // Output: EO status for display
-  getEoStatus(): EoModuleStatus;
+interface SubPixelDetection {
+  type: 'sub_pixel';
+  sensorId: SensorId;
+  timestamp: Timestamp;
+
+  // Bearing measurement (same as current EoBearingObservation)
+  bearing: BearingMeasurement;          // azimuth + elevation
+
+  // Sub-pixel specific data
+  snr: number;                          // Signal-to-noise ratio (detection confidence)
+  peakIntensity: number;                // Pixel intensity (relates to target IR signature)
+  temporalSignature: TemporalSignature; // Flicker pattern, strobe, steady-state
+
+  // Estimated by sensor model
+  detectionRangeM: number;              // Range at which detection occurred
+  angularSizeRad: number;              // Estimated (always < IFOV for sub-pixel)
+}
+
+interface TemporalSignature {
+  type: 'steady' | 'blinking' | 'strobing' | 'irregular';
+  frequencyHz?: number;                 // For periodic signatures
+  pattern?: number[];                   // Intensity over time samples
 }
 ```
+
+**Processing:**
+1. **Bearing extraction** — same as current `generateEoBearing()` with noise model
+2. **SNR computation** — signal-to-noise from target IR signature vs background
+3. **Temporal analysis** — strobe pattern can help distinguish aircraft types (navigation lights flash at known frequencies)
+4. **Kinematic classification** — from triangulated 3D track: speed, altitude, maneuver pattern → infer target type
+   - Speed > 200 m/s + alt > 5000m → likely `fighter_aircraft` or `passenger_aircraft`
+   - Speed 50–150 m/s + alt < 500m → likely `uav` or `helicopter`
+   - Speed < 20 m/s + irregular path → likely `bird` or `small_uav`
+   - Known friendly IFF → `ally`
+5. **Triangulation** — feed bearing into `@eloc2/geometry` for multi-bearing 3D estimation
+
+**Classification confidence for sub-pixel:** LOW to MEDIUM (0.2–0.6) because only kinematics and temporal signatures are available, not direct image features.
+
+##### 16.2.2 Image Target Pipeline
+
+**When active:** Triggered when `angular_size ≥ pixel_size`, meaning the target subtends enough pixels to resolve features. This can happen because:
+- Target is close enough to the sensor
+- Sensor has switched to narrow FOV (zoom mode)
+- Target is physically large
+
+**Transition trigger in simulation:**
+```typescript
+function isImageResolvable(
+  targetSizeM: number,     // Physical size of target (from classification)
+  rangeM: number,          // Distance to sensor
+  sensorIFOVRad: number,   // Instantaneous FOV per pixel
+): boolean {
+  const angularSizeRad = targetSizeM / rangeM;
+  return angularSizeRad >= sensorIFOVRad;  // At least 1 pixel
+}
+
+// Target sizes (wingspan or largest dimension)
+const TARGET_SIZES: Record<TargetClassification, number> = {
+  passenger_aircraft: 60,   // ~60m wingspan
+  fighter_aircraft: 15,     // ~15m wingspan
+  civilian_aircraft: 12,    // ~12m wingspan
+  light_aircraft: 8,        // ~8m wingspan
+  helicopter: 15,           // ~15m rotor diameter
+  uav: 5,                   // ~5m wingspan
+  small_uav: 1.5,           // ~1.5m
+  drone: 0.5,               // ~0.5m
+  predator: 20,             // ~20m wingspan
+  bird: 0.5,                // ~0.5m
+  birds: 2,                 // ~2m flock extent
+  ally: 15,                 // varies — default fighter
+  neutral: 12,              // varies — default civilian
+  unknown: 10,              // default estimate
+};
+```
+
+**Sensor outputs:**
+```typescript
+interface ImageDetection {
+  type: 'image';
+  sensorId: SensorId;
+  timestamp: Timestamp;
+
+  // Standard bearing (same as sub-pixel)
+  bearing: BearingMeasurement;
+
+  // Image-specific data
+  resolvedPixels: number;               // How many pixels the target spans
+  shapeSilhouette: ShapeSilhouette;     // Simplified shape descriptor
+  estimatedSizeM: number;              // Estimated physical size from angular size + range estimate
+  featureVector: number[];              // Simulated feature extraction (for template matching)
+  classificationHint: TargetClassification; // Best guess from image
+  classificationConfidence: number;     // 0–1
+
+  // Image quality factors
+  atmosphericDegradation: number;       // 0–1 (1 = perfect clarity)
+  motionBlur: number;                   // 0–1 (0 = no blur)
+}
+
+interface ShapeSilhouette {
+  type: 'fixed_wing' | 'rotary_wing' | 'delta_wing' | 'bird_like' | 'multi_rotor' | 'amorphous';
+  aspectRatio: number;                  // Width / height
+  symmetry: number;                     // 0–1 (1 = perfectly symmetric)
+}
+```
+
+**Processing:**
+1. **Shape extraction** — from resolved pixels, determine silhouette type
+2. **Size estimation** — angular size × estimated range = physical size
+3. **Feature matching** — compare feature vector against known templates
+4. **Direct classification** — shape + size + features → classification with HIGH confidence (0.6–0.95)
+5. **ID refinement** — multiple observations from different angles improve confidence
+
+**Classification confidence for image targets:** MEDIUM to HIGH (0.5–0.95) because shape, size, and features are directly observable.
+
+##### 16.2.3 Pipeline Transition Logic
+
+```typescript
+interface TargetProcessingState {
+  targetTrackId: SystemTrackId;
+  currentPipeline: 'sub_pixel' | 'image' | 'transitioning';
+
+  // Sub-pixel accumulated data
+  bearingHistory: BearingMeasurement[];
+  kinematicClassification?: TargetClassification;
+  kinematicConfidence: number;
+  temporalSignature?: TemporalSignature;
+
+  // Image accumulated data (when available)
+  imageObservations: ImageDetection[];
+  imageClassification?: TargetClassification;
+  imageConfidence: number;
+
+  // Combined (best available)
+  bestClassification: TargetClassification;
+  bestConfidence: number;
+  classificationSource: 'kinematic' | 'image' | 'operator' | 'fused';
+}
+```
+
+A target can **transition back** from image to sub-pixel if it moves away from the sensor (range increases beyond pixel resolution). The system retains the image classification but marks confidence as decaying.
+
+#### 16.3 Module Interface — Clean Package Boundary
+
+The EO Management Module communicates with the C4ISR system through a well-defined interface. This makes it pluggable — it can be attached to any C4ISR system that provides system tracks.
+
+```typescript
+// @eloc2/eo-management — new package
+// This is the ONLY interface the C4ISR system needs to know about.
+
+/** Main module interface — the C4ISR system interacts only through this. */
+interface EoManagementModule {
+  // ── LIFECYCLE ──────────────────────────────────────────────────────
+
+  /** Initialize the module with available EO sensors. */
+  initialize(sensors: SensorState[], config: EoModuleConfig): void;
+
+  /** Shut down gracefully, release all sensor tasks. */
+  shutdown(): void;
+
+  // ── INPUTS (from C4ISR) ────────────────────────────────────────────
+
+  /** Feed system tracks from the C4ISR track database. Called every cycle. */
+  ingestTracks(tracks: SystemTrack[]): void;
+
+  /** Feed sensor state updates (gimbal position, online status). */
+  updateSensorState(sensorId: SensorId, state: SensorState): void;
+
+  /** Operator command: override automatic allocation. */
+  operatorCommand(command: OperatorCommand): void;
+
+  // ── OUTPUTS (to C4ISR) ─────────────────────────────────────────────
+
+  /** Get tracks enriched with EO data (classification, reduced uncertainty). */
+  getEnrichedTracks(): EnrichedTrack[];
+
+  /** Get the current EO contribution to each track. */
+  getEoContributions(): Map<SystemTrackId, EoContribution>;
+
+  /** Get real-time quality metrics measuring EO value added. */
+  getQualityMetrics(): QualityMetrics;
+
+  /** Get module operational status (for system health display). */
+  getModuleStatus(): EoModuleStatus;
+
+  /** Get pending sensor commands (gimbal slew, zoom change). */
+  getSensorCommands(): SensorCommand[];
+
+  // ── EVENTS ─────────────────────────────────────────────────────────
+
+  /** Subscribe to EO module events. */
+  on(event: EoModuleEvent, handler: (data: any) => void): void;
+}
+
+/** What the EO module knows about its configuration. */
+interface EoModuleConfig {
+  taskingIntervalSec: number;          // How often to re-evaluate tasking
+  dwellTimeSec: number;                // Default dwell per target
+  maxRevisitIntervalSec: number;       // Max time before revisiting a track
+  searchMode: SearchModeConfig;        // Search pattern when no targets
+  policyMode: 'auto' | 'auto_with_veto' | 'manual';
+  scoringWeights: ScoringWeights;      // From existing @eloc2/eo-tasking
+}
+
+/** Operator commands the EO module accepts. */
+type OperatorCommand =
+  | { type: 'lock_sensor'; sensorId: SensorId; targetId?: SystemTrackId; position?: Position3D }
+  | { type: 'release_sensor'; sensorId: SensorId }
+  | { type: 'set_priority'; trackId: SystemTrackId; priority: 'high' | 'normal' | 'low' }
+  | { type: 'classify_target'; trackId: SystemTrackId; classification: TargetClassification; source: 'operator' }
+  | { type: 'set_search_boundary'; boundary: Position3D[] }
+  | { type: 'force_search_mode' }
+  | { type: 'resume_auto' };
+
+/** What the EO module adds to each track it processes. */
+interface EoContribution {
+  trackId: SystemTrackId;
+  processingPipeline: 'sub_pixel' | 'image' | 'none';
+  bearingsCollected: number;
+  triangulationQuality: 'none' | 'bearing_only' | 'candidate_3d' | 'confirmed_3d';
+  positionRefinement?: {
+    originalCovariance: Covariance3x3;
+    refinedCovariance: Covariance3x3;
+    positionShiftM: number;
+  };
+  classification?: {
+    value: TargetClassification;
+    confidence: number;
+    source: 'kinematic' | 'image' | 'operator' | 'fused';
+  };
+  investigationDwellTimeSec: number;
+  sensorsInvolved: SensorId[];
+}
+
+/** Enriched track = original SystemTrack + EO enrichment. */
+interface EnrichedTrack extends SystemTrack {
+  eoContribution?: EoContribution;
+  eoClassification?: TargetClassification;
+  eoClassificationConfidence?: number;
+  eoRefinedPosition?: Position3D;
+  eoRefinedCovariance?: Covariance3x3;
+}
+
+/** Overall module status. */
+interface EoModuleStatus {
+  mode: 'tracking' | 'searching' | 'mixed' | 'idle' | 'operator_override';
+  sensorsTotal: number;
+  sensorsActive: number;
+  sensorsInSearch: number;
+  sensorsLocked: number;
+  tracksUnderInvestigation: number;
+  tracksWithTriangulation: number;
+  tracksWithImageResolution: number;
+  coveragePercent: number;              // % of area covered by active sensors
+  avgGeometryQuality: number;           // Average triangulation quality
+}
+
+/** Events emitted by the module. */
+type EoModuleEvent =
+  | 'track_enriched'           // A track received new EO data
+  | 'classification_updated'   // Classification changed for a track
+  | 'triangulation_achieved'   // 3D position confirmed for a track
+  | 'image_resolved'           // Target transitioned from sub-pixel to image
+  | 'search_detection'         // New detection from search mode
+  | 'sensor_exhausted'         // Sensor completed all priority tasks
+  | 'sensor_reallocated'       // Sensor moved to new target
+  | 'operator_override_active' // Operator took manual control
+  | 'quality_report_ready';    // Quality assessment cycle complete
+```
+
+#### 16.4 Demonstrating EO Value — The Demonstration Narrative
+
+The UI must make the EO module's value **visually obvious**. This is achieved through:
+
+1. **Split-screen before/after**: Toggle between C4ISR-only picture (radar tracks with large uncertainty ellipses, unknown classifications) and C4ISR+EO picture (refined positions, smaller ellipses, classifications).
+
+2. **Track enrichment badges**: Each track on the map shows a visual indicator of EO contribution:
+   - No EO: plain circle
+   - Sub-pixel investigated: circle + bearing lines
+   - Image resolved: circle + classification icon
+   - Triangulated: circle + 3D position marker with small ellipse
+
+3. **EO value scoreboard**: Persistent panel showing:
+   - "Tracks improved by EO: 7/12"
+   - "Average position improvement: 340m → 85m"
+   - "Classifications added: 5 (3 confirmed, 2 tentative)"
+   - "Triangulation solutions: 4"
+
+4. **Investigation timeline**: Shows which sensor is looking at which target at each moment, with dwell periods and transitions animated
+
+5. **Detection mode indicator**: Per-target badge showing "SUB-PIXEL" or "IMAGE" with the pipeline being used
+
+#### 16.5 Internal Sub-modules and Responsibilities
+
+```
+@eloc2/eo-management/
+│
+├── src/
+│   ├── index.ts                    # EoManagementModule class (implements interface above)
+│   │
+│   ├── ingest/
+│   │   ├── track-ingester.ts       # Receives SystemTrack[], maintains internal mirror
+│   │   └── sensor-registry.ts      # Tracks available EO sensors and their state
+│   │
+│   ├── scheduler/
+│   │   ├── task-scheduler.ts       # Main scheduling loop: decide what each sensor does
+│   │   ├── dwell-manager.ts        # Manages dwell timers per task
+│   │   ├── revisit-planner.ts      # Ensures tracks get revisited based on priority
+│   │   ├── cycling-logic.ts        # Determines next target after dwell completes
+│   │   └── operator-override.ts    # Handles manual sensor locking/releasing
+│   │
+│   ├── search/
+│   │   ├── search-controller.ts    # Activates/deactivates search mode
+│   │   ├── scan-patterns.ts        # Wide-scan (sector) and narrow-scan (raster) generators
+│   │   └── search-detector.ts      # Converts search-mode detections into tracks
+│   │
+│   ├── processing/
+│   │   ├── pipeline-router.ts      # Routes detections to sub-pixel or image pipeline
+│   │   ├── sub-pixel/
+│   │   │   ├── bearing-processor.ts
+│   │   │   ├── snr-estimator.ts
+│   │   │   ├── temporal-analyzer.ts
+│   │   │   └── kinematic-classifier.ts
+│   │   └── image/
+│   │       ├── shape-extractor.ts
+│   │       ├── size-estimator.ts
+│   │       ├── feature-matcher.ts
+│   │       └── image-classifier.ts
+│   │
+│   ├── triangulation/
+│   │   └── triangulation-engine.ts # Wraps @eloc2/geometry with convergence detection
+│   │
+│   ├── quality/
+│   │   ├── quality-assessor.ts     # REQ-8: ground truth comparison
+│   │   ├── before-after.ts         # REQ-9: pre/post EO comparison
+│   │   ├── allocation-scorer.ts    # REQ-10: allocation quality criteria
+│   │   └── metrics-accumulator.ts  # Time-series metric collection
+│   │
+│   └── types.ts                    # All types defined in 16.3 above
+│
+├── __tests__/
+│   ├── scheduler/
+│   │   ├── task-scheduler.test.ts
+│   │   ├── dwell-manager.test.ts
+│   │   ├── revisit-planner.test.ts
+│   │   └── cycling-logic.test.ts
+│   ├── processing/
+│   │   ├── pipeline-router.test.ts
+│   │   ├── kinematic-classifier.test.ts
+│   │   └── image-classifier.test.ts
+│   ├── search/
+│   │   ├── search-controller.test.ts
+│   │   └── scan-patterns.test.ts
+│   ├── quality/
+│   │   ├── quality-assessor.test.ts
+│   │   └── allocation-scorer.test.ts
+│   └── integration/
+│       └── full-cycle.test.ts      # End-to-end: ingest → schedule → process → output
+│
+└── package.json
+```
+
+#### 16.6 Refactoring Existing Packages
+
+The current `@eloc2/eo-tasking` and `@eloc2/eo-investigation` packages contain logic that belongs inside the EO Management Module. The refactoring approach:
+
+| Current Package | What Moves to `@eloc2/eo-management` | What Stays |
+|----------------|--------------------------------------|------------|
+| `@eloc2/eo-tasking` | `scorer.ts` → `scheduler/`, `assigner.ts` → `scheduler/`, `generator.ts` → `scheduler/` | Policy types (reusable) |
+| `@eloc2/eo-investigation` | `cue-issuer.ts` → `scheduler/`, `ambiguity.ts` → `processing/`, `identification.ts` → `processing/image/` | Domain types (reusable) |
+| `@eloc2/geometry` | **Stays** — used by `triangulation-engine.ts` as a dependency | Everything stays |
+| `@eloc2/fusion-core` | **Stays** — C4ISR responsibility, EO module consumes its output | Everything stays |
+
+The existing packages are NOT deleted — they remain as lower-level libraries. The EO Management Module composes them behind its clean interface.
+
+#### 16.7 Integration with LiveEngine
+
+Currently, `live-engine.ts` directly calls `generateCandidates()`, `scoreCandidate()`, `applyPolicy()`, `assignTasks()`, and triangulation. After REQ-16:
+
+```typescript
+// BEFORE (current live-engine.ts — ~200 lines of EO logic inline)
+private tickEoTasking() {
+  const candidates = generateCandidates(tracks, sensors);
+  const scored = candidates.map(c => scoreCandidate(c, weights, ...));
+  const filtered = applyPolicy(scored, policyMode);
+  const assignments = assignTasks(filtered, sensors);
+  // ... handle assignments, issue cues, process bearings, triangulate
+}
+
+// AFTER (clean delegation to EO module)
+private tickEoManagement() {
+  // Feed tracks from C4ISR fusion
+  this.eoModule.ingestTracks(this.state.tracks);
+
+  // Get sensor commands (gimbal slew, zoom, search scan)
+  const commands = this.eoModule.getSensorCommands();
+  this.applySensorCommands(commands);
+
+  // Get enriched tracks and update the system picture
+  const enriched = this.eoModule.getEnrichedTracks();
+  this.mergeEnrichments(enriched);
+
+  // Get quality metrics for display
+  this.qualityMetrics = this.eoModule.getQualityMetrics();
+}
+```
+
+This reduces the EO-related code in `live-engine.ts` from ~200+ lines to ~20 lines, making the separation clear.
 
 ---
 
