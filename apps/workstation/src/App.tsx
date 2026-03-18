@@ -423,7 +423,7 @@ export function App() {
 
   // ─── Desktop Layout ───────────────────────────────────────────────────
   const showDetail = detailPanelOpen;
-  const showInjection = injectionMode && simulationState !== 'idle';
+  const showInjection = injectionMode && ['running', 'paused', 'seeking'].includes(simulationState);
   const btn = btnBase(false);
 
   return (

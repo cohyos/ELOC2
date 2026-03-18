@@ -234,7 +234,7 @@ export function TimelinePanel() {
   }, [seekToPosition]);
 
   return (
-    <div style={styles.container}>
+    <div style={styles.container} onWheel={(e) => e.stopPropagation()}>
       {/* Controls row */}
       <div style={styles.header}>
         <span style={styles.title}>Timeline</span>

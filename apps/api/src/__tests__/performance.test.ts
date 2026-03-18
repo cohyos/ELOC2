@@ -65,11 +65,12 @@ describe('Performance: track scaling', () => {
       console.log(`[perf] ${count} ticks: ${elapsed.toFixed(1)}ms total, ${avg.toFixed(2)}ms/tick avg`);
     }
 
-    // Average tick time at 60 ticks should not be more than 5x the time at 10 ticks.
+    // Average tick time at 60 ticks should not be more than 8x the time at 10 ticks.
     // Truly exponential growth would blow past this easily.
+    // Note: post-tick merge sweep adds O(n²) work on active tracks, so ratio may be ~6x.
     const ratio = timings[2].avgMs / timings[0].avgMs;
     console.log(`[perf] Scaling ratio (60-tick avg / 10-tick avg): ${ratio.toFixed(2)}x`);
-    expect(ratio).toBeLessThan(5);
+    expect(ratio).toBeLessThan(8);
   });
 });
 

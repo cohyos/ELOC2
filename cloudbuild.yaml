@@ -1,19 +1,17 @@
 steps:
-  # Build the Docker image
+  # Build the Docker image (use shell to expand $(date ...))
   - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
     args:
-      - 'build'
-      - '--build-arg'
-      - 'BUILD_REVISION=${SHORT_SHA}'
-      - '--build-arg'
-      - 'BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)'
-      - '--build-arg'
-      - 'BUILD_BRANCH=$BRANCH_NAME'
-      - '-t'
-      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}'
-      - '-t'
-      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:latest'
-      - '.'
+      - '-c'
+      - |
+        docker build \
+          --build-arg "BUILD_REVISION=${SHORT_SHA}" \
+          --build-arg "BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+          --build-arg "BUILD_BRANCH=$BRANCH_NAME" \
+          -t "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}" \
+          -t "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:latest" \
+          .
 
   # Push the image to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'

@@ -960,6 +960,7 @@ export class LiveEngine {
     // Complete the reset: resetting → idle
     this.stateMachine.tryTransition('reset');
     this.pushEvent('scenario.reset', 'Scenario reset');
+    this.broadcastRap(true);
   }
 
   /**
@@ -990,13 +991,21 @@ export class LiveEngine {
       const result = this.runner.step(1);
       this.state.elapsedSec = result.currentTimeSec;
 
-      // Process all events synchronously (no batching during seek)
-      for (const simEvent of result.events) {
+      // Separate observation events for batch processing (prevents ghost tracks)
+      const obsEvents: SimulationEvent[] = [];
+      const otherEvents: SimulationEvent[] = [];
+      for (const ev of result.events) {
+        if (ev.type === 'observation') obsEvents.push(ev);
+        else otherEvents.push(ev);
+      }
+      this.processObservationBatch(obsEvents);
+      for (const simEvent of otherEvents) {
         this.processSimEvent(simEvent);
       }
 
       // Update sensor status
       this.updateSensorStatus(result.activeFaults);
+      this.trackManager.mergeCloseTracks(3000);
       this.state.tracks = this.trackManager.getAllTracks().filter(tr => tr.status !== 'dropped');
       this.processAccumulatedBearings();
       this.expireStaleEoCues();
@@ -1126,6 +1135,8 @@ export class LiveEngine {
       { targetId, lat: target.lat, lon: target.lon, alt: target.alt, speed: target.speed, headingDeg: target.headingDeg },
     );
 
+    this.broadcastRap(true);
+
     return targetId;
   }
 
@@ -1249,40 +1260,37 @@ export class LiveEngine {
     const result = this.runner.step(dtSec);
     this.state.elapsedSec = result.currentTimeSec;
 
-    // Process events in batches, yielding to the event loop between batches
-    // to prevent blocking I/O when the number of events per tick is large.
-    const BATCH_SIZE = 20;
     const events = result.events;
 
-    const processBatch = (startIdx: number): void => {
-      const end = Math.min(startIdx + BATCH_SIZE, events.length);
-      for (let i = startIdx; i < end; i++) {
-        this.processSimEvent(events[i]);
-      }
-
-      if (end < events.length) {
-        // Yield to the event loop before processing the next batch
-        setImmediate(() => processBatch(end));
+    // Separate observation events for batch processing (prevents ghost tracks)
+    // from other event types (bearings, faults) which are processed individually.
+    const observationEvents: SimulationEvent[] = [];
+    const otherEvents: SimulationEvent[] = [];
+    for (const ev of events) {
+      if (ev.type === 'observation') {
+        observationEvents.push(ev);
       } else {
-        // All events processed — finalize the tick
-        this.finalizeTick(result);
+        otherEvents.push(ev);
       }
-    };
-
-    if (events.length > BATCH_SIZE) {
-      processBatch(0);
-    } else {
-      // Small batch — process synchronously to avoid overhead
-      for (const simEvent of events) {
-        this.processSimEvent(simEvent);
-      }
-      this.finalizeTick(result);
     }
+
+    // Process observations as a batch through TrackManager (spatial clustering)
+    this.processObservationBatch(observationEvents);
+
+    // Process other events individually
+    for (const simEvent of otherEvents) {
+      this.processSimEvent(simEvent);
+    }
+
+    this.finalizeTick(result);
   }
 
   private finalizeTick(result: { currentTimeSec: number; activeFaults: Array<{ sensorId: string; type: string }>; isComplete: boolean }): void {
     // Update sensor online status based on active faults
     this.updateSensorStatus(result.activeFaults);
+
+    // Post-tick merge sweep: merge tracks within 3km to eliminate ghost tracks
+    this.trackManager.mergeCloseTracks(3000);
 
     // Snapshot tracks from track manager
     this.state.tracks = this.trackManager.getAllTracks().filter(t => t.status !== 'dropped');
@@ -1343,6 +1351,64 @@ export class LiveEngine {
     if (result.isComplete) {
       this.pause();
       this.pushEvent('scenario.completed', `Scenario completed at T+${result.currentTimeSec}s`);
+    }
+  }
+
+  /**
+   * Process all observation events from a tick as a batch.
+   * Extracts SourceObservation from each event, runs cover-zone filtering,
+   * then delegates to TrackManager.processObservationBatch() for spatial
+   * clustering which prevents ghost tracks when multiple sensors report
+   * the same target simultaneously.
+   */
+  private processObservationBatch(observationEvents: SimulationEvent[]): void {
+    const observations: SourceObservation[] = [];
+    const healthMap = new Map<string, RegistrationState>();
+
+    for (const simEvent of observationEvents) {
+      const raw = simEvent.data as any;
+      const obs: SourceObservation = raw?.observation ?? raw;
+      if (!obs || !obs.position) continue;
+
+      // Apply cover-zone detection probability modifier
+      const coverZones = this.scenario.coverZones ?? [];
+      if (coverZones.length > 0) {
+        const modifier = getDetectionModifier(obs.position.lat, obs.position.lon, coverZones);
+        if (modifier < 1.0 && Math.random() > modifier) continue;
+      }
+
+      // Get registration health for this sensor
+      const health = this.registrationService.getHealth(obs.sensorId);
+      if (health) {
+        healthMap.set(obs.sensorId as string, health);
+      }
+
+      // Select fusion mode
+      const sensorType = this.state.sensors.find(s => s.sensorId === obs.sensorId)?.sensorType ?? 'radar';
+      const fusionDecision = selectFusionMode(health ?? undefined, sensorType, 0.5);
+      this.fusionModePerSensor.set(obs.sensorId as string, fusionDecision.mode);
+
+      observations.push(obs);
+    }
+
+    if (observations.length === 0) return;
+
+    // Batch process through TrackManager (clusters spatially, creates fewer tracks)
+    const results = this.trackManager.processObservationBatch(observations, healthMap);
+
+    // Emit events for each processed observation
+    for (const tmResult of results) {
+      this.eventEnvelopes.push(tmResult.event);
+      this.eventEnvelopes.push(tmResult.correlationEvent);
+
+      const decision = tmResult.correlationEvent.data.decision;
+      const trackId = tmResult.track.systemTrackId;
+      const sensorId = tmResult.correlationEvent.data.observationId;
+      this.pushEvent(
+        'source.observation.reported',
+        `observation → ${decision === 'new_track' ? 'new' : 'update'} ${trackId}`,
+        { trackId, decision },
+      );
     }
   }
 

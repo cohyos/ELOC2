@@ -14,7 +14,7 @@ import type {
   SystemTrackUpdated,
 } from '@eloc2/events';
 import { createEventEnvelope } from '@eloc2/events';
-import { generateId } from '@eloc2/shared-utils';
+import { generateId, haversineDistanceM } from '@eloc2/shared-utils';
 
 import { correlate } from '../correlation/correlator.js';
 import type { CorrelationResult } from '../correlation/correlator.js';
@@ -423,5 +423,116 @@ export class TrackManager {
       event: trackEvent,
       correlationEvent,
     };
+  }
+
+  // ── Batch processing ────────────────────────────────────────────────────
+
+  /**
+   * Process a batch of observations from a single tick.
+   *
+   * Groups spatially close observations (within clusterRadiusM) into clusters.
+   * Creates one track per cluster from the first observation, then correlates
+   * remaining observations against the new tracks. This prevents ghost tracks
+   * when multiple sensors report the same target simultaneously.
+   */
+  processObservationBatch(
+    observations: SourceObservation[],
+    registrationHealthMap?: Map<string, RegistrationState>,
+  ): ProcessObservationResult[] {
+    if (observations.length === 0) return [];
+
+    // If tracks already exist, just process normally (batch logic only matters for initial load)
+    const activeTracks = this.getAllTracks().filter(t => t.status !== 'dropped');
+    if (activeTracks.length > 0) {
+      return observations.map(obs => {
+        const health = registrationHealthMap?.get(obs.sensorId as string);
+        return this.processObservation(obs, health);
+      });
+    }
+
+    // Cluster observations spatially
+    const clusters = this.clusterObservations(observations, 5000); // 5km radius
+
+    const results: ProcessObservationResult[] = [];
+    for (const cluster of clusters) {
+      // Process first observation to create the track
+      const first = cluster[0];
+      const health0 = registrationHealthMap?.get(first.sensorId as string);
+      results.push(this.processObservation(first, health0));
+
+      // Process remaining observations — they should now correlate to the new track
+      for (let i = 1; i < cluster.length; i++) {
+        const health = registrationHealthMap?.get(cluster[i].sensorId as string);
+        results.push(this.processObservation(cluster[i], health));
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Simple spatial clustering: group observations within radiusM of each other.
+   */
+  private clusterObservations(observations: SourceObservation[], radiusM: number): SourceObservation[][] {
+    const assigned = new Set<number>();
+    const clusters: SourceObservation[][] = [];
+
+    for (let i = 0; i < observations.length; i++) {
+      if (assigned.has(i)) continue;
+
+      const cluster: SourceObservation[] = [observations[i]];
+      assigned.add(i);
+
+      for (let j = i + 1; j < observations.length; j++) {
+        if (assigned.has(j)) continue;
+        const dist = haversineDistanceM(
+          observations[i].position.lat, observations[i].position.lon,
+          observations[j].position.lat, observations[j].position.lon,
+        );
+        if (dist <= radiusM) {
+          cluster.push(observations[j]);
+          assigned.add(j);
+        }
+      }
+
+      clusters.push(cluster);
+    }
+
+    return clusters;
+  }
+
+  // ── Post-tick merge sweep ───────────────────────────────────────────────
+
+  /**
+   * Scan all non-dropped tracks and merge pairs that are within maxDistM.
+   * Called after each tick to clean up duplicate tracks that slipped through
+   * the correlation gate. Returns the number of merges performed.
+   */
+  mergeCloseTracks(maxDistM: number = 3000): number {
+    let mergeCount = 0;
+    let merged = true;
+
+    while (merged) {
+      merged = false;
+      const active = this.getAllTracks().filter(t => t.status !== 'dropped');
+
+      for (let i = 0; i < active.length; i++) {
+        for (let j = i + 1; j < active.length; j++) {
+          const dist = haversineDistanceM(
+            active[i].state.lat, active[i].state.lon,
+            active[j].state.lat, active[j].state.lon,
+          );
+          if (dist <= maxDistM) {
+            this.mergeTracks(active[i].systemTrackId, active[j].systemTrackId);
+            mergeCount++;
+            merged = true;
+            break; // restart scan since track list changed
+          }
+        }
+        if (merged) break;
+      }
+    }
+
+    return mergeCount;
   }
 }
