@@ -19,6 +19,8 @@ export type {
   ClassificationSource,
   CoverType,
   CoverZone,
+  ZoneType,
+  OperationalZone,
 } from './common-types.js';
 
 // Source track

@@ -61,6 +61,7 @@ export function MapView() {
   const groundTruthTargets = useGroundTruthStore(s => s.targets);
   const showGroundTruth = useGroundTruthStore(s => s.showGroundTruth);
   const coverZones = useCoverZoneStore(s => s.coverZones);
+  const operationalZones = useCoverZoneStore(s => s.operationalZones);
   const fovOverlaps = useFovOverlapStore(s => s.fovOverlaps);
   const bearingAssociations = useFovOverlapStore(s => s.bearingAssociations);
   const multiSensorResolutions = useFovOverlapStore(s => s.multiSensorResolutions);
@@ -533,6 +534,7 @@ export function MapView() {
           groundTruthTargets={groundTruthTargets}
           showGroundTruth={showGroundTruth}
           coverZones={coverZones}
+          operationalZones={operationalZones}
           searchModeStates={searchModeStates}
           fovOverlaps={fovOverlaps}
           bearingAssociations={bearingAssociations}

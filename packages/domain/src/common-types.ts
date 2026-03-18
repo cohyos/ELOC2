@@ -125,6 +125,18 @@ export interface CoverZone {
   detectionProbabilityModifier: number;  // 0.0–1.0+, multiplies sensor Pd
 }
 
+/** Type of operational zone overlay. */
+export type ZoneType = 'threat_corridor' | 'exclusion' | 'engagement' | 'safe_passage';
+
+/** An operational zone drawn on the map (corridors, exclusion areas, etc.). */
+export interface OperationalZone {
+  id: string;
+  name: string;
+  zoneType: ZoneType;
+  polygon: Array<{ lat: number; lon: number }>;  // boundary vertices
+  color?: string;  // override default color
+}
+
 // ---------------------------------------------------------------------------
 // Bearing measurement
 // ---------------------------------------------------------------------------

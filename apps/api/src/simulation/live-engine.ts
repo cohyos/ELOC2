@@ -657,6 +657,7 @@ export class LiveEngine {
       operatorOverrides: this.getOperatorOverrides(),
       groundTruth: this.getGroundTruth(),
       coverZones: this.scenario.coverZones ?? [],
+      operationalZones: (this.scenario as any).operationalZones ?? [],
       cyclingHistories: Object.fromEntries(
         [...this.cyclingHistory.entries()].map(([sensorId, history]) => [sensorId, history.slice(-5)]),
       ),
@@ -4113,6 +4114,7 @@ export class LiveEngine {
       ),
       // Cover zones (REQ-11)
       coverZones: this.scenario.coverZones ?? [],
+      operationalZones: (this.scenario as any).operationalZones ?? [],
       // Quality metrics (REQ-8)
       qualityMetrics: this.cachedQualityMetrics ?? undefined,
       // EO allocation quality (REQ-10)

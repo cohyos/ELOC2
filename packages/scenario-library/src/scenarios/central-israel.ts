@@ -294,4 +294,41 @@ export const centralIsrael: ScenarioDefinition = {
       detectionProbabilityModifier: 1.0,  // baseline open terrain
     },
   ],
+
+  // ── Operational Zones ──────────────────────────────────────────────
+  operationalZones: [
+    {
+      id: 'oz-north-corridor',
+      name: 'Northern Threat Corridor',
+      zoneType: 'threat_corridor',
+      polygon: [
+        { lat: 32.90, lon: 35.30 },
+        { lat: 32.90, lon: 35.50 },
+        { lat: 32.20, lon: 35.20 },
+        { lat: 32.20, lon: 35.00 },
+      ],
+    },
+    {
+      id: 'oz-sea-exclusion',
+      name: 'Mediterranean Exclusion',
+      zoneType: 'exclusion',
+      polygon: [
+        { lat: 32.50, lon: 34.50 },
+        { lat: 32.50, lon: 34.70 },
+        { lat: 32.10, lon: 34.70 },
+        { lat: 32.10, lon: 34.50 },
+      ],
+    },
+    {
+      id: 'oz-engagement-zone',
+      name: 'Primary Engagement Zone',
+      zoneType: 'engagement',
+      polygon: [
+        { lat: 32.30, lon: 34.80 },
+        { lat: 32.30, lon: 35.20 },
+        { lat: 31.80, lon: 35.20 },
+        { lat: 31.80, lon: 34.80 },
+      ],
+    },
+  ],
 };

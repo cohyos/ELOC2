@@ -7,6 +7,7 @@ import type {
   PolicyMode,
   TargetClassification,
   CoverZone,
+  OperationalZone,
 } from '@eloc2/domain';
 
 export interface SensorDefinition {
@@ -60,4 +61,5 @@ export interface ScenarioDefinition {
   faults: FaultDefinition[];
   operatorActions: OperatorActionDef[];
   coverZones?: CoverZone[];
+  operationalZones?: OperationalZone[];
 }
