@@ -401,6 +401,8 @@ export class LiveEngine {
       })),
       fusionModes: Object.fromEntries(this.fusionModePerSensor),
       investigationSummaries: this.getActiveInvestigations(),
+      dwellStates: this.getDwellStates(),
+      revisitSchedule: this.getRevisitSchedule(),
       operatorOverrides: this.getOperatorOverrides(),
       groundTruth: this.getGroundTruth(),
     };
@@ -884,6 +886,9 @@ export class LiveEngine {
     this.eventEnvelopes = [];
     this.operatorLockedSensors.clear();
     this.operatorTrackPriority.clear();
+    this.dwellState.clear();
+    this.dwellDurationOverrides.clear();
+    this.lastInvestigationTime.clear();
 
     this.state = this.buildInitialState();
   }
