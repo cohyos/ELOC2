@@ -21,6 +21,7 @@ COPY packages/scenario-library/package.json packages/scenario-library/
 COPY packages/validation/package.json    packages/validation/
 COPY packages/deployment-planner/package.json packages/deployment-planner/
 COPY packages/eo-management/package.json packages/eo-management/
+COPY packages/asterix-adapter/package.json packages/asterix-adapter/
 COPY apps/simulator/package.json         apps/simulator/
 COPY apps/api/package.json               apps/api/
 COPY apps/workstation/package.json       apps/workstation/
