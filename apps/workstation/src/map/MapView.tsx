@@ -462,8 +462,10 @@ export function MapView() {
 
   // DebugOverlay: always show HTML markers (bypasses GL layers entirely)
   // This verifies data flow independently of MapLibre layer init.
-  // Gate behind ?nodebug to disable if needed.
-  const showDebugOverlay = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
+  // DebugOverlay: HTML-based track/sensor rendering (primary reliable renderer).
+  // MapLibre circle layers may fail due to glyph CDN / WebGL issues in production.
+  // Gate behind ?nodebug to disable if needed for testing MapLibre-only rendering.
+  const hideOverlay = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('nodebug');
   const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
 
   // Set map instance as soon as the map exists (don't wait for layersReady)
@@ -477,6 +479,11 @@ export function MapView() {
     }
   }, [layersReady, mapInstance]);
 
+  // Track status filtered tracks for the overlay (same filter as MapLibre layers)
+  const filteredTracksForOverlay = tracks.filter(t =>
+    trackStatusFilter[t.status as keyof typeof trackStatusFilter] !== false
+  );
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div
@@ -488,16 +495,15 @@ export function MapView() {
         }}
       />
       <LayerFilterPanel />
-      {showDebugOverlay && (
+      {!hideOverlay && (
         <DebugOverlay
           map={mapInstance}
-          tracks={tracks}
+          tracks={filteredTracksForOverlay}
           sensors={sensors}
           layersReady={layersReady}
-          showTracks={true}
-          showTrackLabels={true}
-          showSensors={true}
-          showSensorLabels={true}
+          layerVisibility={layerVisibility}
+          onSelectTrack={selectTrack}
+          onSelectSensor={selectSensor}
         />
       )}
     </div>

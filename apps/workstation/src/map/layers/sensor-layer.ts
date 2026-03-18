@@ -73,7 +73,8 @@ export function initSensorLayer(map: MaplibreMap) {
     },
   });
 
-  // Sensor labels — separate try/catch so font issues don't break circles
+  // Sensor labels — start hidden to prevent glyph CDN loading from stalling WebGL pipeline.
+  // Visibility is controlled by the layerVisibility sync effect in MapView.
   try {
     map.addLayer({
       id: LABEL_LAYER_ID,
@@ -85,6 +86,8 @@ export function initSensorLayer(map: MaplibreMap) {
         'text-offset': [0, -1.5],
         'text-anchor': 'bottom',
         'text-font': ['Open Sans Bold'],
+        'text-optional': true,
+        'visibility': 'none',
       },
       paint: {
         'text-color': ['get', 'color'],
