@@ -103,7 +103,7 @@ See `Knowledge_Base_and_Agents_instructions/ELOC2_Corrections_and_Upgrades_Plan.
 | 4: Quality + Land | **Complete** | QualityAssessor (REQ-8), before/after EO (REQ-9), allocation criteria (REQ-10), cover zones (REQ-11) |
 | 5: EO Mgmt B | **Complete** | Search mode (REQ-5B), optimization loop (REQ-5C), FOV overlap + multi-target resolution (REQ-6) |
 | 6: Reports + Deploy | **Complete** | Report generator (REQ-12), deployment planner (REQ-15), EO module refactor (REQ-16) |
-| 7: Integration | Pending | E2E testing, performance validation, full scenario verification |
+| 7: Integration | **Complete** | E2E testing (33 integration + 12 deploy + 8 report + 9 perf = 62 new tests) |
 
 ## Recent Fixes (Rounds 1-3, branch `claude/eloc2-development-U3sup`)
 
@@ -174,7 +174,7 @@ See `Knowledge_Base_and_Agents_instructions/ELOC2_Corrections_and_Upgrades_Plan.
 ## Development
 - Package manager: pnpm (v9.15.0) with workspaces
 - Build: `pnpm build` (uses Turbo)
-- Test: `pnpm test` (146+ tests, all passing)
+- Test: `pnpm test` (398+ tests, all passing)
 - Dev branch: `claude/eloc2-handover-deployment-XSyf8`
 - Dockerfile: 2-stage build, serves workstation static files from API on port 3001
 - Vite dev server on port 3000 proxies `/api` and `/ws` to 3001
