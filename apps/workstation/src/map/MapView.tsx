@@ -19,6 +19,7 @@ import { LayerFilterPanel } from './LayerFilterPanel';
 import type { LayerVisibility, SelectionBearingRay } from '../stores/ui-store';
 import { useDemoStore } from '../stores/demo-store';
 import { applyBasicMode } from '../demo/BasicModeFilter';
+import { useGroundTruthStore } from '../stores/ground-truth-store';
 
 export function MapView() {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -53,6 +54,8 @@ export function MapView() {
   const darkMode = useUiStore(s => s.darkMode);
   const demoActive = useDemoStore(s => s.active);
   const viewMode = useDemoStore(s => s.viewMode);
+  const groundTruthTargets = useGroundTruthStore(s => s.targets);
+  const showGroundTruth = useGroundTruthStore(s => s.showGroundTruth);
 
   // Initialize map
   useEffect(() => {
@@ -509,6 +512,8 @@ export function MapView() {
           layerVisibility={layerVisibility}
           onSelectTrack={selectTrack}
           onSelectSensor={selectSensor}
+          groundTruthTargets={groundTruthTargets}
+          showGroundTruth={showGroundTruth}
         />
       )}
     </div>

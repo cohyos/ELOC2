@@ -79,6 +79,14 @@ interface UiState {
   spawnTargetPosition: { lat: number; lon: number } | null;
   spawnTargetActive: boolean;
 
+  // Panel sizing
+  rightPanelWidth: number;
+  timelinePanelHeight: number;
+
+  // Simulation state
+  simulationState: string;
+  allowedActions: string[];
+
   // Actions
   selectTrack: (id: string | null) => void;
   selectSensor: (id: string | null) => void;
@@ -112,6 +120,13 @@ interface UiState {
   addInjectionEntry: (entry: InjectionLogEntry) => void;
   setSpawnTargetPosition: (pos: { lat: number; lon: number } | null) => void;
   setSpawnTargetActive: (active: boolean) => void;
+
+  // Panel sizing actions
+  setRightPanelWidth: (w: number) => void;
+  setTimelinePanelHeight: (h: number) => void;
+
+  // Simulation state actions
+  setSimulationState: (state: string, actions: string[]) => void;
 }
 
 export interface SelectionBearingRay {
@@ -136,6 +151,18 @@ export interface InjectionLogEntry {
 }
 
 let eventCounter = 0;
+
+const PANEL_DEFAULTS = { rightPanelWidth: 380, timelinePanelHeight: 150 };
+const LS_RIGHT_WIDTH_KEY = 'eloc2_rightPanelWidth';
+const LS_TIMELINE_HEIGHT_KEY = 'eloc2_timelinePanelHeight';
+
+function loadPanelSize(key: string, fallback: number, min: number, max: number): number {
+  try {
+    const v = Number(localStorage.getItem(key));
+    if (Number.isFinite(v) && v >= min && v <= max) return v;
+  } catch { /* ignore */ }
+  return fallback;
+}
 
 export const useUiStore = create<UiState>((set) => ({
   selectedTrackId: null,
@@ -162,6 +189,10 @@ export const useUiStore = create<UiState>((set) => ({
   injectionLog: [],
   spawnTargetPosition: null,
   spawnTargetActive: false,
+  rightPanelWidth: loadPanelSize(LS_RIGHT_WIDTH_KEY, PANEL_DEFAULTS.rightPanelWidth, 250, 600),
+  timelinePanelHeight: loadPanelSize(LS_TIMELINE_HEIGHT_KEY, PANEL_DEFAULTS.timelinePanelHeight, 80, 400),
+  simulationState: 'idle',
+  allowedActions: ['start', 'reset'],
 
   selectTrack: (id) =>
     set({ selectedTrackId: id, selectedSensorId: null, selectedCueId: null, selectedGroupId: null, selectedGeometryTrackId: null, detailView: id ? 'track' : 'none', detailPanelOpen: !!id }),
@@ -228,4 +259,17 @@ export const useUiStore = create<UiState>((set) => ({
 
   setSpawnTargetPosition: (pos) => set({ spawnTargetPosition: pos }),
   setSpawnTargetActive: (active) => set({ spawnTargetActive: active, spawnTargetPosition: active ? null : null }),
+
+  setRightPanelWidth: (w) => {
+    const clamped = Math.max(250, Math.min(600, w));
+    try { localStorage.setItem(LS_RIGHT_WIDTH_KEY, String(clamped)); } catch { /* ignore */ }
+    set({ rightPanelWidth: clamped });
+  },
+  setTimelinePanelHeight: (h) => {
+    const clamped = Math.max(80, Math.min(400, h));
+    try { localStorage.setItem(LS_TIMELINE_HEIGHT_KEY, String(clamped)); } catch { /* ignore */ }
+    set({ timelinePanelHeight: clamped });
+  },
+
+  setSimulationState: (state, actions) => set({ simulationState: state, allowedActions: actions }),
 }));

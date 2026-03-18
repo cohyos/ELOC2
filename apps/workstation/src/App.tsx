@@ -17,12 +17,18 @@ import { GeometryDetailPanel } from './geometry-detail/GeometryDetailPanel';
 import { ScenarioEditor } from './editor/ScenarioEditor';
 import { LiveInjectionToolbar } from './injection/LiveInjectionToolbar';
 import { useDemoStore } from './stores/demo-store';
+import { useGroundTruthStore } from './stores/ground-truth-store';
 import { ToggleOverlay } from './demo/ToggleOverlay';
 import { getBasicModeHiddenPanels } from './demo/BasicModeFilter';
 import { PresenterDashboard } from './demo/PresenterDashboard';
 import { AnnotationOverlay } from './demo/AnnotationOverlay';
 import { NarrationPanel } from './demo/NarrationPanel';
 import { MetricsOverlay } from './demo/MetricsOverlay';
+import { ResizeHandle } from './components/ResizeHandle';
+
+// Panel size defaults (must match ui-store defaults)
+const DEFAULT_RIGHT_PANEL_WIDTH = 380;
+const DEFAULT_TIMELINE_HEIGHT = 150;
 
 // ---------------------------------------------------------------------------
 // Colors
@@ -166,6 +172,14 @@ export function App() {
   const toggleInjectionMode = useUiStore(s => s.toggleInjectionMode);
   const darkMode = useUiStore(s => s.darkMode);
   const toggleDarkMode = useUiStore(s => s.toggleDarkMode);
+  const showGroundTruth = useGroundTruthStore(s => s.showGroundTruth);
+  const toggleGroundTruth = useGroundTruthStore(s => s.toggleGroundTruth);
+  const simulationState = useUiStore(s => s.simulationState);
+  const allowedActions = useUiStore(s => s.allowedActions);
+  const rightPanelWidth = useUiStore(s => s.rightPanelWidth);
+  const timelinePanelHeight = useUiStore(s => s.timelinePanelHeight);
+  const setRightPanelWidth = useUiStore(s => s.setRightPanelWidth);
+  const setTimelinePanelHeight = useUiStore(s => s.setTimelinePanelHeight);
 
   // Sync demo mode to ui-store for convenience
   const setDemoMode = useUiStore(s => s.setDemoMode);
@@ -297,7 +311,7 @@ export function App() {
 
   // ─── Desktop Layout ───────────────────────────────────────────────────
   const showDetail = detailPanelOpen;
-  const showInjection = injectionMode && simRunning;
+  const showInjection = injectionMode && simulationState !== 'idle';
   const btn = btnBase(false);
 
   return (
@@ -308,15 +322,25 @@ export function App() {
       background: colors.bg,
       color: colors.text,
       overflow: 'hidden',
-      gridTemplateRows: showInjection ? '40px auto 1fr auto' : '40px 1fr auto',
-      gridTemplateColumns: showDetail ? '1fr 380px' : '1fr',
+      gridTemplateRows: showInjection
+        ? (timelinePanelOpen ? `40px auto 1fr 4px ${timelinePanelHeight}px` : '40px auto 1fr 32px')
+        : (timelinePanelOpen ? `40px 1fr 4px ${timelinePanelHeight}px` : '40px 1fr 32px'),
+      gridTemplateColumns: showDetail ? `1fr 4px ${rightPanelWidth}px` : '1fr',
       gridTemplateAreas: showDetail
         ? (showInjection
-          ? `"header header" "inject inject" "map detail" "timeline timeline"`
-          : `"header header" "map detail" "timeline timeline"`)
+          ? (timelinePanelOpen
+            ? `"header header header" "inject inject inject" "map vresize detail" "hresize hresize hresize" "timeline timeline timeline"`
+            : `"header header header" "inject inject inject" "map vresize detail" "timeline timeline timeline"`)
+          : (timelinePanelOpen
+            ? `"header header header" "map vresize detail" "hresize hresize hresize" "timeline timeline timeline"`
+            : `"header header header" "map vresize detail" "timeline timeline timeline"`))
         : (showInjection
-          ? `"header" "inject" "map" "timeline"`
-          : `"header" "map" "timeline"`),
+          ? (timelinePanelOpen
+            ? `"header" "inject" "map" "hresize" "timeline"`
+            : `"header" "inject" "map" "timeline"`)
+          : (timelinePanelOpen
+            ? `"header" "map" "hresize" "timeline"`
+            : `"header" "map" "timeline"`)),
     }}>
       {/* Header */}
       <header style={{ gridArea: 'header', background: colors.headerBg, display: 'flex', alignItems: 'center', padding: '0 16px', gap: '12px', fontSize: '13px', borderBottom: `1px solid ${colors.border}`, zIndex: 10 }}>
@@ -363,17 +387,53 @@ export function App() {
 
         {/* Scenario controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '8px' }}>
-          <button style={{ ...btn, background: simRunning ? '#cc3300' : '#00aa44', color: '#fff', fontWeight: 600, padding: '3px 12px' }} onClick={handleStartPause}>
-            {simRunning ? 'Pause' : 'Start'}
-          </button>
-          <button style={btn} onClick={handleReset}>Reset</button>
+          {/* State badge */}
+          <span style={{
+            fontSize: '9px',
+            fontWeight: 700,
+            letterSpacing: '0.5px',
+            textTransform: 'uppercase',
+            padding: '2px 6px',
+            borderRadius: '3px',
+            background: simulationState === 'running' ? '#00aa4422' : simulationState === 'paused' ? '#ffcc0022' : '#88888822',
+            color: simulationState === 'running' ? '#00cc44' : simulationState === 'paused' ? '#ffcc00' : '#888',
+            border: `1px solid ${simulationState === 'running' ? '#00cc4444' : simulationState === 'paused' ? '#ffcc0044' : '#88888844'}`,
+          }}>
+            {simulationState}
+          </span>
+          {(() => {
+            const canStart = allowedActions.includes('start') || allowedActions.includes('resume');
+            const canPause = allowedActions.includes('pause');
+            const startPauseDisabled = simRunning ? !canPause : !canStart;
+            return (
+              <button
+                style={{ ...btn, background: simRunning ? '#cc3300' : '#00aa44', color: '#fff', fontWeight: 600, padding: '3px 12px', opacity: startPauseDisabled ? 0.4 : 1, cursor: startPauseDisabled ? 'not-allowed' : 'pointer' }}
+                onClick={startPauseDisabled ? undefined : handleStartPause}
+                disabled={startPauseDisabled}
+              >
+                {simRunning ? 'Pause' : (simulationState === 'paused' ? 'Resume' : 'Start')}
+              </button>
+            );
+          })()}
+          {(() => {
+            const canReset = allowedActions.includes('reset');
+            return (
+              <button
+                style={{ ...btn, opacity: canReset ? 1 : 0.4, cursor: canReset ? 'pointer' : 'not-allowed' }}
+                onClick={canReset ? handleReset : undefined}
+                disabled={!canReset}
+              >
+                Reset
+              </button>
+            );
+          })()}
           {[1, 2, 5, 10].map(s => (
             <button key={s} style={{ ...btn, background: simSpeed === s ? '#4a9eff' : '#333', color: simSpeed === s ? '#fff' : '#aaa' }} onClick={() => handleSpeed(s)}>{s}x</button>
           ))}
           <span style={{ fontSize: '11px', color: '#aaa', fontFamily: 'monospace', minWidth: '50px' }}>T+{formatTime(simElapsed)}</span>
         </div>
 
-        {simRunning && (
+        {simulationState !== 'idle' && (
           <button
             style={{ ...btn, background: injectionMode ? '#ff8800' : '#333', color: injectionMode ? '#fff' : '#aaa', border: injectionMode ? '1px solid #ff880066' : 'none', fontWeight: injectionMode ? 600 : 400 }}
             onClick={toggleInjectionMode}
@@ -402,6 +462,9 @@ export function App() {
                 store.setDetailView('investigation');
               }
             }}>Investigation</button>
+          <button style={{ ...btn, background: showGroundTruth ? '#0a2a2a' : '#333', color: showGroundTruth ? '#00ffff' : '#aaa', border: showGroundTruth ? '1px solid #00ffff' : '1px solid transparent' }} onClick={toggleGroundTruth} title="Toggle ground truth overlay">
+            GT
+          </button>
           <button style={{ ...btn, background: darkMode ? '#4a9eff' : '#333', color: darkMode ? '#fff' : '#aaa' }} onClick={toggleDarkMode} title="Toggle dark/light map">
             {darkMode ? 'Dark' : 'Light'}
           </button>
@@ -426,6 +489,17 @@ export function App() {
         <ToggleOverlay />
       </div>
 
+      {/* Vertical Resize Handle (between map and detail panel) */}
+      {showDetail && (
+        <ResizeHandle
+          direction="vertical"
+          gridArea="vresize"
+          currentSize={rightPanelWidth}
+          onResize={setRightPanelWidth}
+          onReset={() => setRightPanelWidth(DEFAULT_RIGHT_PANEL_WIDTH)}
+        />
+      )}
+
       {/* Detail Panel */}
       {showDetail && (
         <div style={{ gridArea: 'detail', background: colors.panelBg, borderLeft: `1px solid ${colors.border}`, overflowY: 'auto', overflowX: 'hidden' }}>
@@ -440,8 +514,19 @@ export function App() {
         </div>
       )}
 
+      {/* Horizontal Resize Handle (between map and timeline) */}
+      {timelinePanelOpen && (
+        <ResizeHandle
+          direction="horizontal"
+          gridArea="hresize"
+          currentSize={timelinePanelHeight}
+          onResize={setTimelinePanelHeight}
+          onReset={() => setTimelinePanelHeight(DEFAULT_TIMELINE_HEIGHT)}
+        />
+      )}
+
       {/* Timeline */}
-      <div style={{ gridArea: 'timeline', background: colors.headerBg, borderTop: `1px solid ${colors.border}`, height: timelinePanelOpen ? '150px' : '32px', transition: 'height 0.2s ease', overflow: 'hidden' }}>
+      <div style={{ gridArea: 'timeline', background: colors.headerBg, borderTop: timelinePanelOpen ? 'none' : `1px solid ${colors.border}`, overflow: 'hidden' }}>
         {timelinePanelOpen ? <TimelinePanel /> : (
           <div style={{ padding: '6px 16px', fontSize: '12px', color: '#666' }}>Timeline (collapsed) — click Show Timeline to expand</div>
         )}
@@ -473,6 +558,8 @@ function MobileLayout() {
   const setDetailView = useUiStore(s => s.setDetailView);
   const timelinePanelOpen = useUiStore(s => s.timelinePanelOpen);
   const toggleTimelinePanel = useUiStore(s => s.toggleTimelinePanel);
+  const simulationState = useUiStore(s => s.simulationState);
+  const allowedActions = useUiStore(s => s.allowedActions);
 
   const [simRunning, setSimRunning] = useState(false);
   const [simSpeed, setSimSpeed] = useState(1);
@@ -533,10 +620,22 @@ function MobileLayout() {
           <span style={{ fontSize: '14px', fontWeight: 700, color: '#fff', letterSpacing: '1px' }}>ELOC2</span>
           <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: wsConnected ? '#00cc44' : '#ff3333' }} />
           <span style={{ fontSize: '11px', color: '#aaa', fontFamily: 'monospace' }}>T+{formatTime(simElapsed)}</span>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
-            <button style={{ ...btn, background: simRunning ? '#cc3300' : '#00aa44', color: '#fff', fontWeight: 600 }} onClick={handleStartPause}>
-              {simRunning ? 'Pause' : 'Start'}
-            </button>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <span style={{
+              fontSize: '8px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', padding: '1px 4px', borderRadius: '2px',
+              background: simulationState === 'running' ? '#00aa4422' : simulationState === 'paused' ? '#ffcc0022' : '#88888822',
+              color: simulationState === 'running' ? '#00cc44' : simulationState === 'paused' ? '#ffcc00' : '#888',
+            }}>{simulationState}</span>
+            {(() => {
+              const canStart = allowedActions.includes('start') || allowedActions.includes('resume');
+              const canPause = allowedActions.includes('pause');
+              const disabled = simRunning ? !canPause : !canStart;
+              return (
+                <button style={{ ...btn, background: simRunning ? '#cc3300' : '#00aa44', color: '#fff', fontWeight: 600, opacity: disabled ? 0.4 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }} onClick={disabled ? undefined : handleStartPause} disabled={disabled}>
+                  {simRunning ? 'Pause' : (simulationState === 'paused' ? 'Resume' : 'Start')}
+                </button>
+              );
+            })()}
             <button style={btn} onClick={() => setShowControls(!showControls)}>
               {showControls ? 'Less' : 'More'}
             </button>
@@ -564,7 +663,10 @@ function MobileLayout() {
           <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {/* Speed + reset */}
             <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <button style={btn} onClick={handleReset}>Reset</button>
+              {(() => {
+                const canReset = allowedActions.includes('reset');
+                return <button style={{ ...btn, opacity: canReset ? 1 : 0.4, cursor: canReset ? 'pointer' : 'not-allowed' }} onClick={canReset ? handleReset : undefined} disabled={!canReset}>Reset</button>;
+              })()}
               {[1, 2, 5, 10].map(s => (
                 <button key={s} style={{ ...btn, background: simSpeed === s ? '#4a9eff' : '#333', color: simSpeed === s ? '#fff' : '#aaa', minWidth: '36px' }} onClick={() => handleSpeed(s)}>{s}x</button>
               ))}

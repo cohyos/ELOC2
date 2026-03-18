@@ -165,6 +165,9 @@ export function TimelinePanel() {
   const scenarioDurationSec = useUiStore(s => s.scenarioDurationSec);
   const setReplayPlaying = useUiStore(s => s.setReplayPlaying);
   const setReplaySpeed = useUiStore(s => s.setReplaySpeed);
+  const simulationState = useUiStore(s => s.simulationState);
+  const allowedActions = useUiStore(s => s.allowedActions);
+  const canSeek = allowedActions.includes('seek');
 
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set());
 
@@ -288,9 +291,9 @@ export function TimelinePanel() {
         </span>
         <div
           ref={scrubberRef}
-          style={{ ...styles.scrubber, flex: 1, marginBottom: 0, height: '10px', padding: '3px 0' }}
-          onMouseDown={handleScrubberMouseDown}
-          title="Click or drag to seek"
+          style={{ ...styles.scrubber, flex: 1, marginBottom: 0, height: '10px', padding: '3px 0', opacity: canSeek ? 1 : 0.4, cursor: canSeek ? 'pointer' : 'not-allowed' }}
+          onMouseDown={canSeek ? handleScrubberMouseDown : undefined}
+          title={canSeek ? 'Click or drag to seek' : 'Pause the simulation to seek'}
         >
           <div style={{ ...styles.scrubberFill(scenarioDurationSec > 0 ? (replayTime / scenarioDurationSec) * 100 : 0), height: '4px', position: 'relative', top: '50%', transform: 'translateY(-50%)' }} />
           <div style={styles.scrubberThumb(scenarioDurationSec > 0 ? (replayTime / scenarioDurationSec) * 100 : 0)} />

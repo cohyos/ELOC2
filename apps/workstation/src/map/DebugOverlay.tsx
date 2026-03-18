@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useCallback } from 'react';
 import type maplibregl from 'maplibre-gl';
 import type { SystemTrack, SensorState } from '@eloc2/domain';
 import type { LayerVisibility } from '../stores/ui-store';
+import type { GroundTruthTarget } from '../stores/ground-truth-store';
 
 /**
  * DebugOverlay — Primary HTML/SVG-based renderer.
@@ -76,9 +77,11 @@ interface DebugOverlayProps {
   layerVisibility: LayerVisibility;
   onSelectTrack?: (id: string) => void;
   onSelectSensor?: (id: string) => void;
+  groundTruthTargets?: GroundTruthTarget[];
+  showGroundTruth?: boolean;
 }
 
-export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor }: DebugOverlayProps) {
+export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth }: DebugOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const frameRef = useRef<number>(0);
@@ -94,8 +97,8 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
 
     const showSensors = layerVisibility.sensors;
     const showSensorLabels = layerVisibility.sensorLabels;
-    const showTracks = layerVisibility.tracks;
-    const showTrackLabels = layerVisibility.trackLabels;
+    const showTracks = showGroundTruth ? false : layerVisibility.tracks;
+    const showTrackLabels = showGroundTruth ? false : layerVisibility.trackLabels;
 
     // ── SVG Geometry: Coverage arcs, EO rays, triangulation, bearings ──
 
@@ -220,6 +223,68 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
       }
     }
 
+    // Draw ground truth targets as cyan diamonds when GT mode is active
+    if (showGroundTruth && groundTruthTargets && groundTruthTargets.length > 0) {
+      for (const target of groundTruthTargets) {
+        if (!target.active) continue;
+        const { lon, lat } = target.position;
+        if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+        const px = proj(lon, lat);
+
+        // Diamond marker (rotated square)
+        const el = document.createElement('div');
+        el.style.cssText = `
+          position:absolute; left:${px.x - 7}px; top:${px.y - 7}px;
+          width:14px; height:14px; background:#00ffff;
+          border:2px solid #fff; z-index:22;
+          transform:rotate(45deg); pointer-events:none;
+        `;
+        container.appendChild(el);
+
+        // Name label
+        const lbl = document.createElement('div');
+        lbl.style.cssText = `
+          position:absolute; left:${px.x + 12}px; top:${px.y - 8}px;
+          font-size:10px; color:#00ffff; white-space:nowrap;
+          text-shadow:0 0 3px #000, 0 0 3px #000; z-index:23;
+          pointer-events:none; font-family:monospace; font-weight:bold;
+        `;
+        lbl.textContent = target.name;
+        container.appendChild(lbl);
+
+        // Classification label below name
+        if (target.classification) {
+          const cls = document.createElement('div');
+          cls.style.cssText = `
+            position:absolute; left:${px.x + 12}px; top:${px.y + 4}px;
+            font-size:9px; color:#00cccc; white-space:nowrap;
+            text-shadow:0 0 3px #000, 0 0 3px #000; z-index:23;
+            pointer-events:none; font-family:monospace;
+          `;
+          cls.textContent = target.classification;
+          container.appendChild(cls);
+        }
+
+        // Velocity vector line
+        if (target.velocity) {
+          const { vx, vy } = target.velocity;
+          const speed = Math.sqrt(vx * vx + vy * vy);
+          if (speed > 0.1) {
+            // Normalize and scale to ~30px length
+            const scale = 30 / speed;
+            const endX = px.x + vx * scale;
+            const endY = px.y - vy * scale; // Invert Y for screen coords
+            const line = createSvgEl('line', {
+              x1: String(px.x), y1: String(px.y),
+              x2: String(endX), y2: String(endY),
+              stroke: '#00ffff', 'stroke-width': '2', 'stroke-opacity': '0.8',
+            });
+            svg.appendChild(line);
+          }
+        }
+      }
+    }
+
     // Draw trail dots (fading breadcrumbs behind tracks)
     if (showTracks && trailHistory.size > 0) {
       const trackStatusMap = new Map(tracks.map(t => [t.systemTrackId as string, t.status]));
@@ -283,7 +348,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
         }
       }
     }
-  }, [map, tracks, sensors, trailHistory, layerVisibility, onSelectTrack, onSelectSensor]);
+  }, [map, tracks, sensors, trailHistory, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth]);
 
   // Re-render on map move/zoom
   useEffect(() => {
@@ -308,7 +373,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
   // Re-render when data changes
   useEffect(() => {
     render();
-  }, [tracks, sensors, trailHistory, render]);
+  }, [tracks, sensors, trailHistory, groundTruthTargets, showGroundTruth, render]);
 
   return (
     <>
