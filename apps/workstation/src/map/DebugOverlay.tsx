@@ -56,13 +56,14 @@ interface DebugOverlayProps {
   map: maplibregl.Map | null;
   tracks: SystemTrack[];
   sensors: SensorState[];
+  trailHistory: Map<string, Array<{ lon: number; lat: number }>>;
   layersReady: boolean;
   layerVisibility: LayerVisibility;
   onSelectTrack?: (id: string) => void;
   onSelectSensor?: (id: string) => void;
 }
 
-export function DebugOverlay({ map, tracks, sensors, layersReady, layerVisibility, onSelectTrack, onSelectSensor }: DebugOverlayProps) {
+export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor }: DebugOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<number>(0);
 
@@ -90,6 +91,7 @@ export function DebugOverlay({ map, tracks, sensors, layersReady, layerVisibilit
             position:absolute; left:${px.x - 7}px; top:${px.y - 7}px;
             width:14px; height:14px; background:${color};
             border:2px solid #000; z-index:20; cursor:pointer;
+            pointer-events:auto;
           `;
           el.title = `${shortSensorLabel(sensor)} — ${sensor.sensorId}`;
           if (onSelectSensor) {
@@ -113,6 +115,31 @@ export function DebugOverlay({ map, tracks, sensors, layersReady, layerVisibilit
       }
     }
 
+    // Draw trail dots (fading breadcrumbs behind tracks)
+    if (showTracks && trailHistory.size > 0) {
+      const trackStatusMap = new Map(tracks.map(t => [t.systemTrackId as string, t.status]));
+      for (const [trackId, positions] of trailHistory) {
+        const status = trackStatusMap.get(trackId) ?? 'tentative';
+        const color = statusColor(status);
+        const count = positions.length;
+        // Skip last position (that's the current track icon position)
+        for (let i = 0; i < count - 1; i++) {
+          const age = count - 1 - i;
+          const opacity = Math.max(0.15, 1.0 - (age / 5) * 0.85);
+          const { lon, lat } = positions[i];
+          if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+          const px = map.project([lon, lat]);
+          const dot = document.createElement('div');
+          dot.style.cssText = `
+            position:absolute; left:${px.x - 3}px; top:${px.y - 3}px;
+            width:6px; height:6px; border-radius:50%; background:${color};
+            opacity:${opacity}; z-index:18;
+          `;
+          container.appendChild(dot);
+        }
+      }
+    }
+
     // Draw tracks as circles
     if (showTracks || showTrackLabels) {
       for (const track of tracks) {
@@ -128,6 +155,7 @@ export function DebugOverlay({ map, tracks, sensors, layersReady, layerVisibilit
             position:absolute; left:${px.x - 6}px; top:${px.y - 6}px;
             width:12px; height:12px; border-radius:50%; background:${color};
             border:2px solid #fff; z-index:22; cursor:pointer;
+            pointer-events:auto;
           `;
           el.title = `${shortTrackLabel(track)} — ${track.status}`;
           if (onSelectTrack) {
@@ -150,7 +178,7 @@ export function DebugOverlay({ map, tracks, sensors, layersReady, layerVisibilit
         }
       }
     }
-  }, [map, tracks, sensors, layerVisibility, onSelectTrack, onSelectSensor]);
+  }, [map, tracks, sensors, trailHistory, layerVisibility, onSelectTrack, onSelectSensor]);
 
   // Re-render on map move/zoom
   useEffect(() => {
@@ -175,7 +203,7 @@ export function DebugOverlay({ map, tracks, sensors, layersReady, layerVisibilit
   // Re-render when data changes
   useEffect(() => {
     render();
-  }, [tracks, sensors, render]);
+  }, [tracks, sensors, trailHistory, render]);
 
   return (
     <div

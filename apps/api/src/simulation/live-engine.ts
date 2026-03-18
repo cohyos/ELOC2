@@ -1794,6 +1794,7 @@ export class LiveEngine {
       timestamp: Date.now(),
       simTimeSec: this.state.elapsedSec,
       running: this.state.running,
+      speed: this.state.speed,
       trackCount: tracks.length,
       confirmedCount: tracks.filter(t => t.status === 'confirmed').length,
       tentativeCount: tracks.filter(t => t.status === 'tentative').length,

@@ -66,7 +66,11 @@ export function MapView() {
       container: mapContainer.current,
       style: {
         version: 8,
-        glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
+        // Glyphs URL removed: DebugOverlay handles all text labels.
+        // Having a glyphs URL causes MapLibre to fetch fonts on symbol layer
+        // visibility change, which can stall the entire WebGL pipeline in
+        // production (CDN timeouts, CORS, rate limiting). See post-mortem:
+        // Knowledge_Base_and_Agents_instructions/Blank_Map_Postmortem_and_Testing_Lessons.md
         sources: {
           osm: {
             type: 'raster',
@@ -375,10 +379,10 @@ export function MapView() {
 
     const layerMap: Array<[keyof LayerVisibility, string[]]> = [
       ['tracks', ['system-tracks-layer', 'track-eo-badge', 'track-trails-layer', 'track-selection-pulse-layer', 'investigation-rings-layer', 'investigation-rings-outer']],
-      ['trackLabels', ['system-tracks-labels']],
+      // trackLabels and sensorLabels are handled by DebugOverlay (HTML), not MapLibre.
+      // Symbol layers remain hidden to avoid glyph CDN loading.
       ['trackEllipses', ['track-ellipses-layer']],
       ['sensors', ['sensors-layer', 'sensors-degraded', 'sensors-highlight-ring']],
-      ['sensorLabels', ['sensors-labels']],
       ['radarCoverage', ['radar-coverage-layer', 'radar-coverage-outline']],
       ['eoFor', ['eo-for-layer']],
       ['eoFov', ['eo-fov-layer']],
@@ -500,6 +504,7 @@ export function MapView() {
           map={mapInstance}
           tracks={filteredTracksForOverlay}
           sensors={sensors}
+          trailHistory={trailHistory}
           layersReady={layersReady}
           layerVisibility={layerVisibility}
           onSelectTrack={selectTrack}

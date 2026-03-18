@@ -149,6 +149,9 @@ export class ReplayController {
     if (typeof data.running === 'boolean') {
       useUiStore.getState().setReplayPlaying(data.running);
     }
+    if (typeof data.speed === 'number') {
+      useUiStore.getState().setReplaySpeed(data.speed);
+    }
   }
 }
 
