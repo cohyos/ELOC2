@@ -58,6 +58,10 @@ export function MapView() {
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
 
+    const tileUrl = darkMode
+      ? 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
+      : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
     map.current = new maplibregl.Map({
       container: mapContainer.current,
       style: {
@@ -66,7 +70,7 @@ export function MapView() {
         sources: {
           osm: {
             type: 'raster',
-            tiles: ['https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'],
+            tiles: [tileUrl],
             tileSize: 256,
             attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
           },
@@ -91,17 +95,47 @@ export function MapView() {
     map.current.addControl(new maplibregl.NavigationControl(), 'top-right');
     map.current.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
+    /** Initialize all data layers on the map */
+    const initAllLayers = (m: maplibregl.Map) => {
+      if (!m.getSource('radar-coverage')) {
+        try { initCoverageLayer(m); } catch (e) { console.warn('[MapView] Coverage layer init failed:', e); }
+      }
+      if (!m.getSource('triangulation-rays')) {
+        try { initTriangulationLayer(m); } catch (e) { console.warn('[MapView] Triangulation layer init failed:', e); }
+      }
+      if (!m.getSource('eo-rays')) {
+        try { initEoRayLayer(m); } catch (e) { console.warn('[MapView] EO ray layer init failed:', e); }
+      }
+      if (!m.getSource('sensors')) {
+        try { initSensorLayer(m); } catch (e) { console.warn('[MapView] Sensor layer init failed:', e); }
+      }
+      if (!m.getSource('investigation-rings')) {
+        try { initInvestigationRingLayer(m); } catch (e) { console.warn('[MapView] Investigation ring layer init failed:', e); }
+      }
+      if (!m.getSource('bearing-lines')) {
+        try { initBearingLineLayer(m); } catch (e) { console.warn('[MapView] Bearing line layer init failed:', e); }
+      }
+      if (!m.getSource('ambiguity-markers')) {
+        try { initAmbiguityMarkerLayer(m); } catch (e) { console.warn('[MapView] Ambiguity marker layer init failed:', e); }
+      }
+      if (!m.getSource('selection-rays-source')) {
+        try { initSelectionRayLayer(m); } catch (e) { console.warn('[MapView] Selection ray layer init failed:', e); }
+      }
+      if (!m.getSource('system-tracks')) {
+        try { initTrackLayer(m); } catch (e) { console.warn('[MapView] Track layer init failed:', e); }
+      }
+      console.log('[MapView] All data layers initialized');
+      // Force a resize in case the container dimensions changed during init
+      try { m.resize(); } catch { /* ignore */ }
+    };
+
+    let loadFired = false;
+
     map.current.on('load', () => {
-      if (!map.current) return;
-      try { initCoverageLayer(map.current); } catch (e) { console.warn('Coverage layer init failed:', e); }
-      try { initTriangulationLayer(map.current); } catch (e) { console.warn('Triangulation layer init failed:', e); }
-      try { initEoRayLayer(map.current); } catch (e) { console.warn('EO ray layer init failed:', e); }
-      try { initSensorLayer(map.current); } catch (e) { console.warn('Sensor layer init failed:', e); }
-      try { initInvestigationRingLayer(map.current); } catch (e) { console.warn('Investigation ring layer init failed:', e); }
-      try { initBearingLineLayer(map.current); } catch (e) { console.warn('Bearing line layer init failed:', e); }
-      try { initAmbiguityMarkerLayer(map.current); } catch (e) { console.warn('Ambiguity marker layer init failed:', e); }
-      try { initSelectionRayLayer(map.current); } catch (e) { console.warn('Selection ray layer init failed:', e); }
-      try { initTrackLayer(map.current); } catch (e) { console.warn('Track layer init failed:', e); }
+      if (!map.current || loadFired) return;
+      loadFired = true;
+      console.log('[MapView] Map load event fired — initializing layers');
+      initAllLayers(map.current);
 
       // Use setState to trigger re-render so data effects re-fire
       setLayersReady(true);
@@ -179,7 +213,19 @@ export function MapView() {
       }
     });
 
+    // Fallback: if 'load' event doesn't fire within 5 seconds, initialize layers anyway.
+    // This handles cases where tile/glyph servers are unreachable or slow.
+    const fallbackTimer = setTimeout(() => {
+      if (!loadFired && map.current) {
+        console.warn('[MapView] Map load event did not fire within 5s — initializing layers via fallback');
+        loadFired = true;
+        initAllLayers(map.current);
+        setLayersReady(true);
+      }
+    }, 5000);
+
     return () => {
+      clearTimeout(fallbackTimer);
       map.current?.remove();
       map.current = null;
       setLayersReady(false);

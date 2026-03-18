@@ -128,6 +128,15 @@ export function updateSensorLayer(
   const highlightSet = new Set(highlightedSensorIds ?? []);
   const hasSelection = highlightSet.size > 0;
 
+  // Diagnostic: log first real update
+  if (sensors.length > 0 && !(updateSensorLayer as any)._logged) {
+    (updateSensorLayer as any)._logged = true;
+    console.log(`[sensor-layer] First update — ${sensors.length} sensors`);
+    if (sensors[0]) {
+      console.log(`[sensor-layer] Sample: ${sensors[0].sensorId} at [${sensors[0].position.lon}, ${sensors[0].position.lat}]`);
+    }
+  }
+
   const features: GeoJSON.Feature[] = sensors.map(sensor => {
     const reg = regMap.get(sensor.sensorId as string);
     const degraded = reg

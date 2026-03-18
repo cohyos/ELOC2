@@ -232,6 +232,15 @@ export function updateTrackLayer(map: MaplibreMap, tracks: SystemTrack[], select
 
   const validTracks = tracks.filter(isValidCoord);
 
+  // Diagnostic: log first real update
+  if (tracks.length > 0 && !(updateTrackLayer as any)._logged) {
+    (updateTrackLayer as any)._logged = true;
+    console.log(`[track-layer] First update — ${tracks.length} tracks, ${validTracks.length} valid`);
+    if (validTracks[0]) {
+      console.log(`[track-layer] Sample: ${validTracks[0].systemTrackId} at [${validTracks[0].state.lon.toFixed(3)}, ${validTracks[0].state.lat.toFixed(3)}]`);
+    }
+  }
+
   // Only log errors (not periodic info) to avoid console noise
   if (tracks.length > 0 && validTracks.length === 0) {
     console.error('[track-layer] ALL tracks filtered as invalid! Sample:', tracks[0].systemTrackId);
