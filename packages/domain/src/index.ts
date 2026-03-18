@@ -15,6 +15,8 @@ export type {
   Covariance6x6,
   QualityLevel,
   BearingMeasurement,
+  TargetClassification,
+  ClassificationSource,
 } from './common-types.js';
 
 // Source track

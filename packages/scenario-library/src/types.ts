@@ -5,6 +5,7 @@ import type {
   CoverageArc,
   FieldOfView,
   PolicyMode,
+  TargetClassification,
 } from '@eloc2/domain';
 
 export interface SensorDefinition {
@@ -28,6 +29,7 @@ export interface TargetDefinition {
   description: string;
   waypoints: WaypointDef[];  // linear interpolation between waypoints
   startTime: number;  // seconds from scenario start
+  classification?: TargetClassification;
 }
 
 export interface FaultDefinition {

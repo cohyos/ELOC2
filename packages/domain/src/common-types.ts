@@ -81,6 +81,34 @@ export type QualityLevel = 'good' | 'degraded' | 'unsafe';
 // Bearing measurement
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Target classification
+// ---------------------------------------------------------------------------
+
+/** Taxonomy of target classifications for air defense. */
+export type TargetClassification =
+  | 'civilian_aircraft'
+  | 'passenger_aircraft'
+  | 'light_aircraft'
+  | 'fighter_aircraft'
+  | 'ally'
+  | 'predator'
+  | 'neutral'
+  | 'unknown'
+  | 'bird'
+  | 'birds'
+  | 'helicopter'
+  | 'uav'
+  | 'small_uav'
+  | 'drone';
+
+/** Source that assigned a target classification. */
+export type ClassificationSource = 'operator' | 'eo_identification' | 'c4isr' | 'scenario';
+
+// ---------------------------------------------------------------------------
+// Bearing measurement
+// ---------------------------------------------------------------------------
+
 /** A single angular measurement from a sensor. */
 export interface BearingMeasurement {
   azimuthDeg: number;

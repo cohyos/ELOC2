@@ -112,6 +112,12 @@ function DefaultPanel() {
         <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Active Tasks</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{activeTasks}</span></div>
         <button onClick={() => selectView('tasks')} style={{ marginTop: '6px', background: '#333', color: '#aaa', border: 'none', padding: '4px 12px', borderRadius: '3px', cursor: 'pointer', fontSize: '11px', width: '100%' }}>View Tasks</button>
       </div>
+      <div style={{ marginBottom: '16px' }}>
+        <div style={sectionTitle}>Build Info</div>
+        <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Git SHA</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{__APP_REVISION__}</span></div>
+        <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Branch</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{__BUILD_BRANCH__}</span></div>
+        <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Built</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{__BUILD_TIMESTAMP__}</span></div>
+      </div>
     </div>
   );
 }
@@ -316,7 +322,7 @@ export function App() {
       <header style={{ gridArea: 'header', background: colors.headerBg, display: 'flex', alignItems: 'center', padding: '0 16px', gap: '12px', fontSize: '13px', borderBottom: `1px solid ${colors.border}`, zIndex: 10 }}>
         <span style={{ fontSize: '15px', fontWeight: 700, color: '#fff', letterSpacing: '1px' }}>ELOC2</span>
         <span style={{ color: colors.textDim, fontSize: '12px' }}>EO C2 Air Defense Demonstrator</span>
-        <span style={{ color: colors.accent, fontSize: '10px', fontFamily: 'monospace' }}>rev:{__APP_REVISION__}</span>
+        <span style={{ color: colors.accent, fontSize: '10px', fontFamily: 'monospace', cursor: 'help' }} title={`SHA: ${__APP_REVISION__}\nBranch: ${__BUILD_BRANCH__}\nBuilt: ${__BUILD_TIMESTAMP__}`}>rev:{__APP_REVISION__}</span>
 
         {/* Scenario selector */}
         {availableScenarios.length > 0 && (

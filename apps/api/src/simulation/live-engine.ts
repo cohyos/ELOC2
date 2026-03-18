@@ -25,11 +25,13 @@ import type {
   EoTrack,
   UnresolvedGroup,
   BearingMeasurement,
+  TargetClassification,
+  ClassificationSource,
 } from '@eloc2/domain';
 import { createLineageEntry } from '@eloc2/domain';
 import type { EventEnvelope } from '@eloc2/events';
 import { createEventEnvelope } from '@eloc2/events';
-import { ScenarioRunner } from '@eloc2/simulator';
+import { ScenarioRunner, interpolatePosition, interpolateVelocity, isTargetActive } from '@eloc2/simulator';
 import type { SimulationEvent } from '@eloc2/simulator';
 import type { EoBearingObservation } from '@eloc2/simulator';
 import { centralIsrael, getScenarioById } from '@eloc2/scenario-library';
@@ -63,6 +65,8 @@ import {
   selectFusionMode,
   type FusionMode,
 } from '@eloc2/fusion-core';
+import { SimulationStateMachine } from './state-machine.js';
+import type { SimulationState, SimulationAction } from './state-machine.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -167,6 +171,7 @@ export class LiveEngine {
   private trackManager: TrackManager;
   private registrationService: RegistrationHealthService;
   private state: LiveState;
+  private stateMachine = new SimulationStateMachine();
   /** Throttle broadcastRap: minimum ms between broadcasts */
   private lastBroadcastTime = 0;
   private static readonly MIN_BROADCAST_INTERVAL_MS = 250;
@@ -210,6 +215,53 @@ export class LiveEngine {
 
   getState(): LiveState {
     return this.state;
+  }
+
+  getSimulationState(): { state: SimulationState; allowedActions: SimulationAction[] } {
+    return {
+      state: this.stateMachine.currentState,
+      allowedActions: this.stateMachine.getAllowedActions(),
+    };
+  }
+
+  /** Compute ground truth positions for all active targets at the current sim time. */
+  getGroundTruth(): Array<{
+    targetId: string;
+    name: string;
+    position: { lat: number; lon: number; alt: number };
+    velocity: { vx: number; vy: number; vz: number } | undefined;
+    classification?: string;
+    active: true;
+  }> {
+    const timeSec = this.state.elapsedSec;
+    const result: Array<{
+      targetId: string;
+      name: string;
+      position: { lat: number; lon: number; alt: number };
+      velocity: { vx: number; vy: number; vz: number } | undefined;
+      classification?: string;
+      active: true;
+    }> = [];
+
+    for (const target of this.scenario.targets) {
+      if (!isTargetActive(target, timeSec)) continue;
+
+      const pos = interpolatePosition(target.waypoints, timeSec);
+      if (!pos) continue;
+
+      const vel = interpolateVelocity(target.waypoints, timeSec);
+
+      result.push({
+        targetId: target.targetId,
+        name: target.name,
+        position: { lat: pos.lat, lon: pos.lon, alt: pos.alt },
+        velocity: vel ? { vx: vel.vx, vy: vel.vy, vz: vel.vz } : undefined,
+        ...((target as any).classification ? { classification: (target as any).classification } : {}),
+        active: true,
+      });
+    }
+
+    return result;
   }
 
   /** Build a full snapshot payload identical to broadcastRap() format. */
@@ -292,6 +344,7 @@ export class LiveEngine {
       })),
       fusionModes: Object.fromEntries(this.fusionModePerSensor),
       investigationSummaries: this.getActiveInvestigations(),
+      groundTruth: this.getGroundTruth(),
     };
   }
 
@@ -418,12 +471,23 @@ export class LiveEngine {
 
   start(): void {
     if (this.state.running) return;
+    // Determine correct action: 'start' from idle, 'resume' from paused
+    const action: SimulationAction = this.stateMachine.currentState === 'idle' ? 'start' : 'resume';
+    const result = this.stateMachine.tryTransition(action);
+    if (!result.allowed) {
+      throw new Error(result.reason ?? 'Transition not allowed');
+    }
     this.state.running = true;
     this.scheduleStep();
     this.pushEvent('scenario.started', `Scenario "${this.scenario.name}" started`);
   }
 
   pause(): void {
+    if (!this.state.running) return;
+    const result = this.stateMachine.tryTransition('pause');
+    if (!result.allowed) {
+      throw new Error(result.reason ?? 'Transition not allowed');
+    }
     this.state.running = false;
     if (this.timer) {
       clearTimeout(this.timer);
@@ -431,6 +495,24 @@ export class LiveEngine {
     }
     this.pushEvent('scenario.paused', 'Scenario paused');
     // Send final broadcast with running=false so frontend knows to stop
+    this.broadcastRap(true);
+  }
+
+  /**
+   * Stop the scenario and return to idle.
+   * Unlike pause(), this resets the state machine to idle.
+   */
+  stop(): void {
+    const result = this.stateMachine.tryTransition('stop');
+    if (!result.allowed) {
+      throw new Error(result.reason ?? 'Transition not allowed');
+    }
+    this.state.running = false;
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    this.pushEvent('scenario.stopped', 'Scenario stopped');
     this.broadcastRap(true);
   }
 
@@ -445,12 +527,23 @@ export class LiveEngine {
   }
 
   reset(scenarioId?: string): void {
-    this.pause();
+    const result = this.stateMachine.tryTransition('reset');
+    if (!result.allowed) {
+      throw new Error(result.reason ?? 'Transition not allowed');
+    }
+    // Stop the timer without going through pause() state transition
+    this.state.running = false;
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
     if (scenarioId) {
       const s = getScenarioById(scenarioId);
       if (s) this.scenario = s;
     }
     this.resetInternalState();
+    // Complete the reset: resetting → idle
+    this.stateMachine.tryTransition('reset');
     this.pushEvent('scenario.reset', 'Scenario reset');
   }
 
@@ -461,7 +554,15 @@ export class LiveEngine {
    */
   seek(toSec: number): void {
     const wasRunning = this.state.running;
-    this.pause();
+    // If running, pause first (state machine: running → paused)
+    if (wasRunning) {
+      this.pause();
+    }
+    // Now seek (state machine: paused → seeking)
+    const result = this.stateMachine.tryTransition('seek');
+    if (!result.allowed) {
+      throw new Error(result.reason ?? 'Transition not allowed');
+    }
 
     // Clamp to valid range
     toSec = Math.max(0, Math.min(toSec, this.scenario.durationSec));
@@ -496,6 +597,9 @@ export class LiveEngine {
     this.state.eoTracks = [...this.eoTracksById.values()];
     this.state.unresolvedGroups = [...this.unresolvedGroupsById.values()].filter(g => g.status === 'active');
     this.state.activeCues = [...this.activeCuesById.values()];
+
+    // Complete the seek (state machine: seeking → paused)
+    this.stateMachine.tryTransition('seek_complete');
 
     // Broadcast current state (force: user-initiated seek)
     this.broadcastRap(true);
@@ -641,9 +745,20 @@ export class LiveEngine {
    * Load a custom ScenarioDefinition into the engine and reset to use it.
    */
   loadCustomScenario(def: ScenarioDefinition): void {
-    this.pause();
+    // Use reset transition (handles idle, running, and paused states)
+    const result = this.stateMachine.tryTransition('reset');
+    if (!result.allowed) {
+      throw new Error(result.reason ?? 'Transition not allowed');
+    }
+    this.state.running = false;
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
     this.scenario = def;
     this.resetInternalState();
+    // Complete: resetting → idle
+    this.stateMachine.tryTransition('reset');
     this.pushEvent('scenario.loaded', `Custom scenario "${def.name}" loaded`);
   }
 
@@ -1695,6 +1810,23 @@ export class LiveEngine {
     return [...this.operatorPriorityTracks];
   }
 
+  /** Classify a track by setting its classification, source, and confidence. */
+  classifyTrack(
+    trackId: string,
+    classification: TargetClassification,
+    source: ClassificationSource,
+    confidence: number = 1.0,
+  ): SystemTrack | undefined {
+    const track = this.state.tracks.find(
+      t => t.systemTrackId === trackId,
+    );
+    if (!track) return undefined;
+    track.classification = classification;
+    track.classificationSource = source;
+    track.classificationConfidence = Math.max(0, Math.min(1, confidence));
+    return track;
+  }
+
   /** Update EO gimbal azimuth to continuously track assigned targets. */
   private updateGimbalPointing(): void {
     const trackMap = new Map(this.state.tracks.map(t => [t.systemTrackId, t]));
@@ -1847,6 +1979,17 @@ export class LiveEngine {
       // Investigation summaries for InvestigationManagerPanel
       investigationSummaries: this.getActiveInvestigations(),
     });
+
+    // Separate ground truth broadcast
+    const groundTruthTargets = this.getGroundTruth();
+    if (groundTruthTargets.length > 0) {
+      this.broadcast({
+        type: 'groundTruth.update',
+        timestamp: Date.now(),
+        simTimeSec: this.state.elapsedSec,
+        targets: groundTruthTargets,
+      });
+    }
   }
 
   private broadcast(msg: Record<string, unknown>): void {

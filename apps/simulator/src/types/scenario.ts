@@ -9,6 +9,7 @@ import type {
   SensorType,
   CoverageArc,
   FieldOfView,
+  TargetClassification,
 } from '@eloc2/domain';
 
 export interface WaypointDef {
@@ -23,6 +24,7 @@ export interface TargetDefinition {
   description: string;
   waypoints: WaypointDef[];
   startTime: number;
+  classification?: TargetClassification;
 }
 
 export interface SensorDefinition {
