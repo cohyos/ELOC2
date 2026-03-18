@@ -2,9 +2,10 @@ import type {
   SourceObservation,
   SystemTrack,
   SystemTrackId,
+  Covariance3x3,
 } from '@eloc2/domain';
 import type { CorrelationDecision } from '@eloc2/events';
-import { geodeticToENU, mat3x3Inverse, mat3x3Add, mahalanobisDistance } from '@eloc2/shared-utils';
+import { geodeticToENU, mat3x3Inverse, mat3x3Add, mahalanobisDistance, DEG_TO_RAD } from '@eloc2/shared-utils';
 
 // ---------------------------------------------------------------------------
 // Result type
@@ -79,11 +80,39 @@ export function correlate(
     // Skip dropped tracks
     if (track.status === 'dropped') continue;
 
-    // Convert track position to ENU relative to the observation
+    // Predict track position forward using velocity (constant-velocity model).
+    // Without prediction, fast-moving targets (300 m/s) exceed the Mahalanobis
+    // gate within 1-2 ticks, creating ghost tracks.
+    let predLat = track.state.lat;
+    let predLon = track.state.lon;
+    let predAlt = track.state.alt;
+    let predCov = track.covariance;
+
+    if (track.velocity && track.lastUpdated > 0) {
+      const dtSec = (observation.timestamp - track.lastUpdated) / 1000;
+      if (dtSec > 0 && dtSec < 30) { // only predict up to 30s
+        // Propagate position using velocity (ENU approximation)
+        const metersPerDegLat = 111_320;
+        const metersPerDegLon = metersPerDegLat * Math.cos(predLat * DEG_TO_RAD);
+        predLat += (track.velocity.vy * dtSec) / metersPerDegLat;
+        predLon += (track.velocity.vx * dtSec) / metersPerDegLon;
+        predAlt += (track.velocity.vz ?? 0) * dtSec;
+
+        // Grow covariance with process noise (Q = 100 m^2/s * dt)
+        const qDiag = 100 * dtSec;
+        predCov = [
+          [track.covariance[0][0] + qDiag, track.covariance[0][1], track.covariance[0][2]],
+          [track.covariance[1][0], track.covariance[1][1] + qDiag, track.covariance[1][2]],
+          [track.covariance[2][0], track.covariance[2][1], track.covariance[2][2] + qDiag],
+        ] as Covariance3x3;
+      }
+    }
+
+    // Convert predicted track position to ENU relative to the observation
     const enu = geodeticToENU(
-      track.state.lat,
-      track.state.lon,
-      track.state.alt,
+      predLat,
+      predLon,
+      predAlt,
       refLat,
       refLon,
       refAlt,
@@ -93,8 +122,8 @@ export function correlate(
     // track's ENU coordinates (track_enu - obs_enu where obs_enu = [0,0,0]).
     const dx = [enu.east, enu.north, enu.up];
 
-    // Combined covariance = P_track + P_obs
-    const combinedCov = mat3x3Add(track.covariance, observation.covariance);
+    // Combined covariance = P_predicted + P_obs
+    const combinedCov = mat3x3Add(predCov, observation.covariance);
     const invCombinedCov = mat3x3Inverse(combinedCov);
 
     if (invCombinedCov === null) {

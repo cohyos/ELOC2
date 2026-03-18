@@ -1006,6 +1006,16 @@ export class LiveEngine {
 
       // Update sensor status
       this.updateSensorStatus(result.activeFaults);
+
+      // Drop stale tracks (same logic as finalizeTick)
+      const seekNow = Date.now();
+      for (const tr of this.trackManager.getAllTracks().filter(t => t.status !== 'dropped')) {
+        const age = (seekNow - (tr.lastUpdated as number)) / 1000;
+        if (age > 3) {
+          try { this.trackManager.missedUpdate(tr.systemTrackId); } catch (_) { /* merged/dropped */ }
+        }
+      }
+
       this.trackManager.mergeCloseTracks(3000);
       this.state.tracks = this.trackManager.getAllTracks().filter(tr => tr.status !== 'dropped');
       this.processAccumulatedBearings();
@@ -1289,6 +1299,25 @@ export class LiveEngine {
   private finalizeTick(result: { currentTimeSec: number; activeFaults: Array<{ sensorId: string; type: string }>; isComplete: boolean }): void {
     // Update sensor online status based on active faults
     this.updateSensorStatus(result.activeFaults);
+
+    // Mark stale tracks as missed. Tracks not updated in this tick increment
+    // their miss counter; after 5 consecutive misses they get dropped.
+    // This prevents ghost-track accumulation from the correlator creating
+    // new tracks when fast-moving targets outrun the Mahalanobis gate.
+    const now = Date.now();
+    const activeTracks = this.trackManager.getAllTracks().filter(t => t.status !== 'dropped');
+    for (const track of activeTracks) {
+      // If this track wasn't updated in the last 3 seconds, count it as missed.
+      // (lastUpdated is set by TrackManager.updateTrack / createTrack)
+      const ageSec = (now - (track.lastUpdated as number)) / 1000;
+      if (ageSec > 3) {
+        try {
+          this.trackManager.missedUpdate(track.systemTrackId);
+        } catch (_) {
+          // Track may have been dropped or merged already
+        }
+      }
+    }
 
     // Post-tick merge sweep: merge tracks within 3km to eliminate ghost tracks
     this.trackManager.mergeCloseTracks(3000);
