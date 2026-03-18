@@ -4,6 +4,8 @@ import { useSensorStore } from '../stores/sensor-store';
 import { useTaskStore } from '../stores/task-store';
 import { useInvestigationStore } from '../stores/investigation-store';
 import { useGroundTruthStore } from '../stores/ground-truth-store';
+import { useCoverZoneStore } from '../stores/cover-zone-store';
+import { useQualityStore } from '../stores/quality-store';
 
 /**
  * ReplayController manages the WebSocket connection for real-time event streaming
@@ -150,6 +152,12 @@ export class ReplayController {
     }
     if (data.groundTruth && Array.isArray(data.groundTruth)) {
       useGroundTruthStore.getState().setTargets(data.groundTruth);
+    }
+    if (data.coverZones && Array.isArray(data.coverZones)) {
+      useCoverZoneStore.getState().setCoverZones(data.coverZones);
+    }
+    if (data.qualityMetrics && typeof data.qualityMetrics === 'object') {
+      useQualityStore.getState().setMetrics(data.qualityMetrics);
     }
     // Update replay time from simulation
     if (typeof data.simTimeSec === 'number') {

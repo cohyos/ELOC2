@@ -242,4 +242,56 @@ export const centralIsrael: ScenarioDefinition = {
       time: 450,
     },
   ],
+
+  // ── Cover Zones ────────────────────────────────────────────────────
+  coverZones: [
+    {
+      id: 'cz-tel-aviv-urban',
+      name: 'Tel Aviv Metro',
+      polygon: [
+        { lat: 32.15, lon: 34.72 },
+        { lat: 32.15, lon: 34.82 },
+        { lat: 32.05, lon: 34.82 },
+        { lat: 32.05, lon: 34.72 },
+      ],
+      coverType: 'urban',
+      detectionProbabilityModifier: 0.7,  // urban clutter reduces Pd
+    },
+    {
+      id: 'cz-carmel-forest',
+      name: 'Carmel Forest',
+      polygon: [
+        { lat: 32.75, lon: 34.95 },
+        { lat: 32.75, lon: 35.05 },
+        { lat: 32.68, lon: 35.05 },
+        { lat: 32.68, lon: 34.95 },
+      ],
+      coverType: 'forest',
+      detectionProbabilityModifier: 0.6,  // forest canopy blocks EO
+    },
+    {
+      id: 'cz-mediterranean',
+      name: 'Mediterranean Sea',
+      polygon: [
+        { lat: 32.80, lon: 34.40 },
+        { lat: 32.80, lon: 34.70 },
+        { lat: 31.80, lon: 34.70 },
+        { lat: 31.80, lon: 34.40 },
+      ],
+      coverType: 'water',
+      detectionProbabilityModifier: 1.1,  // water background improves contrast
+    },
+    {
+      id: 'cz-negev-open',
+      name: 'Northern Negev',
+      polygon: [
+        { lat: 31.40, lon: 34.50 },
+        { lat: 31.40, lon: 34.90 },
+        { lat: 31.10, lon: 34.90 },
+        { lat: 31.10, lon: 34.50 },
+      ],
+      coverType: 'open',
+      detectionProbabilityModifier: 1.0,  // baseline open terrain
+    },
+  ],
 };

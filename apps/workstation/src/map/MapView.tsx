@@ -20,6 +20,7 @@ import type { LayerVisibility, SelectionBearingRay } from '../stores/ui-store';
 import { useDemoStore } from '../stores/demo-store';
 import { applyBasicMode } from '../demo/BasicModeFilter';
 import { useGroundTruthStore } from '../stores/ground-truth-store';
+import { useCoverZoneStore } from '../stores/cover-zone-store';
 
 export function MapView() {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -56,6 +57,7 @@ export function MapView() {
   const viewMode = useDemoStore(s => s.viewMode);
   const groundTruthTargets = useGroundTruthStore(s => s.targets);
   const showGroundTruth = useGroundTruthStore(s => s.showGroundTruth);
+  const coverZones = useCoverZoneStore(s => s.coverZones);
 
   // Initialize map
   useEffect(() => {
@@ -514,6 +516,7 @@ export function MapView() {
           onSelectSensor={selectSensor}
           groundTruthTargets={groundTruthTargets}
           showGroundTruth={showGroundTruth}
+          coverZones={coverZones}
         />
       )}
     </div>

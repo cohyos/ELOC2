@@ -109,6 +109,26 @@ export type ClassificationSource = 'operator' | 'eo_identification' | 'c4isr' | 
 // Bearing measurement
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Land cover zones
+// ---------------------------------------------------------------------------
+
+/** Type of terrain / land cover. */
+export type CoverType = 'urban' | 'forest' | 'water' | 'open';
+
+/** A geographic zone whose terrain affects sensor detection probability. */
+export interface CoverZone {
+  id: string;
+  name: string;
+  polygon: Array<{ lat: number; lon: number }>;  // boundary vertices (closed polygon)
+  coverType: CoverType;
+  detectionProbabilityModifier: number;  // 0.0–1.0+, multiplies sensor Pd
+}
+
+// ---------------------------------------------------------------------------
+// Bearing measurement
+// ---------------------------------------------------------------------------
+
 /** A single angular measurement from a sensor. */
 export interface BearingMeasurement {
   azimuthDeg: number;

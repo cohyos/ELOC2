@@ -27,6 +27,7 @@ import type {
   BearingMeasurement,
   TargetClassification,
   ClassificationSource,
+  CoverZone,
 } from '@eloc2/domain';
 import { createLineageEntry } from '@eloc2/domain';
 import type { EventEnvelope } from '@eloc2/events';
@@ -162,6 +163,39 @@ const DEFAULT_INVESTIGATION_PARAMETERS: InvestigationParameters = {
 const EO_TASKING_INTERVAL_SEC = 5;
 
 // ---------------------------------------------------------------------------
+// Cover-zone helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Ray-casting point-in-polygon test.
+ * Returns true if (lat, lon) is inside the given polygon vertices.
+ */
+function pointInPolygon(lat: number, lon: number, polygon: Array<{ lat: number; lon: number }>): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const yi = polygon[i].lat, xi = polygon[i].lon;
+    const yj = polygon[j].lat, xj = polygon[j].lon;
+    if (((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+/**
+ * Returns the detection-probability modifier for a point given cover zones.
+ * If the point lies inside a zone, returns that zone's modifier; otherwise 1.0.
+ */
+function getDetectionModifier(lat: number, lon: number, coverZones: CoverZone[]): number {
+  for (const zone of coverZones) {
+    if (pointInPolygon(lat, lon, zone.polygon)) {
+      return zone.detectionProbabilityModifier;
+    }
+  }
+  return 1.0;
+}
+
+// ---------------------------------------------------------------------------
 // Engine
 // ---------------------------------------------------------------------------
 
@@ -229,6 +263,28 @@ export class LiveEngine {
     startedSec: number;
     endedSec: number;
   }>>();
+
+  // ── Quality Assessment state ──────────────────────────────────────────
+  /** Time (sim seconds) when each target was first associated with a system track */
+  private firstDetectionTime = new Map<string, number>();
+  /** Time (sim seconds) when each target's associated track first reached confirmed_3d */
+  private confirmedGeometryTime = new Map<string, number>();
+  /** Accumulated sensor tasked ticks (each tick a sensor has an active dwell counts as 1) */
+  private sensorTaskedTicks = new Map<string, number>();
+  /** Total ticks elapsed (for sensor utilization denominator) */
+  private totalTicks = 0;
+  /** Cached quality metrics (recomputed each tick) */
+  private cachedQualityMetrics: {
+    trackToTruthAssociation: number;
+    positionErrorAvg: number;
+    positionErrorMax: number;
+    classificationAccuracy: number;
+    coveragePercent: number;
+    falseTrackRate: number;
+    sensorUtilization: Record<string, number>;
+    timeToFirstDetection: Record<string, number>;
+    timeToConfirmed3D: Record<string, number>;
+  } | null = null;
 
   constructor(scenarioId?: string) {
     this.scenario = (scenarioId ? getScenarioById(scenarioId) : undefined) ?? centralIsrael;
@@ -412,9 +468,11 @@ export class LiveEngine {
       revisitSchedule: this.getRevisitSchedule(),
       operatorOverrides: this.getOperatorOverrides(),
       groundTruth: this.getGroundTruth(),
+      coverZones: this.scenario.coverZones ?? [],
       cyclingHistories: Object.fromEntries(
         [...this.cyclingHistory.entries()].map(([sensorId, history]) => [sensorId, history.slice(-5)]),
       ),
+      qualityMetrics: this.cachedQualityMetrics ?? undefined,
     };
   }
 
@@ -911,6 +969,13 @@ export class LiveEngine {
     this.lastInvestigationTime.clear();
     this.cyclingHistory.clear();
 
+    // Quality assessment reset
+    this.firstDetectionTime.clear();
+    this.confirmedGeometryTime.clear();
+    this.sensorTaskedTicks.clear();
+    this.totalTicks = 0;
+    this.cachedQualityMetrics = null;
+
     this.state = this.buildInitialState();
   }
 
@@ -997,6 +1062,9 @@ export class LiveEngine {
     // Continuous gimbal tracking: update EO sensor gimbal azimuth toward current target
     this.updateGimbalPointing();
 
+    // Quality assessment: compute metrics comparing tracks vs ground truth
+    this.computeQualityMetrics();
+
     // Broadcast updated RAP to WebSocket clients
     this.broadcastRap();
 
@@ -1015,6 +1083,16 @@ export class LiveEngine {
         const raw = simEvent.data as any;
         const obs: SourceObservation = raw?.observation ?? raw;
         if (!obs || !obs.position) break;
+
+        // Apply cover-zone detection probability modifier
+        const coverZones = this.scenario.coverZones ?? [];
+        if (coverZones.length > 0) {
+          const modifier = getDetectionModifier(obs.position.lat, obs.position.lon, coverZones);
+          if (modifier < 1.0 && Math.random() > modifier) {
+            // Target not detected due to terrain cover
+            break;
+          }
+        }
 
         // Get registration health for this sensor
         const health = this.registrationService.getHealth(obs.sensorId);
@@ -2441,6 +2519,164 @@ export class LiveEngine {
     });
   }
 
+  // ── Quality Assessment ─────────────────────────────────────────────
+
+  /**
+   * Haversine distance in meters between two lat/lon points.
+   */
+  private static haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6_371_000; // Earth radius in meters
+    const toRad = Math.PI / 180;
+    const dLat = (lat2 - lat1) * toRad;
+    const dLon = (lon2 - lon1) * toRad;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  /**
+   * Compute quality metrics by comparing system tracks against ground truth.
+   * Called each tick from finalizeTick().
+   */
+  private computeQualityMetrics(): void {
+    this.totalTicks++;
+
+    // Update sensor tasked ticks
+    for (const [sensorId] of this.dwellState) {
+      this.sensorTaskedTicks.set(sensorId, (this.sensorTaskedTicks.get(sensorId) ?? 0) + 1);
+    }
+
+    const groundTruth = this.getGroundTruth();
+    const tracks = this.state.tracks;
+    const timeSec = this.state.elapsedSec;
+
+    if (groundTruth.length === 0 && tracks.length === 0) {
+      this.cachedQualityMetrics = {
+        trackToTruthAssociation: 1,
+        positionErrorAvg: 0,
+        positionErrorMax: 0,
+        classificationAccuracy: 1,
+        coveragePercent: 1,
+        falseTrackRate: 0,
+        sensorUtilization: this.buildSensorUtilization(),
+        timeToFirstDetection: Object.fromEntries(this.firstDetectionTime),
+        timeToConfirmed3D: Object.fromEntries(this.confirmedGeometryTime),
+      };
+      return;
+    }
+
+    // Associate each system track to its nearest ground truth target (within 2km)
+    const MATCH_THRESHOLD_M = 2000;
+    const trackToTarget = new Map<string, string>(); // trackId → targetId
+    const targetToTrack = new Map<string, string>(); // targetId → trackId
+    const positionErrors: number[] = [];
+
+    for (const track of tracks) {
+      let bestTargetId: string | null = null;
+      let bestDist = Infinity;
+
+      for (const gt of groundTruth) {
+        const dist = LiveEngine.haversineMeters(
+          track.state.lat, track.state.lon,
+          gt.position.lat, gt.position.lon,
+        );
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestTargetId = gt.targetId;
+        }
+      }
+
+      if (bestTargetId && bestDist < MATCH_THRESHOLD_M) {
+        trackToTarget.set(track.systemTrackId as string, bestTargetId);
+        // Only keep closest track per target
+        const existingTrackId = targetToTrack.get(bestTargetId);
+        if (!existingTrackId) {
+          targetToTrack.set(bestTargetId, track.systemTrackId as string);
+        }
+        positionErrors.push(bestDist);
+
+        // Record first detection time
+        if (!this.firstDetectionTime.has(bestTargetId)) {
+          this.firstDetectionTime.set(bestTargetId, timeSec);
+        }
+
+        // Record confirmed_3d time
+        const geoEst = this.state.geometryEstimates.get(track.systemTrackId as string);
+        if (geoEst && geoEst.classification === 'confirmed_3d' && !this.confirmedGeometryTime.has(bestTargetId)) {
+          this.confirmedGeometryTime.set(bestTargetId, timeSec);
+        }
+      }
+    }
+
+    // Metrics
+    const matchedTrackCount = trackToTarget.size;
+    const trackToTruthAssociation = tracks.length > 0
+      ? matchedTrackCount / tracks.length
+      : 1;
+
+    const positionErrorAvg = positionErrors.length > 0
+      ? positionErrors.reduce((a, b) => a + b, 0) / positionErrors.length
+      : 0;
+
+    const positionErrorMax = positionErrors.length > 0
+      ? Math.max(...positionErrors)
+      : 0;
+
+    // Classification accuracy: among tracks that have a classification and are matched
+    let classifiedCorrect = 0;
+    let classifiedTotal = 0;
+    for (const track of tracks) {
+      const targetId = trackToTarget.get(track.systemTrackId as string);
+      if (!targetId) continue;
+      if (!track.classification) continue;
+      classifiedTotal++;
+      const gt = groundTruth.find(g => g.targetId === targetId);
+      if (gt && gt.classification && track.classification === gt.classification) {
+        classifiedCorrect++;
+      }
+    }
+    const classificationAccuracy = classifiedTotal > 0 ? classifiedCorrect / classifiedTotal : 1;
+
+    // Coverage: % of active targets that have an associated system track
+    const coveragePercent = groundTruth.length > 0
+      ? targetToTrack.size / groundTruth.length
+      : 1;
+
+    // False track rate: % of system tracks with no corresponding real target
+    const falseTrackRate = tracks.length > 0
+      ? (tracks.length - matchedTrackCount) / tracks.length
+      : 0;
+
+    this.cachedQualityMetrics = {
+      trackToTruthAssociation,
+      positionErrorAvg,
+      positionErrorMax,
+      classificationAccuracy,
+      coveragePercent,
+      falseTrackRate,
+      sensorUtilization: this.buildSensorUtilization(),
+      timeToFirstDetection: Object.fromEntries(this.firstDetectionTime),
+      timeToConfirmed3D: Object.fromEntries(this.confirmedGeometryTime),
+    };
+  }
+
+  private buildSensorUtilization(): Record<string, number> {
+    const result: Record<string, number> = {};
+    if (this.totalTicks === 0) return result;
+    for (const sensor of this.state.sensors) {
+      const sensorId = sensor.sensorId as string;
+      const tasked = this.sensorTaskedTicks.get(sensorId) ?? 0;
+      result[sensorId] = tasked / this.totalTicks;
+    }
+    return result;
+  }
+
+  /** Public accessor for quality metrics. */
+  getQualityMetrics(): typeof this.cachedQualityMetrics {
+    return this.cachedQualityMetrics;
+  }
+
   private broadcastRap(force = false): void {
     // Throttle: at high speeds, cap broadcasts to ~4/sec (250ms interval)
     const now = Date.now();
@@ -2547,6 +2783,10 @@ export class LiveEngine {
       cyclingHistories: Object.fromEntries(
         [...this.cyclingHistory.entries()].map(([sensorId, history]) => [sensorId, history.slice(-5)]),
       ),
+      // Cover zones (REQ-11)
+      coverZones: this.scenario.coverZones ?? [],
+      // Quality metrics (REQ-8)
+      qualityMetrics: this.cachedQualityMetrics ?? undefined,
     });
 
     // Separate ground truth broadcast

@@ -3,6 +3,7 @@ import type maplibregl from 'maplibre-gl';
 import type { SystemTrack, SensorState } from '@eloc2/domain';
 import type { LayerVisibility } from '../stores/ui-store';
 import type { GroundTruthTarget } from '../stores/ground-truth-store';
+import type { CoverZone } from '../stores/cover-zone-store';
 
 /**
  * DebugOverlay — Primary HTML/SVG-based renderer.
@@ -79,9 +80,10 @@ interface DebugOverlayProps {
   onSelectSensor?: (id: string) => void;
   groundTruthTargets?: GroundTruthTarget[];
   showGroundTruth?: boolean;
+  coverZones?: CoverZone[];
 }
 
-export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth }: DebugOverlayProps) {
+export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones }: DebugOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const frameRef = useRef<number>(0);
@@ -104,6 +106,63 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
 
     // Helper to project geo coords to screen pixel
     const proj = (lon: number, lat: number) => map.project([lon, lat]);
+
+    // Cover zone polygons (rendered first so they appear behind all other SVG)
+    if (coverZones && coverZones.length > 0) {
+      const coverTypeStyle: Record<string, { fill: string; stroke: string }> = {
+        urban:  { fill: 'rgba(255, 165, 0, 0.15)',  stroke: 'rgba(255, 165, 0, 0.4)' },
+        forest: { fill: 'rgba(34, 139, 34, 0.15)',   stroke: 'rgba(34, 139, 34, 0.4)' },
+        water:  { fill: 'rgba(0, 100, 200, 0.15)',   stroke: 'rgba(0, 100, 200, 0.4)' },
+        open:   { fill: 'rgba(200, 180, 100, 0.10)', stroke: 'rgba(200, 180, 100, 0.4)' },
+      };
+
+      for (const zone of coverZones) {
+        if (!zone.polygon || zone.polygon.length < 3) continue;
+
+        const style = coverTypeStyle[zone.coverType] ?? coverTypeStyle.open;
+        const points: string[] = [];
+        let centroidX = 0;
+        let centroidY = 0;
+
+        for (const vertex of zone.polygon) {
+          if (!Number.isFinite(vertex.lon) || !Number.isFinite(vertex.lat)) continue;
+          const p = proj(vertex.lon, vertex.lat);
+          points.push(`${p.x},${p.y}`);
+          centroidX += p.x;
+          centroidY += p.y;
+        }
+
+        if (points.length < 3) continue;
+
+        centroidX /= points.length;
+        centroidY /= points.length;
+
+        const polygon = createSvgEl('polygon', {
+          points: points.join(' '),
+          fill: style.fill,
+          stroke: style.stroke,
+          'stroke-width': '1',
+          'stroke-dasharray': '4,3',
+        });
+        svg.appendChild(polygon);
+
+        // Zone name label at centroid
+        if (zone.name) {
+          const label = createSvgEl('text', {
+            x: String(centroidX),
+            y: String(centroidY),
+            'text-anchor': 'middle',
+            'dominant-baseline': 'central',
+            'font-size': '10',
+            'font-family': 'monospace',
+            fill: style.stroke,
+            'pointer-events': 'none',
+          });
+          label.textContent = zone.name;
+          svg.appendChild(label);
+        }
+      }
+    }
 
     // Radar coverage arcs
     if (layerVisibility.radarCoverage) {
@@ -348,7 +407,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
         }
       }
     }
-  }, [map, tracks, sensors, trailHistory, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth]);
+  }, [map, tracks, sensors, trailHistory, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones]);
 
   // Re-render on map move/zoom
   useEffect(() => {
@@ -373,7 +432,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
   // Re-render when data changes
   useEffect(() => {
     render();
-  }, [tracks, sensors, trailHistory, groundTruthTargets, showGroundTruth, render]);
+  }, [tracks, sensors, trailHistory, groundTruthTargets, showGroundTruth, coverZones, render]);
 
   return (
     <>
