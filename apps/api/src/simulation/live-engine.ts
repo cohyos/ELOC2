@@ -185,6 +185,15 @@ export class LiveEngine {
   /** Maps cueId → systemTrackId for cue-to-track lookup. */
   private cueToTrack = new Map<string, string>();
   private operatorPriorityTracks = new Set<string>();
+  /** Sensors locked by operator — excluded from auto-assignment */
+  private operatorLockedSensors = new Map<string, {
+    sensorId: string;
+    targetTrackId?: string;
+    position?: { lat: number; lon: number; alt: number };
+    lockedAt: number; // sim time
+  }>();
+  /** Track priority overrides (high/normal/low) */
+  private operatorTrackPriority = new Map<string, 'high' | 'normal' | 'low'>();
   /** Accumulates bearings per cueId within a tick for batch processing. */
   private pendingBearings = new Map<string, EoBearingObservation[]>();
   private lastEoTaskingSec = 0;
@@ -194,6 +203,25 @@ export class LiveEngine {
   private currentParameters: InvestigationParameters = { ...DEFAULT_INVESTIGATION_PARAMETERS, weights: { ...DEFAULT_INVESTIGATION_PARAMETERS.weights }, thresholds: { ...DEFAULT_INVESTIGATION_PARAMETERS.thresholds } };
   /** Formal event envelopes for validation runner. */
   private eventEnvelopes: EventEnvelope[] = [];
+
+  /** Dwell state: tracks how long each sensor has been dwelling on its current target */
+  private dwellState = new Map<string, {
+    sensorId: string;
+    targetTrackId: string;
+    dwellStartSec: number;      // sim time when dwell started
+    dwellDurationSec: number;    // configured dwell (default 15s)
+  }>();
+
+  /** Default dwell time in simulation seconds */
+  private static readonly DEFAULT_DWELL_SEC = 15;
+
+  /** Per-sensor dwell duration overrides (operator control) */
+  private dwellDurationOverrides = new Map<string, number>();
+
+  /** Revisit tracking: last investigation time per track */
+  private lastInvestigationTime = new Map<string, number>(); // trackId → sim time
+  /** Maximum revisit interval in sim seconds */
+  private static readonly MAX_REVISIT_INTERVAL_SEC = 60;
 
   constructor(scenarioId?: string) {
     this.scenario = (scenarioId ? getScenarioById(scenarioId) : undefined) ?? centralIsrael;
@@ -1270,8 +1298,9 @@ export class LiveEngine {
     const tracks = this.state.tracks;
     const sensors = this.state.sensors;
 
-    // 1. Generate candidates
-    const candidates = generateCandidates(tracks, sensors);
+    // 1. Generate candidates — exclude operator-locked sensors
+    const availableSensors = sensors.filter(s => !this.operatorLockedSensors.has(s.sensorId as string));
+    const candidates = generateCandidates(tracks, availableSensors);
     if (candidates.length === 0) return;
 
     // 2. Score each candidate
@@ -1292,7 +1321,11 @@ export class LiveEngine {
     }
 
     const scoredDecisions = candidates.map(candidate => {
-      const score = scoreCandidate(candidate, this.currentParameters.weights as ScoringWeights, groupBoostedTrackIds, sensorOccupancy);
+      let score = scoreCandidate(candidate, this.currentParameters.weights as ScoringWeights, groupBoostedTrackIds, sensorOccupancy);
+      // Apply operator track priority overrides
+      const trackPriority = this.operatorTrackPriority.get(candidate.systemTrackId as string);
+      if (trackPriority === 'high') score += 5;
+      else if (trackPriority === 'low') score -= 3;
       return { candidate, score };
     });
 
@@ -1825,6 +1858,91 @@ export class LiveEngine {
     track.classificationSource = source;
     track.classificationConfidence = Math.max(0, Math.min(1, confidence));
     return track;
+  }
+
+  /** Lock a sensor to a target or position, preventing auto-reassignment. */
+  lockSensor(sensorId: string, targetId?: string, position?: { lat: number; lon: number; alt: number }): boolean {
+    const sensor = this.state.sensors.find(s => s.sensorId === sensorId);
+    if (!sensor) return false;
+
+    this.operatorLockedSensors.set(sensorId, {
+      sensorId,
+      targetTrackId: targetId,
+      position,
+      lockedAt: this.state.elapsedSec,
+    });
+
+    // Point gimbal immediately if target exists
+    if (sensor.gimbal && targetId) {
+      const track = this.state.tracks.find(t => t.systemTrackId === targetId);
+      if (track) {
+        sensor.gimbal.azimuthDeg = bearingDeg(
+          sensor.position.lat, sensor.position.lon,
+          track.state.lat, track.state.lon,
+        );
+        sensor.gimbal.currentTargetId = targetId;
+      }
+    } else if (sensor.gimbal && position) {
+      sensor.gimbal.azimuthDeg = bearingDeg(
+        sensor.position.lat, sensor.position.lon,
+        position.lat, position.lon,
+      );
+      sensor.gimbal.currentTargetId = undefined;
+    }
+
+    this.pushEvent('operator.sensor.locked', `Sensor ${sensorId} locked by operator`, {
+      sensorId,
+      targetTrackId: targetId,
+      position,
+    });
+    return true;
+  }
+
+  /** Release a locked sensor back to auto mode. */
+  releaseSensor(sensorId: string): boolean {
+    if (!this.operatorLockedSensors.has(sensorId)) return false;
+    this.operatorLockedSensors.delete(sensorId);
+    this.pushEvent('operator.sensor.released', `Sensor ${sensorId} released by operator`, { sensorId });
+    return true;
+  }
+
+  /** Set priority level for a track. */
+  setTrackPriority(trackId: string, priority: 'high' | 'normal' | 'low'): boolean {
+    const track = this.state.tracks.find(t => t.systemTrackId === trackId);
+    if (!track) return false;
+
+    if (priority === 'normal') {
+      this.operatorTrackPriority.delete(trackId);
+      this.operatorPriorityTracks.delete(trackId);
+    } else {
+      this.operatorTrackPriority.set(trackId, priority);
+      if (priority === 'high') {
+        this.operatorPriorityTracks.add(trackId);
+      } else {
+        this.operatorPriorityTracks.delete(trackId);
+      }
+    }
+
+    this.pushEvent('operator.priority.set', `Track ${trackId} priority set to ${priority}`, { trackId, priority });
+    return true;
+  }
+
+  /** Get all active operator overrides. */
+  getOperatorOverrides(): {
+    lockedSensors: Array<{ sensorId: string; targetTrackId?: string; position?: { lat: number; lon: number; alt: number }; lockedAt: number }>;
+    priorityTracks: Array<{ trackId: string; priority: 'high' | 'normal' | 'low' }>;
+    manualClassifications: Array<{ trackId: string; classification: string; confidence: number }>;
+  } {
+    const lockedSensors = [...this.operatorLockedSensors.values()];
+    const priorityTracks = [...this.operatorTrackPriority.entries()].map(([trackId, priority]) => ({ trackId, priority }));
+    const manualClassifications = this.state.tracks
+      .filter(t => t.classificationSource === 'operator' && t.classification)
+      .map(t => ({
+        trackId: t.systemTrackId as string,
+        classification: t.classification!,
+        confidence: t.classificationConfidence ?? 1.0,
+      }));
+    return { lockedSensors, priorityTracks, manualClassifications };
   }
 
   /** Update EO gimbal azimuth to continuously track assigned targets. */

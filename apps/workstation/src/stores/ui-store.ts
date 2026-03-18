@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type DetailView = 'track' | 'sensor' | 'tasks' | 'investigation' | 'cue' | 'group' | 'geometry' | 'none';
+export type DetailView = 'track' | 'sensor' | 'tasks' | 'investigation' | 'eo-window' | 'cue' | 'group' | 'geometry' | 'none';
 
 export interface LayerVisibility {
   tracks: boolean;
@@ -39,6 +39,7 @@ interface UiState {
   selectedCueId: string | null;
   selectedGroupId: string | null;
   selectedGeometryTrackId: string | null;
+  investigationWindowTrackId: string | null;
   detailView: DetailView;
 
   // Panel visibility
@@ -93,6 +94,7 @@ interface UiState {
   selectCue: (id: string | null) => void;
   selectGroup: (id: string | null) => void;
   selectGeometry: (trackId: string | null) => void;
+  setInvestigationWindowTrackId: (trackId: string | null) => void;
   toggleDetailPanel: () => void;
   toggleTimelinePanel: () => void;
   toggleLayer: (layer: keyof LayerVisibility) => void;
@@ -170,6 +172,7 @@ export const useUiStore = create<UiState>((set) => ({
   selectedCueId: null,
   selectedGroupId: null,
   selectedGeometryTrackId: null,
+  investigationWindowTrackId: null,
   detailView: 'none',
   detailPanelOpen: true,
   timelinePanelOpen: true,
@@ -208,6 +211,9 @@ export const useUiStore = create<UiState>((set) => ({
 
   selectGeometry: (trackId) =>
     set({ selectedGeometryTrackId: trackId, selectedTrackId: null, selectedSensorId: null, selectedCueId: null, selectedGroupId: null, detailView: trackId ? 'geometry' : 'none', detailPanelOpen: !!trackId }),
+
+  setInvestigationWindowTrackId: (trackId) =>
+    set({ investigationWindowTrackId: trackId, detailView: trackId ? 'eo-window' : 'investigation', detailPanelOpen: true }),
 
   toggleDetailPanel: () =>
     set((s) => ({ detailPanelOpen: !s.detailPanelOpen })),
