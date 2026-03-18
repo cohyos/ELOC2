@@ -85,9 +85,10 @@ interface DebugOverlayProps {
   coverZones?: CoverZone[];
   searchModeStates?: SearchModeStateWS[];
   fovOverlaps?: FovOverlap[];
+  convergedTrackIds?: Set<string>;
 }
 
-export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps }: DebugOverlayProps) {
+export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps, convergedTrackIds }: DebugOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const frameRef = useRef<number>(0);
@@ -476,6 +477,18 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
             el.addEventListener('click', (e) => { e.stopPropagation(); onSelectTrack(tId); });
           }
           container.appendChild(el);
+
+          // REQ-5 Phase C: Green ring around converged tracks
+          if (convergedTrackIds?.has(track.systemTrackId as string)) {
+            const ring = document.createElement('div');
+            ring.style.cssText = `
+              position:absolute; left:${px.x - 9}px; top:${px.y - 9}px;
+              width:18px; height:18px; border-radius:50%;
+              border:2px solid #00cc44; z-index:21;
+              pointer-events:none;
+            `;
+            container.appendChild(ring);
+          }
         }
 
         if (showTrackLabels) {
@@ -491,7 +504,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
         }
       }
     }
-  }, [map, tracks, sensors, trailHistory, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones, searchModeStates]);
+  }, [map, tracks, sensors, trailHistory, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps, convergedTrackIds]);
 
   // Re-render on map move/zoom
   useEffect(() => {
@@ -516,7 +529,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
   // Re-render when data changes
   useEffect(() => {
     render();
-  }, [tracks, sensors, trailHistory, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, render]);
+  }, [tracks, sensors, trailHistory, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps, convergedTrackIds, render]);
 
   return (
     <>

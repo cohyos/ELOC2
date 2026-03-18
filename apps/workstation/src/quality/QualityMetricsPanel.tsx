@@ -71,6 +71,7 @@ const labelStyle: React.CSSProperties = {
 export function QualityMetricsPanel() {
   const metrics = useQualityStore(s => s.metrics);
   const allocation = useQualityStore(s => s.eoAllocationQuality);
+  const convergenceStates = useQualityStore(s => s.convergenceStates);
 
   if (!metrics) {
     return (
@@ -234,6 +235,44 @@ export function QualityMetricsPanel() {
                     transition: 'width 0.3s ease',
                   }} />
                 </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Convergence (REQ-5 Phase C) */}
+      {convergenceStates.length > 0 && (
+        <div style={{ marginBottom: '16px' }}>
+          <div style={sectionTitle}>Convergence</div>
+          {convergenceStates.map(cs => {
+            const shortId = cs.trackId.length > 16 ? cs.trackId.slice(0, 16) : cs.trackId;
+            const rateArrow = cs.convergenceRate < 0 ? '\u2193' : cs.convergenceRate > 0 ? '\u2191' : '\u2192';
+            const rateColor = cs.convergenceRate < 0 ? '#00cc44' : cs.convergenceRate > 0 ? '#ff3333' : '#888';
+            return (
+              <div key={cs.trackId} style={{ marginBottom: '6px', padding: '4px', background: '#1a1a1a', borderRadius: '3px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+                  <span style={{ ...labelStyle, fontWeight: 600, color: '#ccc' }}>
+                    {cs.converged ? '\u2705 ' : ''}{shortId}
+                  </span>
+                  <span style={{ ...monoVal, fontSize: '11px', color: rateColor }}>
+                    {rateArrow} {Math.abs(cs.convergenceRate).toFixed(2)}/s
+                  </span>
+                </div>
+                <div style={row}>
+                  <span style={labelStyle}>Est. Error</span>
+                  <span style={monoVal}>{formatMeters(cs.positionErrorEstimate)}</span>
+                </div>
+                <div style={row}>
+                  <span style={labelStyle}>Measurements</span>
+                  <span style={monoVal}>{cs.measurementCount}</span>
+                </div>
+                {cs.convergedAt !== null && (
+                  <div style={row}>
+                    <span style={labelStyle}>Converged at</span>
+                    <span style={{ ...monoVal, color: '#00cc44' }}>T+{cs.convergedAt.toFixed(0)}s</span>
+                  </div>
+                )}
               </div>
             );
           })}
