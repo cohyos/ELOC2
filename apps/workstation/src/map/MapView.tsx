@@ -464,15 +464,22 @@ export function MapView() {
     }
   }, [spawnTargetPosition]);
 
-  // DebugOverlay: only show when ?debug=1 URL param is set
-  const showDebugOverlay = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
+  // DebugOverlay: always show HTML markers (bypasses GL layers entirely)
+  // This verifies data flow independently of MapLibre layer init.
+  // Gate behind ?nodebug to disable if needed.
+  const hideDebugOverlay = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('nodebug');
   const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
 
+  // Set map instance as soon as the map exists (don't wait for layersReady)
   useEffect(() => {
-    if (layersReady && map.current) {
-      setMapInstance(map.current);
+    if (map.current && !mapInstance) {
+      // Small delay to ensure map is rendered
+      const t = setTimeout(() => {
+        if (map.current) setMapInstance(map.current);
+      }, 500);
+      return () => clearTimeout(t);
     }
-  }, [layersReady]);
+  }, [layersReady, mapInstance]);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -484,28 +491,17 @@ export function MapView() {
           filter: darkMode ? 'none' : 'brightness(0.85) saturate(0.7)',
         }}
       />
-      {/* Layer init status indicator — visible until layers are ready */}
-      {!layersReady && (
-        <div style={{
-          position: 'absolute', bottom: 40, left: '50%', transform: 'translateX(-50%)',
-          background: '#ff6600cc', color: '#fff', padding: '6px 16px', borderRadius: '4px',
-          fontSize: '12px', fontWeight: 600, zIndex: 100, pointerEvents: 'none',
-          fontFamily: 'system-ui, sans-serif',
-        }}>
-          Initializing map layers...
-        </div>
-      )}
       <LayerFilterPanel />
-      {showDebugOverlay && (
+      {!hideDebugOverlay && (
         <DebugOverlay
           map={mapInstance}
           tracks={tracks}
           sensors={sensors}
           layersReady={layersReady}
-          showTracks={layerVisibility.tracks}
-          showTrackLabels={layerVisibility.trackLabels}
-          showSensors={layerVisibility.sensors}
-          showSensorLabels={layerVisibility.sensorLabels}
+          showTracks={true}
+          showTrackLabels={true}
+          showSensors={true}
+          showSensorLabels={true}
         />
       )}
     </div>
