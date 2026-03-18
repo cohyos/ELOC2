@@ -36,7 +36,7 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 
 ## Knowledge Base — Source of Truth
 
-The `Knowledge_Base_and_Agents_instructions/` folder contains **17 foundational design documents** that define ALL domain logic, algorithms, and UI requirements. **Always consult the relevant document before implementing or debugging a feature.**
+The `Knowledge_Base_and_Agents_instructions/` folder contains **18 foundational design documents** that define ALL domain logic, algorithms, and UI requirements. **Always consult the relevant document before implementing or debugging a feature.**
 
 | File | Purpose | Phases |
 |------|---------|--------|
@@ -54,6 +54,7 @@ The `Knowledge_Base_and_Agents_instructions/` folder contains **17 foundational 
 | `Map_simulation_and_workstation.md` | UI layout, map layers, panels, responsive design | Phase 8 |
 | `ELOC2_UI_Requirements_and_VV_Spec.md` | **Full UI/UX requirements, visual inventory, interaction flows, QA agent spec, acceptance criteria** | **QA, All** |
 | `ELOC2_Implementation_Plan.md` | **Detailed implementation plan: 20 sub-tasks, file paths, agent prompts, execution order** | **All** |
+| `Blank_Map_Postmortem_and_Testing_Lessons.md` | **Post-mortem: blank map bug, testing gaps, 7 mandatory rules, dual rendering architecture** | **QA, All** |
 | `Claude_code_prompt_templates.md` | Copy-paste agent prompts with shared prefix | Agent execution |
 | `Claude_agent_build_prompts.md` | Detailed agent prompts with scope + done criteria | Agent execution |
 | `Chunk_index.md` | Index of all knowledge base chunks for retrieval | Reference |
@@ -103,7 +104,7 @@ The `Knowledge_Base_and_Agents_instructions/` folder contains **17 foundational 
 ## Gap Completion Plan (Ordered)
 
 ### HIGH — Must fix for demo
-1. ~~**Map symbols blank on deploy**~~ — **DONE**: Font CDN fixed, try/catch isolation, DebugOverlay gated
+1. ~~**Map symbols blank on deploy**~~ — **FIXED (Round 4)**: Root cause was MapLibre glyph CDN stalling WebGL pipeline. Fix: dual rendering (DebugOverlay as primary HTML renderer + MapLibre for geometry). See `Blank_Map_Postmortem_and_Testing_Lessons.md`.
 2. **Deploy to Cloud Run** — Merge dev→master triggers Cloud Build. Or manual `gcloud builds submit`.
 
 ### MEDIUM — Feature completeness
@@ -119,6 +120,13 @@ The `Knowledge_Base_and_Agents_instructions/` folder contains **17 foundational 
 10. **Playwright E2E** — Smoke browser test. New `tests/e2e/`
 
 ## Known Issues
+
+### Map Rendering Architecture (CRITICAL — read before touching map code)
+- **Dual rendering**: DebugOverlay (HTML divs) is the PRIMARY renderer for tracks/sensors. MapLibre GL layers are SECONDARY (handle coverage arcs, EO rays, triangulation, trails).
+- **Why**: MapLibre circle/symbol layers fail in production due to glyph CDN stalling the WebGL pipeline. The HTML overlay has zero external dependencies and always works.
+- **DebugOverlay**: Always on by default. Disable with `?nodebug` URL param for MapLibre-only testing.
+- **Symbol layers**: Init with `visibility:'none'` to prevent glyph loading on startup. Labels are rendered by the HTML overlay instead.
+- **Full post-mortem**: See `Knowledge_Base_and_Agents_instructions/Blank_Map_Postmortem_and_Testing_Lessons.md`
 
 ### Deployment (ACTIVE)
 - Cloud Run service: `eloc2-820514480393.me-west1.run.app`

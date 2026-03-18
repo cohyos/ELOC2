@@ -25,6 +25,7 @@ This folder contains tighter retrieval oriented files derived from the master re
 | Map simulation and workstation | UI, replay, and map display            |
 | ELOC2 UI Requirements and VV Spec | Full UI/UX requirements, visual inventory, interaction flows, QA agent spec, acceptance criteria |
 | ELOC2 Implementation Plan       | Detailed implementation plan: 20 sub-tasks, file paths, agent prompts, execution order |
+| Blank Map Postmortem and Testing Lessons | Post-mortem: why MapLibre layers never rendered, testing gaps, 7 mandatory rules, dual rendering architecture |
 
 These chunk files are written to improve retrieval precision for MCP or RAG while preserving the key research backed claims from the master report \[Joh05, Paw96, Kal04, San01, Cor11, Oke01, Pat09\].
 
