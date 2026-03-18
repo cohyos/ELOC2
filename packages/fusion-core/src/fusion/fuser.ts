@@ -140,7 +140,11 @@ export function fuseWithRegistration(
     return fuseObservation(observation, track);
   }
 
-  // Confirmation-only mode — keep track state, adjust confidence
+  // Confirmation-only mode — use observation position but with inflated
+  // covariance (2x the observation's) to reflect lower trust in the
+  // unregistered sensor.  We MUST still update the position so the track
+  // follows the target; otherwise the correlation gate loses the target
+  // after a few observations and a new track is created each time.
   const dLat = observation.position.lat - track.state.lat;
   const dLon = observation.position.lon - track.state.lon;
   const dAlt = observation.position.alt - track.state.alt;
@@ -152,9 +156,15 @@ export function fuseWithRegistration(
   const confidenceBoost = isClose ? 0.01 : 0.005;
   const confidence = Math.min(1, Math.max(0, track.confidence + confidenceBoost));
 
+  // Update position to observation (move the gate with the target)
+  // but inflate covariance to 2x observation's to express lower trust.
+  const inflatedCov = observation.covariance.map((row) =>
+    row.map((v) => v * 2),
+  ) as Covariance3x3;
+
   return {
-    state: { ...track.state },
-    covariance: track.covariance.map((row) => [...row]) as Covariance3x3,
+    state: { ...observation.position },
+    covariance: inflatedCov,
     confidence,
   };
 }

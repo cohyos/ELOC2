@@ -66,7 +66,11 @@ export function MapView() {
       container: mapContainer.current,
       style: {
         version: 8,
-        glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
+        // Glyphs URL removed: DebugOverlay handles all text labels.
+        // Having a glyphs URL causes MapLibre to fetch fonts on symbol layer
+        // visibility change, which can stall the entire WebGL pipeline in
+        // production (CDN timeouts, CORS, rate limiting). See post-mortem:
+        // Knowledge_Base_and_Agents_instructions/Blank_Map_Postmortem_and_Testing_Lessons.md
         sources: {
           osm: {
             type: 'raster',
@@ -375,10 +379,10 @@ export function MapView() {
 
     const layerMap: Array<[keyof LayerVisibility, string[]]> = [
       ['tracks', ['system-tracks-layer', 'track-eo-badge', 'track-trails-layer', 'track-selection-pulse-layer', 'investigation-rings-layer', 'investigation-rings-outer']],
-      ['trackLabels', ['system-tracks-labels']],
+      // trackLabels and sensorLabels are handled by DebugOverlay (HTML), not MapLibre.
+      // Symbol layers remain hidden to avoid glyph CDN loading.
       ['trackEllipses', ['track-ellipses-layer']],
       ['sensors', ['sensors-layer', 'sensors-degraded', 'sensors-highlight-ring']],
-      ['sensorLabels', ['sensors-labels']],
       ['radarCoverage', ['radar-coverage-layer', 'radar-coverage-outline']],
       ['eoFor', ['eo-for-layer']],
       ['eoFov', ['eo-fov-layer']],
@@ -462,8 +466,10 @@ export function MapView() {
 
   // DebugOverlay: always show HTML markers (bypasses GL layers entirely)
   // This verifies data flow independently of MapLibre layer init.
-  // Gate behind ?nodebug to disable if needed.
-  const showDebugOverlay = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
+  // DebugOverlay: HTML-based track/sensor rendering (primary reliable renderer).
+  // MapLibre circle layers may fail due to glyph CDN / WebGL issues in production.
+  // Gate behind ?nodebug to disable if needed for testing MapLibre-only rendering.
+  const hideOverlay = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('nodebug');
   const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
 
   // Set map instance as soon as the map exists (don't wait for layersReady)
@@ -477,6 +483,11 @@ export function MapView() {
     }
   }, [layersReady, mapInstance]);
 
+  // Track status filtered tracks for the overlay (same filter as MapLibre layers)
+  const filteredTracksForOverlay = tracks.filter(t =>
+    trackStatusFilter[t.status as keyof typeof trackStatusFilter] !== false
+  );
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div
@@ -488,16 +499,16 @@ export function MapView() {
         }}
       />
       <LayerFilterPanel />
-      {showDebugOverlay && (
+      {!hideOverlay && (
         <DebugOverlay
           map={mapInstance}
-          tracks={tracks}
+          tracks={filteredTracksForOverlay}
           sensors={sensors}
+          trailHistory={trailHistory}
           layersReady={layersReady}
-          showTracks={true}
-          showTrackLabels={true}
-          showSensors={true}
-          showSensorLabels={true}
+          layerVisibility={layerVisibility}
+          onSelectTrack={selectTrack}
+          onSelectSensor={selectSensor}
         />
       )}
     </div>
