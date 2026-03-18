@@ -31,6 +31,25 @@ export interface UnresolvedGroupWS {
   reason: string;
 }
 
+export interface EoModuleStatusWS {
+  mode: 'idle' | 'tracking' | 'searching' | 'mixed';
+  activePipelines: Array<{
+    trackId: string;
+    pipeline: 'sub-pixel' | 'image';
+    angularSizeMrad: number;
+    snr: number;
+  }>;
+  sensorAllocations: Array<{
+    sensorId: string;
+    targetTrackId: string | null;
+    mode: 'dwell' | 'search' | 'idle';
+    dwellRemainingSec: number;
+  }>;
+  enrichedTrackCount: number;
+  totalTracksIngested: number;
+  tickCount: number;
+}
+
 interface TaskStoreState {
   tasks: Task[];
   eoTracks: Array<{
@@ -55,6 +74,7 @@ interface TaskStoreState {
   registrationStates: RegistrationStateWS[];
   unresolvedGroups: UnresolvedGroupWS[];
   fusionModes: Record<string, string>;
+  eoModuleStatus: EoModuleStatusWS | null;
   loading: boolean;
   error: string | null;
 
@@ -65,6 +85,7 @@ interface TaskStoreState {
   setRegistrationStates: (states: RegistrationStateWS[]) => void;
   setUnresolvedGroups: (groups: UnresolvedGroupWS[]) => void;
   setFusionModes: (modes: Record<string, string>) => void;
+  setEoModuleStatus: (status: EoModuleStatusWS | null) => void;
   fetchTasks: () => Promise<void>;
   approveTask: (taskId: string) => Promise<void>;
   rejectTask: (taskId: string) => Promise<void>;
@@ -78,6 +99,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
   registrationStates: [],
   unresolvedGroups: [],
   fusionModes: {},
+  eoModuleStatus: null,
   loading: false,
   error: null,
 
@@ -88,6 +110,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
   setRegistrationStates: (states) => set({ registrationStates: states }),
   setUnresolvedGroups: (groups) => set({ unresolvedGroups: groups }),
   setFusionModes: (modes) => set({ fusionModes: modes }),
+  setEoModuleStatus: (status) => set({ eoModuleStatus: status }),
 
   fetchTasks: async () => {
     set({ loading: true, error: null });
