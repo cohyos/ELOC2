@@ -3,7 +3,7 @@ import type maplibregl from 'maplibre-gl';
 import type { SystemTrack, SensorState } from '@eloc2/domain';
 import type { LayerVisibility } from '../stores/ui-store';
 import type { GroundTruthTarget } from '../stores/ground-truth-store';
-import type { CoverZone } from '../stores/cover-zone-store';
+import type { CoverZone, OperationalZone } from '../stores/cover-zone-store';
 import type { SearchModeStateWS } from '../stores/sensor-store';
 import type { FovOverlap, BearingAssociation, MultiSensorResolution } from '../stores/fov-overlap-store';
 
@@ -80,9 +80,11 @@ interface DebugOverlayProps {
   layerVisibility: LayerVisibility;
   onSelectTrack?: (id: string) => void;
   onSelectSensor?: (id: string) => void;
+  onSelectGroundTruth?: (id: string) => void;
   groundTruthTargets?: GroundTruthTarget[];
   showGroundTruth?: boolean;
   coverZones?: CoverZone[];
+  operationalZones?: OperationalZone[];
   searchModeStates?: SearchModeStateWS[];
   fovOverlaps?: FovOverlap[];
   bearingAssociations?: BearingAssociation[];
@@ -90,7 +92,7 @@ interface DebugOverlayProps {
   convergedTrackIds?: Set<string>;
 }
 
-export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds }: DebugOverlayProps) {
+export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor, onSelectGroundTruth, groundTruthTargets, showGroundTruth, coverZones, operationalZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds }: DebugOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const frameRef = useRef<number>(0);
@@ -168,6 +170,58 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
           label.textContent = zone.name;
           svg.appendChild(label);
         }
+      }
+    }
+
+    // Operational zones (threat corridors, exclusion areas, engagement zones)
+    if (operationalZones && operationalZones.length > 0) {
+      const zoneStyles: Record<string, { fill: string; stroke: string; dash: string }> = {
+        threat_corridor: { fill: 'rgba(255, 50, 50, 0.12)', stroke: 'rgba(255, 50, 50, 0.7)', dash: '8,4' },
+        exclusion:       { fill: 'rgba(255, 0, 0, 0.08)',   stroke: 'rgba(255, 0, 0, 0.6)',   dash: '12,4,4,4' },
+        engagement:      { fill: 'rgba(0, 200, 100, 0.08)', stroke: 'rgba(0, 200, 100, 0.5)', dash: '6,3' },
+        safe_passage:    { fill: 'rgba(0, 150, 255, 0.08)', stroke: 'rgba(0, 150, 255, 0.5)', dash: '4,4' },
+      };
+
+      for (const zone of operationalZones) {
+        if (!zone.polygon || zone.polygon.length < 3) continue;
+
+        const style = zoneStyles[zone.zoneType] ?? zoneStyles.threat_corridor;
+        const points: string[] = [];
+        let cx = 0, cy = 0;
+
+        for (const v of zone.polygon) {
+          if (!Number.isFinite(v.lon) || !Number.isFinite(v.lat)) continue;
+          const p = proj(v.lon, v.lat);
+          points.push(`${p.x},${p.y}`);
+          cx += p.x;
+          cy += p.y;
+        }
+        if (points.length < 3) continue;
+        cx /= points.length;
+        cy /= points.length;
+
+        const poly = createSvgEl('polygon', {
+          points: points.join(' '),
+          fill: zone.color ? `${zone.color}20` : style.fill,
+          stroke: zone.color ?? style.stroke,
+          'stroke-width': '2',
+          'stroke-dasharray': style.dash,
+        });
+        svg.appendChild(poly);
+
+        // Label
+        const label = createSvgEl('text', {
+          x: String(cx),
+          y: String(cy),
+          fill: zone.color ?? style.stroke,
+          'font-size': '10',
+          'font-family': 'monospace',
+          'text-anchor': 'middle',
+          'dominant-baseline': 'middle',
+          'font-weight': '600',
+        });
+        label.textContent = zone.name;
+        svg.appendChild(label);
       }
     }
 
@@ -464,14 +518,19 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
         if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
         const px = proj(lon, lat);
 
-        // Diamond marker (rotated square)
+        // Diamond marker (rotated square) — clickable to show details
         const el = document.createElement('div');
         el.style.cssText = `
           position:absolute; left:${px.x - 7}px; top:${px.y - 7}px;
           width:14px; height:14px; background:#00ffff;
-          border:2px solid #fff; z-index:22;
-          transform:rotate(45deg); pointer-events:none;
+          border:2px solid #fff; z-index:22; cursor:pointer;
+          transform:rotate(45deg); pointer-events:auto;
         `;
+        el.title = `GT: ${target.name} — ${target.classification ?? 'unclassified'}`;
+        if (onSelectGroundTruth) {
+          const gtId = target.targetId ?? target.name;
+          el.addEventListener('click', (e) => { e.stopPropagation(); onSelectGroundTruth(gtId); });
+        }
         container.appendChild(el);
 
         // Name label
@@ -540,6 +599,46 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
           `;
           container.appendChild(dot);
         }
+      }
+    }
+
+    // Uncertainty ellipses (SVG, behind markers)
+    if (layerVisibility.trackEllipses && showTracks) {
+      for (const track of tracks) {
+        const { lon, lat } = track.state;
+        if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+        const cov = track.covariance;
+        if (!cov || !cov[0] || !cov[1]) continue;
+
+        const semiAxisXm = Math.sqrt(Math.abs(cov[0][0] ?? 100));
+        const semiAxisYm = Math.sqrt(Math.abs(cov[1][1] ?? 100));
+        const mPerDegLon = 111320 * Math.cos(lat * DEG_TO_RAD);
+        const mPerDegLat = 110540;
+        // Scale by 3x for visibility
+        const semiAxisXdeg = (semiAxisXm / mPerDegLon) * 3;
+        const semiAxisYdeg = (semiAxisYm / mPerDegLat) * 3;
+
+        // Generate 24-segment ellipse polygon in screen coords
+        const segments = 24;
+        const points: string[] = [];
+        for (let i = 0; i <= segments; i++) {
+          const angle = (2 * Math.PI * i) / segments;
+          const eLon = lon + semiAxisXdeg * Math.cos(angle);
+          const eLat = lat + semiAxisYdeg * Math.sin(angle);
+          const p = proj(eLon, eLat);
+          points.push(`${p.x},${p.y}`);
+        }
+
+        const color = statusColor(track.status);
+        const ellipse = createSvgEl('polygon', {
+          points: points.join(' '),
+          fill: color,
+          'fill-opacity': '0.1',
+          stroke: color,
+          'stroke-opacity': '0.4',
+          'stroke-width': '1',
+        });
+        svg.appendChild(ellipse);
       }
     }
 
@@ -614,7 +713,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
         }
       }
     }
-  }, [map, tracks, sensors, trailHistory, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds]);
+  }, [map, tracks, sensors, trailHistory, layerVisibility, onSelectTrack, onSelectSensor, onSelectGroundTruth, groundTruthTargets, showGroundTruth, coverZones, operationalZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds]);
 
   // Re-render on map move/zoom
   useEffect(() => {

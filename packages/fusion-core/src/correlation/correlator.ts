@@ -23,12 +23,17 @@ export interface CorrelationResult {
 // ---------------------------------------------------------------------------
 
 export interface CorrelatorConfig {
-  /** Chi-squared gate threshold. Default 9.21 (2-DoF, 99% confidence). */
+  /**
+   * Chi-squared gate threshold.
+   * Default 16.27 (3-DoF, 99.9% confidence).
+   * Previously 9.21 (2-DoF, 99%) which was too tight for 3D ENU correlation,
+   * causing ghost tracks when sensor noise exceeded the gate radius.
+   */
   gateThreshold: number;
 }
 
 const DEFAULT_CONFIG: CorrelatorConfig = {
-  gateThreshold: 9.21,
+  gateThreshold: 16.27,
 };
 
 // ---------------------------------------------------------------------------

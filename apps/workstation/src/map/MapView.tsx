@@ -36,6 +36,7 @@ export function MapView() {
   const searchModeStates = useSensorStore(s => s.searchModeStates);
   const selectTrack = useUiStore(s => s.selectTrack);
   const selectSensor = useUiStore(s => s.selectSensor);
+  const selectGroundTruth = useUiStore(s => s.selectGroundTruth);
   const selectCue = useUiStore(s => s.selectCue);
   const selectGroup = useUiStore(s => s.selectGroup);
   const selectGeometry = useUiStore(s => s.selectGeometry);
@@ -61,6 +62,7 @@ export function MapView() {
   const groundTruthTargets = useGroundTruthStore(s => s.targets);
   const showGroundTruth = useGroundTruthStore(s => s.showGroundTruth);
   const coverZones = useCoverZoneStore(s => s.coverZones);
+  const operationalZones = useCoverZoneStore(s => s.operationalZones);
   const fovOverlaps = useFovOverlapStore(s => s.fovOverlaps);
   const bearingAssociations = useFovOverlapStore(s => s.bearingAssociations);
   const multiSensorResolutions = useFovOverlapStore(s => s.multiSensorResolutions);
@@ -530,9 +532,11 @@ export function MapView() {
           layerVisibility={layerVisibility}
           onSelectTrack={selectTrack}
           onSelectSensor={selectSensor}
+          onSelectGroundTruth={selectGroundTruth}
           groundTruthTargets={groundTruthTargets}
           showGroundTruth={showGroundTruth}
           coverZones={coverZones}
+          operationalZones={operationalZones}
           searchModeStates={searchModeStates}
           fovOverlaps={fovOverlaps}
           bearingAssociations={bearingAssociations}

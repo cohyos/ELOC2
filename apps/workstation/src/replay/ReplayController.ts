@@ -157,6 +157,9 @@ export class ReplayController {
     if (data.coverZones && Array.isArray(data.coverZones)) {
       useCoverZoneStore.getState().setCoverZones(data.coverZones);
     }
+    if (data.operationalZones && Array.isArray(data.operationalZones)) {
+      useCoverZoneStore.getState().setOperationalZones(data.operationalZones);
+    }
     if (data.qualityMetrics && typeof data.qualityMetrics === 'object') {
       useQualityStore.getState().setMetrics(data.qualityMetrics);
     }

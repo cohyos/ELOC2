@@ -102,6 +102,12 @@ export class EoManagementModule {
     scanEnd: number;
     scanSpeed: number;
     idleTickCount: number;
+    // Elevation scan (azimuth + elevation grid)
+    currentElevation: number;
+    elevationMin: number;
+    elevationMax: number;
+    elevationStep: number;
+    elevationDirection: 1 | -1;
   }>();
 
   /** Convergence monitoring per track. */
@@ -398,6 +404,12 @@ export class EoManagementModule {
           scanEnd: sensor.coverage?.maxAzDeg ?? 360,
           scanSpeed: 5,
           idleTickCount: 0,
+          // Elevation scan defaults: 0-30° in 5° steps
+          currentElevation: sensor.coverage?.minElDeg ?? 0,
+          elevationMin: sensor.coverage?.minElDeg ?? 0,
+          elevationMax: sensor.coverage?.maxElDeg ?? 30,
+          elevationStep: 5,
+          elevationDirection: 1,
         };
         this.searchState.set(sid, state);
       }
@@ -409,10 +421,19 @@ export class EoManagementModule {
         state.idleTickCount++;
         if (state.idleTickCount >= 3) {
           state.active = true;
-          // Advance scan
+          // Advance scan: azimuth sweep with elevation stepping
           state.currentAzimuth += state.scanSpeed * dtSec;
           if (state.currentAzimuth > state.scanEnd) {
             state.currentAzimuth = state.scanStart;
+            // Step elevation on each azimuth sweep completion
+            state.currentElevation += state.elevationStep * state.elevationDirection;
+            if (state.currentElevation >= state.elevationMax) {
+              state.elevationDirection = -1;
+              state.currentElevation = state.elevationMax;
+            } else if (state.currentElevation <= state.elevationMin) {
+              state.elevationDirection = 1;
+              state.currentElevation = state.elevationMin;
+            }
           }
         }
       }
@@ -470,6 +491,7 @@ export class EoManagementModule {
         active: state.active,
         pattern: state.pattern,
         currentAzimuth: state.currentAzimuth,
+        currentElevation: state.currentElevation,
       });
     }
     return result;
