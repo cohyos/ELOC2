@@ -24,4 +24,26 @@ export function registerQualityRoutes(app: FastifyInstance, engine: LiveEngine) 
     }
     return metrics;
   });
+
+  // GET /api/quality/allocation — Returns EO allocation quality metrics (REQ-10)
+  app.get('/api/quality/allocation', async () => {
+    const allocation = engine.getEoAllocationQuality();
+    if (!allocation) {
+      return {
+        coverageEfficiency: 0,
+        geometryOptimality: 0,
+        dwellEfficiency: 0,
+        revisitTimeliness: 100,
+        triangulationSuccessRate: 0,
+        sensorUtilization: 0,
+        priorityAlignment: 100,
+      };
+    }
+    return allocation;
+  });
+
+  // GET /api/quality/before-after — Returns before/after EO comparison (REQ-9)
+  app.get('/api/quality/before-after', async () => {
+    return engine.getBeforeAfterComparison();
+  });
 }

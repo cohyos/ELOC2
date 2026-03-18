@@ -264,6 +264,25 @@ export class LiveEngine {
     endedSec: number;
   }>>();
 
+  // ── Before/After EO Comparison (REQ-9) ─────────────────────────────
+  /** Snapshots of track state before and after EO investigation */
+  private eoSnapshots = new Map<string, {
+    preEo: {
+      positionError: number;
+      covariance: number;
+      classification: string | null;
+      geometryStatus: string;
+      timestamp: number;
+    };
+    postEo: {
+      positionError: number;
+      covariance: number;
+      classification: string | null;
+      geometryStatus: string;
+      timestamp: number;
+    } | null;
+  }>();
+
   // ── Quality Assessment state ──────────────────────────────────────────
   /** Time (sim seconds) when each target was first associated with a system track */
   private firstDetectionTime = new Map<string, number>();
@@ -284,6 +303,17 @@ export class LiveEngine {
     sensorUtilization: Record<string, number>;
     timeToFirstDetection: Record<string, number>;
     timeToConfirmed3D: Record<string, number>;
+  } | null = null;
+
+  /** Cached EO allocation quality metrics (REQ-10, recomputed each tick) */
+  private cachedEoAllocationQuality: {
+    coverageEfficiency: number;
+    geometryOptimality: number;
+    dwellEfficiency: number;
+    revisitTimeliness: number;
+    triangulationSuccessRate: number;
+    sensorUtilization: number;
+    priorityAlignment: number;
   } | null = null;
 
   constructor(scenarioId?: string) {
@@ -473,6 +503,8 @@ export class LiveEngine {
         [...this.cyclingHistory.entries()].map(([sensorId, history]) => [sensorId, history.slice(-5)]),
       ),
       qualityMetrics: this.cachedQualityMetrics ?? undefined,
+      eoAllocationQuality: this.cachedEoAllocationQuality ?? undefined,
+      beforeAfterComparison: this.getBeforeAfterComparison(),
     };
   }
 
@@ -976,6 +1008,9 @@ export class LiveEngine {
     this.totalTicks = 0;
     this.cachedQualityMetrics = null;
 
+    // REQ-9: Before/after EO comparison reset
+    this.eoSnapshots.clear();
+
     this.state = this.buildInitialState();
   }
 
@@ -1064,6 +1099,9 @@ export class LiveEngine {
 
     // Quality assessment: compute metrics comparing tracks vs ground truth
     this.computeQualityMetrics();
+
+    // EO allocation quality (REQ-10)
+    this.computeEoAllocationQuality();
 
     // Broadcast updated RAP to WebSocket clients
     this.broadcastRap();
@@ -1615,6 +1653,9 @@ export class LiveEngine {
     this.activeCuesById.set(cue.cueId, cue);
     this.cueToTrack.set(cue.cueId, track.systemTrackId as string);
 
+    // REQ-9: Capture pre-EO snapshot when cue is issued
+    this.capturePreEoSnapshot(track.systemTrackId as string);
+
     this.trackManager.setEoInvestigationStatus(track.systemTrackId, 'in_progress');
 
     // 6. Start a new dwell
@@ -1706,6 +1747,9 @@ export class LiveEngine {
       if (elapsed >= dwell.dwellDurationSec) {
         // Dwell completed — free this sensor for reassignment
         this.dwellState.delete(sensorId);
+
+        // REQ-9: Capture post-EO snapshot when dwell completes
+        this.capturePostEoSnapshot(dwell.targetTrackId);
 
         // Record completed dwell in cycling history
         if (!this.cyclingHistory.has(sensorId)) {
@@ -1850,6 +1894,9 @@ export class LiveEngine {
       // Store cue
       this.activeCuesById.set(cue.cueId, cue);
       this.cueToTrack.set(cue.cueId, track.systemTrackId as string);
+
+      // REQ-9: Capture pre-EO snapshot when cue is issued
+      this.capturePreEoSnapshot(track.systemTrackId as string);
 
       // Mark track as under EO investigation
       this.trackManager.setEoInvestigationStatus(track.systemTrackId, 'in_progress');
@@ -2677,6 +2724,316 @@ export class LiveEngine {
     return this.cachedQualityMetrics;
   }
 
+  /** Public accessor for EO allocation quality (REQ-10). */
+  getEoAllocationQuality(): typeof this.cachedEoAllocationQuality {
+    return this.cachedEoAllocationQuality;
+  }
+
+  /**
+   * Compute EO allocation quality metrics (REQ-10).
+   * Measures how well EO resources were allocated across 7 criteria.
+   */
+  private computeEoAllocationQuality(): void {
+    const tracks = this.state.tracks;
+    const eoSensors = this.state.sensors.filter(s => s.type === 'eo');
+    const elapsedSec = this.state.elapsedSec;
+
+    // 1. Coverage efficiency: % of high-priority/confirmed tracks that received EO investigation
+    const highPriorityTracks = tracks.filter(t => {
+      const trackId = t.systemTrackId as string;
+      return this.operatorPriorityTracks.has(trackId)
+        || this.operatorTrackPriority.get(trackId) === 'high'
+        || t.status === 'confirmed';
+    });
+    let investigatedHighPriority = 0;
+    for (const t of highPriorityTracks) {
+      const trackId = t.systemTrackId as string;
+      const hasEoTrack = [...this.eoTracksById.values()].some(
+        et => (et.associatedSystemTrackId as string) === trackId,
+      );
+      if (hasEoTrack) investigatedHighPriority++;
+    }
+    const coverageEfficiency = highPriorityTracks.length > 0
+      ? (investigatedHighPriority / highPriorityTracks.length) * 100
+      : 100;
+
+    // 2. Geometry optimality: avg intersection angle (closer to 90 is better)
+    let angleSum = 0;
+    let angleCount = 0;
+    for (const [, est] of this.state.geometryEstimates) {
+      if (est.intersectionAngleDeg != null && Number.isFinite(est.intersectionAngleDeg)) {
+        angleSum += est.intersectionAngleDeg;
+        angleCount++;
+      }
+    }
+    const geometryOptimality = angleCount > 0 ? angleSum / angleCount : 0;
+
+    // 3. Dwell efficiency: ratio of total dwell time vs total possible sensor time
+    let totalDwellTimeSec = 0;
+    for (const [, history] of this.cyclingHistory) {
+      for (const entry of history) {
+        totalDwellTimeSec += entry.endedSec - entry.startedSec;
+      }
+    }
+    // Also add currently active dwells
+    for (const [, dwell] of this.dwellState) {
+      totalDwellTimeSec += elapsedSec - dwell.dwellStartSec;
+    }
+    const totalPossibleSec = elapsedSec * eoSensors.length;
+    const dwellEfficiency = totalPossibleSec > 0
+      ? Math.min(100, (totalDwellTimeSec / totalPossibleSec) * 100)
+      : 0;
+
+    // 4. Revisit timeliness: % of tracks whose revisit schedule is on time
+    let onTimeCount = 0;
+    let revisitTotal = 0;
+    for (const track of tracks) {
+      const trackId = track.systemTrackId as string;
+      const lastInv = this.lastInvestigationTime.get(trackId);
+      if (lastInv == null) continue; // never investigated, skip
+      revisitTotal++;
+      const nextRevisit = lastInv + LiveEngine.MAX_REVISIT_INTERVAL_SEC;
+      if (elapsedSec <= nextRevisit) {
+        onTimeCount++;
+      }
+    }
+    const revisitTimeliness = revisitTotal > 0
+      ? (onTimeCount / revisitTotal) * 100
+      : 100;
+
+    // 5. Triangulation success rate: % of investigated tracks achieving confirmed_3d
+    let investigatedCount = 0;
+    let confirmed3dCount = 0;
+    for (const track of tracks) {
+      const trackId = track.systemTrackId as string;
+      const hasEoTrack = [...this.eoTracksById.values()].some(
+        et => (et.associatedSystemTrackId as string) === trackId,
+      );
+      if (!hasEoTrack) continue;
+      investigatedCount++;
+      const geoEst = this.state.geometryEstimates.get(trackId);
+      if (geoEst && geoEst.classification === 'confirmed_3d') {
+        confirmed3dCount++;
+      }
+    }
+    const triangulationSuccessRate = investigatedCount > 0
+      ? (confirmed3dCount / investigatedCount) * 100
+      : 0;
+
+    // 6. Sensor utilization: avg % time each EO sensor is actively tasked
+    let utilizationSum = 0;
+    const sensorUtil = this.buildSensorUtilization();
+    let eoSensorCount = 0;
+    for (const sensor of eoSensors) {
+      const sensorId = sensor.sensorId as string;
+      utilizationSum += (sensorUtil[sensorId] ?? 0);
+      eoSensorCount++;
+    }
+    const sensorUtilizationPct = eoSensorCount > 0
+      ? (utilizationSum / eoSensorCount) * 100
+      : 0;
+
+    // 7. Priority alignment: rank correlation between threat priority and investigation order
+    let priorityAlignment = 100;
+    if (this.cyclingHistory.size > 0) {
+      let totalComparisons = 0;
+      let concordant = 0;
+      for (const [, history] of this.cyclingHistory) {
+        if (history.length < 2) continue;
+        // Get priority rank for each visited track (high=3, normal=2, low=1, unset=2)
+        const getRank = (trackId: string): number => {
+          if (this.operatorPriorityTracks.has(trackId)) return 3;
+          const p = this.operatorTrackPriority.get(trackId);
+          if (p === 'high') return 3;
+          if (p === 'low') return 1;
+          return 2;
+        };
+        for (let i = 0; i < history.length - 1; i++) {
+          const rankI = getRank(history[i].trackId);
+          const rankJ = getRank(history[i + 1].trackId);
+          totalComparisons++;
+          // Concordant if higher-priority visited first or same priority
+          if (rankI >= rankJ) concordant++;
+        }
+      }
+      priorityAlignment = totalComparisons > 0
+        ? (concordant / totalComparisons) * 100
+        : 100;
+    }
+
+    this.cachedEoAllocationQuality = {
+      coverageEfficiency,
+      geometryOptimality,
+      dwellEfficiency,
+      revisitTimeliness,
+      triangulationSuccessRate,
+      sensorUtilization: sensorUtilizationPct,
+      priorityAlignment,
+    };
+  }
+
+  // ── Before/After EO Comparison (REQ-9) ─────────────────────────────
+
+  /**
+   * Compute position error (meters) for a track by finding nearest ground truth target.
+   */
+  private computeTrackPositionError(track: SystemTrack): number {
+    const groundTruth = this.getGroundTruth();
+    let bestDist = Infinity;
+    for (const gt of groundTruth) {
+      const dist = LiveEngine.haversineMeters(
+        track.state.lat, track.state.lon,
+        gt.position.lat, gt.position.lon,
+      );
+      if (dist < bestDist) {
+        bestDist = dist;
+      }
+    }
+    return bestDist === Infinity ? 0 : bestDist;
+  }
+
+  /**
+   * Capture a pre-EO snapshot for a track (called when a cue is issued).
+   * Only captures if no snapshot exists yet for this track.
+   */
+  private capturePreEoSnapshot(trackId: string): void {
+    if (this.eoSnapshots.has(trackId)) return;
+
+    const track = this.state.tracks.find(t => (t.systemTrackId as string) === trackId);
+    if (!track) return;
+
+    const positionError = this.computeTrackPositionError(track);
+    const geoEst = this.state.geometryEstimates.get(trackId);
+    const geometryStatus = geoEst?.classification ?? 'bearing_only';
+    // Use covariance trace as uncertainty measure (fallback to 0)
+    const covariance = track.covariance
+      ? (track.covariance[0] ?? 0) + (track.covariance[3] ?? 0)
+      : 0;
+
+    this.eoSnapshots.set(trackId, {
+      preEo: {
+        positionError,
+        covariance,
+        classification: (track.classification as string) ?? null,
+        geometryStatus,
+        timestamp: this.state.elapsedSec,
+      },
+      postEo: null,
+    });
+  }
+
+  /**
+   * Capture a post-EO snapshot for a track (called when a dwell completes).
+   */
+  private capturePostEoSnapshot(trackId: string): void {
+    const snapshot = this.eoSnapshots.get(trackId);
+    if (!snapshot) return;
+
+    const track = this.state.tracks.find(t => (t.systemTrackId as string) === trackId);
+    if (!track) return;
+
+    const positionError = this.computeTrackPositionError(track);
+    const geoEst = this.state.geometryEstimates.get(trackId);
+    const geometryStatus = geoEst?.classification ?? 'bearing_only';
+    const covariance = track.covariance
+      ? (track.covariance[0] ?? 0) + (track.covariance[3] ?? 0)
+      : 0;
+
+    snapshot.postEo = {
+      positionError,
+      covariance,
+      classification: (track.classification as string) ?? null,
+      geometryStatus,
+      timestamp: this.state.elapsedSec,
+    };
+  }
+
+  /**
+   * Get before/after EO comparison data (REQ-9).
+   */
+  getBeforeAfterComparison(): {
+    perTrack: Array<{
+      trackId: string;
+      preEo: { positionError: number; covariance: number; classification: string | null; geometryStatus: string; timestamp: number };
+      postEo: { positionError: number; covariance: number; classification: string | null; geometryStatus: string; timestamp: number } | null;
+      improvement: {
+        positionErrorReduction: number;
+        classificationGained: boolean;
+        geometryUpgraded: boolean;
+      };
+    }>;
+    aggregate: {
+      avgPositionImprovement: number;
+      tracksWithClassification: number;
+      tracksWithGeometryUpgrade: number;
+      totalTracksInvestigated: number;
+    };
+  } {
+    const geometryRank: Record<string, number> = {
+      bearing_only: 0,
+      candidate_3d: 1,
+      confirmed_3d: 2,
+    };
+
+    const perTrack: Array<{
+      trackId: string;
+      preEo: { positionError: number; covariance: number; classification: string | null; geometryStatus: string; timestamp: number };
+      postEo: { positionError: number; covariance: number; classification: string | null; geometryStatus: string; timestamp: number } | null;
+      improvement: {
+        positionErrorReduction: number;
+        classificationGained: boolean;
+        geometryUpgraded: boolean;
+      };
+    }> = [];
+
+    let totalPositionImprovement = 0;
+    let tracksWithPositionData = 0;
+    let tracksWithClassification = 0;
+    let tracksWithGeometryUpgrade = 0;
+
+    for (const [trackId, snapshot] of this.eoSnapshots) {
+      const positionErrorReduction = snapshot.postEo
+        ? snapshot.preEo.positionError - snapshot.postEo.positionError
+        : 0;
+      const classificationGained = snapshot.postEo
+        ? snapshot.preEo.classification === null && snapshot.postEo.classification !== null
+        : false;
+      const geometryUpgraded = snapshot.postEo
+        ? (geometryRank[snapshot.postEo.geometryStatus] ?? 0) > (geometryRank[snapshot.preEo.geometryStatus] ?? 0)
+        : false;
+
+      if (snapshot.postEo) {
+        totalPositionImprovement += positionErrorReduction;
+        tracksWithPositionData++;
+        if (classificationGained) tracksWithClassification++;
+        if (geometryUpgraded) tracksWithGeometryUpgrade++;
+      }
+
+      perTrack.push({
+        trackId,
+        preEo: snapshot.preEo,
+        postEo: snapshot.postEo,
+        improvement: {
+          positionErrorReduction,
+          classificationGained,
+          geometryUpgraded,
+        },
+      });
+    }
+
+    return {
+      perTrack,
+      aggregate: {
+        avgPositionImprovement: tracksWithPositionData > 0
+          ? totalPositionImprovement / tracksWithPositionData
+          : 0,
+        tracksWithClassification,
+        tracksWithGeometryUpgrade,
+        totalTracksInvestigated: this.eoSnapshots.size,
+      },
+    };
+  }
+
   private broadcastRap(force = false): void {
     // Throttle: at high speeds, cap broadcasts to ~4/sec (250ms interval)
     const now = Date.now();
@@ -2787,6 +3144,10 @@ export class LiveEngine {
       coverZones: this.scenario.coverZones ?? [],
       // Quality metrics (REQ-8)
       qualityMetrics: this.cachedQualityMetrics ?? undefined,
+      // EO allocation quality (REQ-10)
+      eoAllocationQuality: this.cachedEoAllocationQuality ?? undefined,
+      // Before/after EO comparison aggregate (REQ-9)
+      beforeAfterAggregate: this.getBeforeAfterComparison().aggregate,
     });
 
     // Separate ground truth broadcast

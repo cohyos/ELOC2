@@ -11,6 +11,13 @@ function pctColor(value: number): string {
   return '#ff3333';
 }
 
+/** Color for 0-100 percentage values (used by allocation quality) */
+function pctColor100(value: number): string {
+  if (value >= 80) return '#00cc44';
+  if (value >= 50) return '#ffcc00';
+  return '#ff3333';
+}
+
 function formatPct(value: number): string {
   return (value * 100).toFixed(1) + '%';
 }
@@ -63,6 +70,7 @@ const labelStyle: React.CSSProperties = {
 
 export function QualityMetricsPanel() {
   const metrics = useQualityStore(s => s.metrics);
+  const allocation = useQualityStore(s => s.eoAllocationQuality);
 
   if (!metrics) {
     return (
@@ -189,6 +197,43 @@ export function QualityMetricsPanel() {
               <div key={targetId} style={row}>
                 <span style={labelStyle}>{shortId}</span>
                 <span style={monoVal}>{timeSec.toFixed(0)}s</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* EO Allocation Quality (REQ-10) */}
+      {allocation && (
+        <div style={{ marginBottom: '16px' }}>
+          <div style={sectionTitle}>EO Allocation Quality</div>
+          {([
+            ['Coverage Efficiency', allocation.coverageEfficiency, '%'],
+            ['Geometry Optimality', allocation.geometryOptimality, '\u00B0'],
+            ['Dwell Efficiency', allocation.dwellEfficiency, '%'],
+            ['Revisit Timeliness', allocation.revisitTimeliness, '%'],
+            ['Triangulation Success', allocation.triangulationSuccessRate, '%'],
+            ['Sensor Utilization', allocation.sensorUtilization, '%'],
+            ['Priority Alignment', allocation.priorityAlignment, '%'],
+          ] as Array<[string, number, string]>).map(([label, value, unit]) => {
+            const isAngle = unit === '\u00B0';
+            const barValue = isAngle ? Math.min(100, (value / 90) * 100) : Math.min(100, value);
+            const color = isAngle ? pctColor100((value / 90) * 100) : pctColor100(value);
+            return (
+              <div key={label} style={{ marginBottom: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '1px' }}>
+                  <span style={{ color: '#aaa' }}>{label}</span>
+                  <span style={{ ...monoVal, fontSize: '11px', color }}>{value.toFixed(1)}{unit}</span>
+                </div>
+                <div style={{ background: '#222', borderRadius: '2px', height: '6px', overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${barValue}%`,
+                    height: '100%',
+                    background: color,
+                    borderRadius: '2px',
+                    transition: 'width 0.3s ease',
+                  }} />
+                </div>
               </div>
             );
           })}

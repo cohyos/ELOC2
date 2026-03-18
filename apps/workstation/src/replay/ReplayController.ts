@@ -159,6 +159,9 @@ export class ReplayController {
     if (data.qualityMetrics && typeof data.qualityMetrics === 'object') {
       useQualityStore.getState().setMetrics(data.qualityMetrics);
     }
+    if (data.eoAllocationQuality && typeof data.eoAllocationQuality === 'object') {
+      useQualityStore.getState().setEoAllocationQuality(data.eoAllocationQuality);
+    }
     // Update replay time from simulation
     if (typeof data.simTimeSec === 'number') {
       useUiStore.getState().setReplayTime(data.simTimeSec);
