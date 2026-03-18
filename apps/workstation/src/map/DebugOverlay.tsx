@@ -4,6 +4,8 @@ import type { SystemTrack, SensorState } from '@eloc2/domain';
 import type { LayerVisibility } from '../stores/ui-store';
 import type { GroundTruthTarget } from '../stores/ground-truth-store';
 import type { CoverZone } from '../stores/cover-zone-store';
+import type { SearchModeStateWS } from '../stores/sensor-store';
+import type { FovOverlap } from '../stores/fov-overlap-store';
 
 /**
  * DebugOverlay — Primary HTML/SVG-based renderer.
@@ -81,9 +83,11 @@ interface DebugOverlayProps {
   groundTruthTargets?: GroundTruthTarget[];
   showGroundTruth?: boolean;
   coverZones?: CoverZone[];
+  searchModeStates?: SearchModeStateWS[];
+  fovOverlaps?: FovOverlap[];
 }
 
-export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones }: DebugOverlayProps) {
+export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps }: DebugOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const frameRef = useRef<number>(0);
@@ -195,6 +199,48 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
       }
     }
 
+    // FOV overlap regions (semi-transparent yellow polygons)
+    if (fovOverlaps && fovOverlaps.length > 0 && layerVisibility.eoFov) {
+      for (const overlap of fovOverlaps) {
+        if (!overlap.overlapRegion || overlap.overlapRegion.length < 2) continue;
+
+        if (overlap.overlapRegion.length >= 3) {
+          // Render as polygon
+          const points: string[] = [];
+          for (const vertex of overlap.overlapRegion) {
+            if (!Number.isFinite(vertex.lon) || !Number.isFinite(vertex.lat)) continue;
+            const p = proj(vertex.lon, vertex.lat);
+            points.push(`${p.x},${p.y}`);
+          }
+          if (points.length >= 3) {
+            const polygon = createSvgEl('polygon', {
+              points: points.join(' '),
+              fill: 'rgba(255, 255, 0, 0.1)',
+              stroke: 'rgba(255, 255, 0, 0.4)',
+              'stroke-width': '1.5',
+              'stroke-dasharray': '4,3',
+            });
+            svg.appendChild(polygon);
+          }
+        } else {
+          // Single point indicator — render as a small circle
+          const pt = overlap.overlapRegion[0];
+          if (Number.isFinite(pt.lon) && Number.isFinite(pt.lat)) {
+            const p = proj(pt.lon, pt.lat);
+            const circle = createSvgEl('circle', {
+              cx: String(p.x),
+              cy: String(p.y),
+              r: '6',
+              fill: 'rgba(255, 255, 0, 0.3)',
+              stroke: 'rgba(255, 255, 0, 0.6)',
+              'stroke-width': '1.5',
+            });
+            svg.appendChild(circle);
+          }
+        }
+      }
+    }
+
     // EO gimbal rays
     if (layerVisibility.eoRays) {
       for (const sensor of sensors) {
@@ -211,6 +257,44 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
           'stroke-dasharray': '6,3',
         });
         svg.appendChild(line);
+      }
+    }
+
+    // Search mode sweep lines (dashed light blue from sensor in scan direction)
+    if (searchModeStates && searchModeStates.length > 0 && layerVisibility.sensors) {
+      const searchMap = new Map(searchModeStates.map(s => [s.sensorId, s]));
+      for (const sensor of sensors) {
+        if (sensor.sensorType !== 'eo') continue;
+        const searchState = searchMap.get(sensor.sensorId as string);
+        if (!searchState || !searchState.active) continue;
+
+        const { lon, lat } = sensor.position;
+        const endPos = geoOffset(lon, lat, searchState.currentAzimuth, 30000); // 30km line
+        const p1 = proj(lon, lat);
+        const p2 = proj(endPos[0], endPos[1]);
+        const line = createSvgEl('line', {
+          x1: String(p1.x), y1: String(p1.y),
+          x2: String(p2.x), y2: String(p2.y),
+          stroke: '#44aaff', 'stroke-width': '2', 'stroke-opacity': '0.5',
+          'stroke-dasharray': '8,4',
+        });
+        svg.appendChild(line);
+
+        // Small "SEARCH" label near sensor
+        const labelX = p1.x + (p2.x - p1.x) * 0.15;
+        const labelY = p1.y + (p2.y - p1.y) * 0.15;
+        const label = createSvgEl('text', {
+          x: String(labelX),
+          y: String(labelY - 6),
+          'font-size': '9',
+          'font-family': 'monospace',
+          fill: '#44aaff',
+          'fill-opacity': '0.7',
+          'text-anchor': 'start',
+          'pointer-events': 'none',
+        });
+        label.textContent = 'SEARCH';
+        svg.appendChild(label);
       }
     }
 
@@ -407,7 +491,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
         }
       }
     }
-  }, [map, tracks, sensors, trailHistory, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones]);
+  }, [map, tracks, sensors, trailHistory, layerVisibility, onSelectTrack, onSelectSensor, groundTruthTargets, showGroundTruth, coverZones, searchModeStates]);
 
   // Re-render on map move/zoom
   useEffect(() => {
@@ -432,7 +516,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
   // Re-render when data changes
   useEffect(() => {
     render();
-  }, [tracks, sensors, trailHistory, groundTruthTargets, showGroundTruth, coverZones, render]);
+  }, [tracks, sensors, trailHistory, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, render]);
 
   return (
     <>

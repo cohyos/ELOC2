@@ -31,6 +31,7 @@ export function MapView() {
   const tracks = useTrackStore(s => s.tracks);
   const trailHistory = useTrackStore(s => s.trailHistory);
   const sensors = useSensorStore(s => s.sensors);
+  const searchModeStates = useSensorStore(s => s.searchModeStates);
   const selectTrack = useUiStore(s => s.selectTrack);
   const selectSensor = useUiStore(s => s.selectSensor);
   const selectCue = useUiStore(s => s.selectCue);
@@ -517,6 +518,7 @@ export function MapView() {
           groundTruthTargets={groundTruthTargets}
           showGroundTruth={showGroundTruth}
           coverZones={coverZones}
+          searchModeStates={searchModeStates}
         />
       )}
     </div>

@@ -22,16 +22,29 @@ export interface EoAllocationQuality {
   priorityAlignment: number;
 }
 
+export interface ConvergenceState {
+  trackId: string;
+  convergenceRate: number;
+  converged: boolean;
+  convergedAt: number | null;
+  measurementCount: number;
+  positionErrorEstimate: number;
+}
+
 interface QualityStore {
   metrics: QualityMetrics | null;
   eoAllocationQuality: EoAllocationQuality | null;
+  convergenceStates: ConvergenceState[];
   setMetrics: (m: QualityMetrics) => void;
   setEoAllocationQuality: (q: EoAllocationQuality) => void;
+  setConvergenceStates: (c: ConvergenceState[]) => void;
 }
 
 export const useQualityStore = create<QualityStore>((set) => ({
   metrics: null,
   eoAllocationQuality: null,
+  convergenceStates: [],
   setMetrics: (m) => set({ metrics: m }),
   setEoAllocationQuality: (q) => set({ eoAllocationQuality: q }),
+  setConvergenceStates: (c) => set({ convergenceStates: c }),
 }));

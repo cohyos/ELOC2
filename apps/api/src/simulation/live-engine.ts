@@ -195,6 +195,104 @@ function getDetectionModifier(lat: number, lon: number, coverZones: CoverZone[])
   return 1.0;
 }
 
+
+// ---------------------------------------------------------------------------
+// FOV overlap helpers
+// ---------------------------------------------------------------------------
+
+export interface FovOverlap {
+  sensorIds: [string, string];
+  overlapRegion: Array<{ lat: number; lon: number }>;
+  tracksInOverlap: string[];
+}
+
+const DEG_TO_RAD_ENGINE = Math.PI / 180;
+
+/**
+ * Project a point at rangeKm from (lat, lon) along azimuth azDeg.
+ */
+function geoProject(lat: number, lon: number, azDeg: number, rangeKm: number): { lat: number; lon: number } {
+  const rangeM = rangeKm * 1000;
+  const azRad = azDeg * DEG_TO_RAD_ENGINE;
+  const mPerDegLon = 111320 * Math.cos(lat * DEG_TO_RAD_ENGINE);
+  const mPerDegLat = 110540;
+  return {
+    lon: lon + (rangeM / mPerDegLon) * Math.sin(azRad),
+    lat: lat + (rangeM / mPerDegLat) * Math.cos(azRad),
+  };
+}
+
+/**
+ * Compute the FOV polygon for an EO sensor as a triangle:
+ * [sensorPos, leftFarPoint, rightFarPoint]
+ */
+function computeFovPolygon(sensor: SensorState, rangeKm: number): Array<{ lat: number; lon: number }> {
+  if (!sensor.gimbal || !sensor.fov) return [];
+  const azDeg = sensor.gimbal.azimuthDeg;
+  const halfAngle = sensor.fov.halfAngleHDeg;
+  const { lat, lon } = sensor.position;
+
+  const leftAz = azDeg - halfAngle;
+  const rightAz = azDeg + halfAngle;
+
+  return [
+    { lat, lon },
+    geoProject(lat, lon, leftAz, rangeKm),
+    geoProject(lat, lon, rightAz, rangeKm),
+  ];
+}
+
+/**
+ * Ray-casting point-in-polygon test for {lat, lon} points.
+ */
+function pointInFovPolygon(point: { lat: number; lon: number }, polygon: Array<{ lat: number; lon: number }>): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const yi = polygon[i].lat, xi = polygon[i].lon;
+    const yj = polygon[j].lat, xj = polygon[j].lon;
+    if (((yi > point.lat) !== (yj > point.lat)) && (point.lon < (xj - xi) * (point.lat - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+/**
+ * Check if two FOV triangles overlap by testing vertex containment.
+ */
+function fovPolygonsOverlap(fov1: Array<{ lat: number; lon: number }>, fov2: Array<{ lat: number; lon: number }>): boolean {
+  for (const v of fov1) {
+    if (pointInFovPolygon(v, fov2)) return true;
+  }
+  for (const v of fov2) {
+    if (pointInFovPolygon(v, fov1)) return true;
+  }
+  return false;
+}
+
+/**
+ * Approximate overlap region of two FOV triangles.
+ * Returns vertices from both polygons that lie inside the other.
+ */
+function computeOverlapRegion(
+  fov1: Array<{ lat: number; lon: number }>,
+  fov2: Array<{ lat: number; lon: number }>,
+): Array<{ lat: number; lon: number }> {
+  const region: Array<{ lat: number; lon: number }> = [];
+  for (const v of fov1) {
+    if (pointInFovPolygon(v, fov2)) region.push(v);
+  }
+  for (const v of fov2) {
+    if (pointInFovPolygon(v, fov1)) region.push(v);
+  }
+  if (region.length < 3) {
+    const allPts = [...fov1, ...fov2];
+    const cx = allPts.reduce((s, p) => s + p.lat, 0) / allPts.length;
+    const cy = allPts.reduce((s, p) => s + p.lon, 0) / allPts.length;
+    return [{ lat: cx, lon: cy }];
+  }
+  return region;
+}
 // ---------------------------------------------------------------------------
 // Engine
 // ---------------------------------------------------------------------------
@@ -283,6 +381,19 @@ export class LiveEngine {
     } | null;
   }>();
 
+  // ── Search Mode state (REQ-5 Phase B) ────────────────────────────────
+  /** Per-sensor search mode state: when no targets exist, EO sensors scan sectors */
+  private searchModeState = new Map<string, {
+    active: boolean;
+    pattern: 'sector' | 'raster';
+    currentAzimuth: number;     // current scan direction (degrees)
+    scanStart: number;          // sector start azimuth
+    scanEnd: number;            // sector end azimuth
+    scanSpeed: number;          // degrees per second
+    scanDirection: 1 | -1;     // 1 = clockwise, -1 = counter-clockwise
+    idleTickCount: number;      // ticks with no candidates (activate after 3)
+  }>();
+
   // ── Quality Assessment state ──────────────────────────────────────────
   /** Time (sim seconds) when each target was first associated with a system track */
   private firstDetectionTime = new Map<string, number>();
@@ -315,6 +426,24 @@ export class LiveEngine {
     sensorUtilization: number;
     priorityAlignment: number;
   } | null = null;
+
+  // ── FOV overlap detection (REQ-6) ──────────────────────────────────────
+  private fovOverlaps: FovOverlap[] = [];
+
+  // ── Convergence monitoring (REQ-5 Phase C) ────────────────────────────
+  /** Tracks how triangulation quality improves over successive dwells */
+  private convergenceState = new Map<string, {
+    trackId: string;
+    measurements: Array<{
+      timestamp: number;
+      positionErrorEstimate: number;
+      intersectionAngle: number;
+      numBearings: number;
+    }>;
+    convergenceRate: number;
+    converged: boolean;
+    convergedAt: number | null;
+  }>();
 
   constructor(scenarioId?: string) {
     this.scenario = (scenarioId ? getScenarioById(scenarioId) : undefined) ?? centralIsrael;
@@ -505,6 +634,9 @@ export class LiveEngine {
       qualityMetrics: this.cachedQualityMetrics ?? undefined,
       eoAllocationQuality: this.cachedEoAllocationQuality ?? undefined,
       beforeAfterComparison: this.getBeforeAfterComparison(),
+      fovOverlaps: this.fovOverlaps,
+      searchModeStates: this.getSearchModeStatus().filter(s => s.active),
+      convergenceStates: this.getConvergenceStates(),
     };
   }
 
@@ -1001,6 +1133,9 @@ export class LiveEngine {
     this.lastInvestigationTime.clear();
     this.cyclingHistory.clear();
 
+    // Search mode reset
+    this.searchModeState.clear();
+
     // Quality assessment reset
     this.firstDetectionTime.clear();
     this.confirmedGeometryTime.clear();
@@ -1010,6 +1145,10 @@ export class LiveEngine {
 
     // REQ-9: Before/after EO comparison reset
     this.eoSnapshots.clear();
+    this.fovOverlaps = [];
+
+    // REQ-5 Phase C: Convergence state reset
+    this.convergenceState.clear();
 
     this.state = this.buildInitialState();
   }
@@ -1084,6 +1223,9 @@ export class LiveEngine {
     // Phase 6: Compute geometry estimates from EO bearings
     this.computeGeometryEstimates();
 
+    // REQ-5 Phase C: Update convergence monitoring
+    this.updateConvergenceState();
+
     if (result.currentTimeSec - this.lastEoTaskingSec >= EO_TASKING_INTERVAL_SEC) {
       this.runEoTaskingCycle();
       this.lastEoTaskingSec = result.currentTimeSec;
@@ -1094,6 +1236,9 @@ export class LiveEngine {
     this.state.unresolvedGroups = [...this.unresolvedGroupsById.values()].filter(g => g.status === 'active');
     this.state.activeCues = [...this.activeCuesById.values()];
 
+    // Search mode: scan sectors when no targets available
+    this.updateSearchMode(1); // dtSec = 1 (fixed tick)
+
     // Continuous gimbal tracking: update EO sensor gimbal azimuth toward current target
     this.updateGimbalPointing();
 
@@ -1102,6 +1247,9 @@ export class LiveEngine {
 
     // EO allocation quality (REQ-10)
     this.computeEoAllocationQuality();
+
+    // FOV overlap detection (REQ-6)
+    this.computeFovOverlaps();
 
     // Broadcast updated RAP to WebSocket clients
     this.broadcastRap();
@@ -1854,6 +2002,13 @@ export class LiveEngine {
       const trackPriority = this.operatorTrackPriority.get(candidate.systemTrackId as string);
       if (trackPriority === 'high') score.total += 5;
       else if (trackPriority === 'low') score.total -= 3;
+
+      // REQ-5 Phase C: Reduce score for converged tracks to reallocate sensors
+      const convergenceEntry = this.convergenceState.get(trackId);
+      if (convergenceEntry?.converged) {
+        score.total *= 0.3;
+      }
+
       return { candidate, score };
     });
 
@@ -2092,6 +2247,120 @@ export class LiveEngine {
         // Triangulation can fail with degenerate geometry — skip
       }
     }
+  }
+
+  // ── Convergence Monitoring (REQ-5 Phase C) ─────────────────────────
+
+  /**
+   * Update convergence state for all tracks that have geometry estimates.
+   * Called each tick after computeGeometryEstimates().
+   */
+  private updateConvergenceState(): void {
+    const nowSec = this.state.elapsedSec;
+
+    for (const [trackId, estimate] of this.state.geometryEstimates) {
+      // Compute estimated position error from covariance (if available)
+      let positionErrorEstimate: number;
+      const cov = (estimate as any).covariance3D;
+      if (cov && Array.isArray(cov) && cov.length >= 2) {
+        const varLat = typeof cov[0]?.[0] === 'number' ? cov[0][0] : 0;
+        const varLon = typeof cov[1]?.[1] === 'number' ? cov[1][1] : 0;
+        positionErrorEstimate = Math.sqrt(varLat + varLon) * 111000;
+      } else {
+        const qualityMap: Record<string, number> = {
+          excellent: 100, good: 300, fair: 700, poor: 1500,
+        };
+        positionErrorEstimate = qualityMap[estimate.quality] ?? 1000;
+      }
+
+      const intersectionAngle = estimate.intersectionAngleDeg ?? 0;
+      const numBearings = estimate.eoTrackIds?.length ?? 0;
+
+      let entry = this.convergenceState.get(trackId);
+      if (!entry) {
+        entry = {
+          trackId,
+          measurements: [],
+          convergenceRate: 0,
+          converged: false,
+          convergedAt: null,
+        };
+        this.convergenceState.set(trackId, entry);
+      }
+
+      entry.measurements.push({
+        timestamp: nowSec,
+        positionErrorEstimate,
+        intersectionAngle,
+        numBearings,
+      });
+
+      // Keep last 10 measurements
+      if (entry.measurements.length > 10) {
+        entry.measurements = entry.measurements.slice(-10);
+      }
+
+      // Compute convergence rate via linear regression slope
+      if (entry.measurements.length >= 3 && !entry.converged) {
+        const n = entry.measurements.length;
+        let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+        for (let i = 0; i < n; i++) {
+          const x = entry.measurements[i].timestamp;
+          const y = entry.measurements[i].positionErrorEstimate;
+          sumX += x;
+          sumY += y;
+          sumXY += x * y;
+          sumX2 += x * x;
+        }
+        const denom = n * sumX2 - sumX * sumX;
+        if (denom !== 0) {
+          entry.convergenceRate = (n * sumXY - sumX * sumY) / denom;
+        }
+
+        if (entry.convergenceRate < 0 && positionErrorEstimate < 500) {
+          entry.converged = true;
+          entry.convergedAt = nowSec;
+          this.pushEvent(
+            'eo.convergence.achieved',
+            `Triangulation converged for track ${trackId.slice(0, 8)} (error: ${positionErrorEstimate.toFixed(0)}m, rate: ${entry.convergenceRate.toFixed(2)})`,
+            { trackId, positionErrorEstimate, convergenceRate: entry.convergenceRate },
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Get convergence states for all tracked targets.
+   */
+  getConvergenceStates(): Array<{
+    trackId: string;
+    convergenceRate: number;
+    converged: boolean;
+    convergedAt: number | null;
+    measurementCount: number;
+    positionErrorEstimate: number;
+  }> {
+    const result: Array<{
+      trackId: string;
+      convergenceRate: number;
+      converged: boolean;
+      convergedAt: number | null;
+      measurementCount: number;
+      positionErrorEstimate: number;
+    }> = [];
+    for (const entry of this.convergenceState.values()) {
+      const lastMeasurement = entry.measurements[entry.measurements.length - 1];
+      result.push({
+        trackId: entry.trackId,
+        convergenceRate: entry.convergenceRate,
+        converged: entry.converged,
+        convergedAt: entry.convergedAt,
+        measurementCount: entry.measurements.length,
+        positionErrorEstimate: lastMeasurement?.positionErrorEstimate ?? 0,
+      });
+    }
+    return result;
   }
 
   // ── Track Dossier Methods ────────────────────────────────────────────
@@ -2489,6 +2758,182 @@ export class LiveEngine {
     return { lockedSensors, priorityTracks, manualClassifications };
   }
 
+  // ── Search Mode (REQ-5 Phase B) ────────────────────────────────────
+
+  /**
+   * Update search mode for all EO sensors.
+   * Called each tick from finalizeTick(). If an EO sensor has no valid
+   * tracking candidates for 3+ consecutive ticks, it enters search mode
+   * and systematically scans its sector. Exits when candidates appear.
+   */
+  private updateSearchMode(dtSec: number): void {
+    const tracks = this.state.tracks;
+    const sensors = this.state.sensors;
+
+    for (const sensor of sensors) {
+      if (sensor.sensorType !== 'eo' || !sensor.online || !sensor.gimbal) continue;
+      const sId = sensor.sensorId as string;
+
+      // Operator-locked sensors skip search mode
+      if (this.operatorLockedSensors.has(sId)) continue;
+
+      // Check if sensor has any valid candidates: tracks in coverage, not dropped
+      const hasCandidates = tracks.some(track => {
+        if (track.status === 'dropped') return false;
+        if (!sensor.coverage) return false;
+        // Simple range check using coverage.maxRangeM
+        const dlat = track.state.lat - sensor.position.lat;
+        const dlon = track.state.lon - sensor.position.lon;
+        const distM = Math.sqrt(dlat * dlat + dlon * dlon) * 111_000;
+        return distM <= sensor.coverage.maxRangeM;
+      });
+
+      // Also check if sensor is actively dwelling
+      const isDwelling = this.dwellState.has(sId);
+
+      let searchState = this.searchModeState.get(sId);
+
+      if (hasCandidates || isDwelling) {
+        // Candidates available — deactivate search mode
+        if (searchState?.active) {
+          searchState.active = false;
+          searchState.idleTickCount = 0;
+          this.pushEvent('eo.search.deactivated', `Search mode deactivated for ${sId} — targets available`);
+        } else if (searchState) {
+          searchState.idleTickCount = 0;
+        }
+        continue;
+      }
+
+      // No candidates and not dwelling — increment idle counter
+      if (!searchState) {
+        searchState = {
+          active: false,
+          pattern: 'sector',
+          currentAzimuth: sensor.gimbal.azimuthDeg ?? 0,
+          scanStart: 0,
+          scanEnd: 360,
+          scanSpeed: 10,
+          scanDirection: 1,
+          idleTickCount: 0,
+        };
+        this.searchModeState.set(sId, searchState);
+      }
+
+      searchState.idleTickCount++;
+
+      if (!searchState.active && searchState.idleTickCount >= 3) {
+        // Activate search mode after 3 idle ticks
+        searchState.active = true;
+        searchState.currentAzimuth = sensor.gimbal.azimuthDeg ?? 0;
+        this.pushEvent('eo.search.activated', `Search mode activated for ${sId} — no targets for ${searchState.idleTickCount} ticks`);
+      }
+
+      if (searchState.active) {
+        // Advance scan azimuth
+        const increment = searchState.scanSpeed * dtSec * searchState.scanDirection;
+        searchState.currentAzimuth += increment;
+
+        // Bounce at sector boundaries
+        if (searchState.scanEnd > searchState.scanStart) {
+          // Normal sector (e.g. 0-360)
+          if (searchState.currentAzimuth >= searchState.scanEnd) {
+            searchState.currentAzimuth = searchState.scanEnd;
+            searchState.scanDirection = -1;
+          } else if (searchState.currentAzimuth <= searchState.scanStart) {
+            searchState.currentAzimuth = searchState.scanStart;
+            searchState.scanDirection = 1;
+          }
+        }
+
+        // Normalize to [0, 360)
+        searchState.currentAzimuth = ((searchState.currentAzimuth % 360) + 360) % 360;
+
+        // Update sensor gimbal to follow search pattern
+        sensor.gimbal.azimuthDeg = searchState.currentAzimuth;
+        sensor.gimbal.currentTargetId = undefined; // no target — searching
+      }
+    }
+  }
+
+  /** Get search mode status for all EO sensors. */
+  getSearchModeStatus(): Array<{
+    sensorId: string;
+    active: boolean;
+    pattern: 'sector' | 'raster';
+    currentAzimuth: number;
+    scanStart: number;
+    scanEnd: number;
+    scanSpeed: number;
+    scanDirection: 1 | -1;
+  }> {
+    const result: Array<{
+      sensorId: string;
+      active: boolean;
+      pattern: 'sector' | 'raster';
+      currentAzimuth: number;
+      scanStart: number;
+      scanEnd: number;
+      scanSpeed: number;
+      scanDirection: 1 | -1;
+    }> = [];
+    for (const [sensorId, state] of this.searchModeState) {
+      result.push({
+        sensorId,
+        active: state.active,
+        pattern: state.pattern,
+        currentAzimuth: state.currentAzimuth,
+        scanStart: state.scanStart,
+        scanEnd: state.scanEnd,
+        scanSpeed: state.scanSpeed,
+        scanDirection: state.scanDirection,
+      });
+    }
+    return result;
+  }
+
+  /** Set search mode control for a specific sensor. */
+  setSearchModeControl(sensorId: string, control: {
+    enabled: boolean;
+    pattern?: 'sector' | 'raster';
+    scanStart?: number;
+    scanEnd?: number;
+  }): boolean {
+    const sensor = this.state.sensors.find(s => (s.sensorId as string) === sensorId && s.sensorType === 'eo');
+    if (!sensor) return false;
+
+    let searchState = this.searchModeState.get(sensorId);
+    if (!searchState) {
+      searchState = {
+        active: false,
+        pattern: 'sector',
+        currentAzimuth: sensor.gimbal?.azimuthDeg ?? 0,
+        scanStart: 0,
+        scanEnd: 360,
+        scanSpeed: 10,
+        scanDirection: 1,
+        idleTickCount: 0,
+      };
+      this.searchModeState.set(sensorId, searchState);
+    }
+
+    if (control.pattern !== undefined) searchState.pattern = control.pattern;
+    if (control.scanStart !== undefined) searchState.scanStart = control.scanStart;
+    if (control.scanEnd !== undefined) searchState.scanEnd = control.scanEnd;
+
+    if (control.enabled && !searchState.active) {
+      searchState.active = true;
+      searchState.idleTickCount = 3; // force active
+      this.pushEvent('eo.search.activated', `Search mode manually activated for ${sensorId}`);
+    } else if (!control.enabled && searchState.active) {
+      searchState.active = false;
+      searchState.idleTickCount = 0;
+      this.pushEvent('eo.search.deactivated', `Search mode manually deactivated for ${sensorId}`);
+    }
+
+    return true;
+  }
+
   /** Update EO gimbal azimuth to continuously track assigned targets. */
   private updateGimbalPointing(): void {
     const trackMap = new Map(this.state.tracks.map(t => [t.systemTrackId, t]));
@@ -2733,6 +3178,71 @@ export class LiveEngine {
    * Compute EO allocation quality metrics (REQ-10).
    * Measures how well EO resources were allocated across 7 criteria.
    */
+
+  // ── FOV Overlap Detection (REQ-6) ──────────────────────────────────────
+
+  /**
+   * Detect overlapping fields of view between EO sensors and identify
+   * which tracks fall within the overlap regions.
+   */
+  private computeFovOverlaps(): void {
+    const eoSensors = this.state.sensors.filter(
+      s => s.sensorType === 'eo' && s.online && s.gimbal && s.fov,
+    );
+
+    const overlaps: FovOverlap[] = [];
+
+    // Precompute FOV polygons for each EO sensor
+    const fovPolygons = new Map<string, Array<{ lat: number; lon: number }>>();
+    for (const sensor of eoSensors) {
+      const rangeKm = (sensor.coverage?.maxRangeM ?? 30000) / 1000;
+      const polygon = computeFovPolygon(sensor, rangeKm);
+      if (polygon.length >= 3) {
+        fovPolygons.set(sensor.sensorId as string, polygon);
+      }
+    }
+
+    // Check each pair of EO sensors for overlap
+    const sensorIds = [...fovPolygons.keys()];
+    for (let i = 0; i < sensorIds.length; i++) {
+      for (let j = i + 1; j < sensorIds.length; j++) {
+        const id1 = sensorIds[i];
+        const id2 = sensorIds[j];
+        const fov1 = fovPolygons.get(id1)!;
+        const fov2 = fovPolygons.get(id2)!;
+
+        if (fovPolygonsOverlap(fov1, fov2)) {
+          const overlapRegion = computeOverlapRegion(fov1, fov2);
+
+          // Find tracks within the overlap region
+          const tracksInOverlap: string[] = [];
+          for (const track of this.state.tracks) {
+            if (track.status === 'dropped') continue;
+            const tp = { lat: track.state.lat, lon: track.state.lon };
+            if (!Number.isFinite(tp.lat) || !Number.isFinite(tp.lon)) continue;
+            // Track is in overlap if it's inside both FOV polygons
+            if (pointInFovPolygon(tp, fov1) && pointInFovPolygon(tp, fov2)) {
+              tracksInOverlap.push(track.systemTrackId as string);
+            }
+          }
+
+          overlaps.push({
+            sensorIds: [id1, id2],
+            overlapRegion,
+            tracksInOverlap,
+          });
+        }
+      }
+    }
+
+    this.fovOverlaps = overlaps;
+  }
+
+  /** Get current FOV overlaps (for API endpoint). */
+  getFovOverlaps(): FovOverlap[] {
+    return this.fovOverlaps;
+  }
+
   private computeEoAllocationQuality(): void {
     const tracks = this.state.tracks;
     const eoSensors = this.state.sensors.filter(s => s.type === 'eo');
@@ -3148,6 +3658,12 @@ export class LiveEngine {
       eoAllocationQuality: this.cachedEoAllocationQuality ?? undefined,
       // Before/after EO comparison aggregate (REQ-9)
       beforeAfterAggregate: this.getBeforeAfterComparison().aggregate,
+      // FOV overlap detection (REQ-6)
+      fovOverlaps: this.fovOverlaps,
+      // Search mode states (REQ-5 Phase B)
+      searchModeStates: this.getSearchModeStatus().filter(s => s.active),
+      // Convergence states (REQ-5 Phase C)
+      convergenceStates: this.getConvergenceStates(),
     });
 
     // Separate ground truth broadcast

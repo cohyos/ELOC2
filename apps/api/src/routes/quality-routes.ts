@@ -46,4 +46,9 @@ export function registerQualityRoutes(app: FastifyInstance, engine: LiveEngine) 
   app.get('/api/quality/before-after', async () => {
     return engine.getBeforeAfterComparison();
   });
+
+  // GET /api/quality/convergence — Returns convergence state for all tracked targets (REQ-5 Phase C)
+  app.get('/api/quality/convergence', async () => {
+    return engine.getConvergenceStates();
+  });
 }
