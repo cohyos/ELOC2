@@ -10,10 +10,25 @@ function gitRevision(): string {
   }
 }
 
+function buildTimestamp(): string {
+  return process.env.BUILD_TIMESTAMP || new Date().toISOString();
+}
+
+function buildBranch(): string {
+  if (process.env.BUILD_BRANCH) return process.env.BUILD_BRANCH;
+  try {
+    return execSync('git rev-parse --abbrev-ref HEAD').toString().trim();
+  } catch {
+    return 'unknown';
+  }
+}
+
 export default defineConfig({
   plugins: [react()],
   define: {
     __APP_REVISION__: JSON.stringify(gitRevision()),
+    __BUILD_TIMESTAMP__: JSON.stringify(buildTimestamp()),
+    __BUILD_BRANCH__: JSON.stringify(buildBranch()),
   },
   server: {
     port: 3000,

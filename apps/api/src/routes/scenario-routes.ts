@@ -4,6 +4,11 @@ import { scenarios } from '@eloc2/scenario-library';
 import { customScenarios } from './editor-routes.js';
 
 export async function scenarioRoutes(app: FastifyInstance) {
+  // GET /api/scenario/state — Current state machine state + allowed actions
+  app.get('/api/scenario/state', async () => {
+    return engine.getSimulationState();
+  });
+
   // GET /api/scenarios — List all available scenarios (built-in + custom)
   app.get('/api/scenarios', async () => {
     const builtIn = scenarios.map(s => ({
@@ -44,16 +49,24 @@ export async function scenarioRoutes(app: FastifyInstance) {
   });
 
   // POST /api/scenario/start — Start the scenario
-  app.post('/api/scenario/start', async () => {
-    engine.start();
-    const s = engine.getState();
-    return { ok: true, running: s.running, speed: s.speed, scenarioId: s.scenarioId };
+  app.post('/api/scenario/start', async (_request, reply) => {
+    try {
+      engine.start();
+      const s = engine.getState();
+      return { ok: true, running: s.running, speed: s.speed, scenarioId: s.scenarioId };
+    } catch (err: any) {
+      return reply.code(409).send({ error: err.message });
+    }
   });
 
   // POST /api/scenario/pause — Pause the scenario
-  app.post('/api/scenario/pause', async () => {
-    engine.pause();
-    return { ok: true, running: false };
+  app.post('/api/scenario/pause', async (_request, reply) => {
+    try {
+      engine.pause();
+      return { ok: true, running: false };
+    } catch (err: any) {
+      return reply.code(409).send({ error: err.message });
+    }
   });
 
   // POST /api/scenario/speed — Set scenario speed
@@ -67,20 +80,24 @@ export async function scenarioRoutes(app: FastifyInstance) {
   });
 
   // POST /api/scenario/reset — Reset and optionally switch scenario
-  app.post<{ Body: { scenarioId?: string } }>('/api/scenario/reset', async (request) => {
+  app.post<{ Body: { scenarioId?: string } }>('/api/scenario/reset', async (request, reply) => {
     const scenarioId = request.body?.scenarioId;
 
-    // Check if it's a custom scenario
-    if (scenarioId && customScenarios.has(scenarioId)) {
-      const customDef = customScenarios.get(scenarioId)!;
-      engine.loadCustomScenario(customDef);
+    try {
+      // Check if it's a custom scenario
+      if (scenarioId && customScenarios.has(scenarioId)) {
+        const customDef = customScenarios.get(scenarioId)!;
+        engine.loadCustomScenario(customDef);
+        const s = engine.getState();
+        return { ok: true, scenarioId: s.scenarioId };
+      }
+
+      engine.reset(scenarioId);
       const s = engine.getState();
       return { ok: true, scenarioId: s.scenarioId };
+    } catch (err: any) {
+      return reply.code(409).send({ error: err.message });
     }
-
-    engine.reset(scenarioId);
-    const s = engine.getState();
-    return { ok: true, scenarioId: s.scenarioId };
   });
 
   // POST /api/replay/seek — Seek to a specific simulation time
@@ -89,8 +106,12 @@ export async function scenarioRoutes(app: FastifyInstance) {
     if (typeof timeSec !== 'number' || timeSec < 0) {
       return reply.code(400).send({ error: 'timeSec must be a non-negative number' });
     }
-    engine.seek(timeSec);
-    const s = engine.getState();
-    return { ok: true, elapsedSec: s.elapsedSec, running: s.running };
+    try {
+      engine.seek(timeSec);
+      const s = engine.getState();
+      return { ok: true, elapsedSec: s.elapsedSec, running: s.running };
+    } catch (err: any) {
+      return reply.code(409).send({ error: err.message });
+    }
   });
 }

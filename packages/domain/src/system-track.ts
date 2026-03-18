@@ -5,6 +5,8 @@ import type {
   SystemTrackId,
   Timestamp,
   Velocity3D,
+  TargetClassification,
+  ClassificationSource,
 } from './common-types.js';
 
 // ---------------------------------------------------------------------------
@@ -61,4 +63,10 @@ export interface SystemTrack {
   /** Sensors that have contributed observations to this track. */
   sources: SensorId[];
   eoInvestigationStatus: EoInvestigationStatus;
+  /** Target classification (e.g. 'fighter_aircraft', 'uav', 'unknown'). */
+  classification?: TargetClassification;
+  /** Source that assigned the classification. */
+  classificationSource?: ClassificationSource;
+  /** Confidence in the classification, range [0, 1]. */
+  classificationConfidence?: number;
 }

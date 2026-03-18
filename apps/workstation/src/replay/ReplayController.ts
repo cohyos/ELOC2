@@ -3,6 +3,7 @@ import { useTrackStore } from '../stores/track-store';
 import { useSensorStore } from '../stores/sensor-store';
 import { useTaskStore } from '../stores/task-store';
 import { useInvestigationStore } from '../stores/investigation-store';
+import { useGroundTruthStore } from '../stores/ground-truth-store';
 
 /**
  * ReplayController manages the WebSocket connection for real-time event streaming
@@ -90,6 +91,11 @@ export class ReplayController {
           this.rafId = null;
         });
       }
+    } else if (data.type === 'groundTruth.update') {
+      // Ground truth updates go directly to store (small payloads)
+      if (data.targets && Array.isArray(data.targets)) {
+        useGroundTruthStore.getState().setTargets(data.targets);
+      }
     } else if (data.type === 'event') {
       // Events are small — apply immediately
       useUiStore.getState().addEvent({
@@ -142,6 +148,9 @@ export class ReplayController {
     if (data.investigationSummaries && Array.isArray(data.investigationSummaries)) {
       useInvestigationStore.getState().setActiveInvestigations(data.investigationSummaries);
     }
+    if (data.groundTruth && Array.isArray(data.groundTruth)) {
+      useGroundTruthStore.getState().setTargets(data.groundTruth);
+    }
     // Update replay time from simulation
     if (typeof data.simTimeSec === 'number') {
       useUiStore.getState().setReplayTime(data.simTimeSec);
@@ -151,6 +160,26 @@ export class ReplayController {
     }
     if (typeof data.speed === 'number') {
       useUiStore.getState().setReplaySpeed(data.speed);
+    }
+
+    // Derive simulation state and allowed actions from running + track presence
+    if (typeof data.running === 'boolean') {
+      const hasTracks = Array.isArray(data.tracks)
+        ? data.tracks.length > 0
+        : useTrackStore.getState().trackCount > 0;
+      let simState: string;
+      let allowed: string[];
+      if (data.running) {
+        simState = 'running';
+        allowed = ['pause', 'stop', 'inject'];
+      } else if (hasTracks) {
+        simState = 'paused';
+        allowed = ['resume', 'stop', 'reset', 'seek', 'inject'];
+      } else {
+        simState = 'idle';
+        allowed = ['start', 'reset'];
+      }
+      useUiStore.getState().setSimulationState(simState, allowed);
     }
   }
 }

@@ -31,6 +31,7 @@ export const singleTargetConfirm: ScenarioDefinition = {
       targetId: 'TGT-SC-1',
       name: 'Single Inbound',
       description: 'Straight-line inbound from the north.',
+      classification: 'unknown',
       startTime: 0,
       waypoints: [
         { time: 0, position: { lat: 32.2, lon: 34.5, alt: 7000 } },
@@ -71,6 +72,7 @@ export const crossedTracks: ScenarioDefinition = {
       targetId: 'TGT-CT-1',
       name: 'NW to SE',
       description: 'Target flying NW to SE, crossing TGT-CT-2 at mid-point.',
+      classification: 'unknown',
       startTime: 0,
       waypoints: [
         { time: 0, position: { lat: 32.0, lon: 34.2, alt: 6000 } },
@@ -82,6 +84,7 @@ export const crossedTracks: ScenarioDefinition = {
       targetId: 'TGT-CT-2',
       name: 'NE to SW',
       description: 'Target flying NE to SW, crossing TGT-CT-1 at mid-point.',
+      classification: 'unknown',
       startTime: 0,
       waypoints: [
         { time: 0, position: { lat: 32.0, lon: 34.8, alt: 6000 } },
@@ -125,6 +128,7 @@ export const lowAltitudeClutter: ScenarioDefinition = {
       targetId: 'TGT-LC-1',
       name: 'Low Creeper',
       description: 'Low-altitude target at 200 m, slow speed — clutter-prone.',
+      classification: 'unknown',
       startTime: 0,
       waypoints: [
         { time: 0, position: { lat: 31.8, lon: 34.3, alt: 200 } },
@@ -175,6 +179,7 @@ export const oneCueTwoEo: ScenarioDefinition = {
       targetId: 'TGT-OC-1',
       name: 'Multi-EO Target',
       description: 'Target positioned to be visible to both EO sensors simultaneously.',
+      classification: 'unknown',
       startTime: 0,
       waypoints: [
         { time: 0, position: { lat: 31.8, lon: 34.5, alt: 5000 } },
@@ -219,6 +224,7 @@ export const goodTriangulation: ScenarioDefinition = {
       targetId: 'TGT-GT-1',
       name: 'Triangulation Target',
       description: 'Target placed to create ~90 deg bearing intersection between the two EO sensors.',
+      classification: 'unknown',
       startTime: 0,
       waypoints: [
         // Target roughly equidistant from both EO sensors at ~90 deg intersection
@@ -264,6 +270,7 @@ export const badTriangulation: ScenarioDefinition = {
       targetId: 'TGT-BT-1',
       name: 'Shallow Angle Target',
       description: 'Target far from sensor pair, producing only ~5 deg bearing intersection.',
+      classification: 'unknown',
       startTime: 0,
       waypoints: [
         // Far target — nearly collinear bearings from the two closely-spaced sensors
@@ -305,6 +312,7 @@ export const sensorFault: ScenarioDefinition = {
       targetId: 'TGT-SF-1',
       name: 'Fault Test Target',
       description: 'Inbound target visible to both radars during fault injection.',
+      classification: 'unknown',
       startTime: 0,
       waypoints: [
         { time: 0, position: { lat: 32.0, lon: 34.5, alt: 7000 } },
@@ -362,6 +370,7 @@ export const operatorOverride: ScenarioDefinition = {
       targetId: 'TGT-OO-1',
       name: 'Primary Target',
       description: 'Primary inbound — initially auto-assigned to EO-H1.',
+      classification: 'unknown',
       startTime: 0,
       waypoints: [
         { time: 0, position: { lat: 31.9, lon: 34.4, alt: 6000 } },
@@ -372,6 +381,7 @@ export const operatorOverride: ScenarioDefinition = {
       targetId: 'TGT-OO-2',
       name: 'Secondary Target',
       description: 'Secondary inbound — competes for EO resources.',
+      classification: 'unknown',
       startTime: 30,
       waypoints: [
         { time: 0, position: { lat: 31.9, lon: 34.6, alt: 5500 } },
