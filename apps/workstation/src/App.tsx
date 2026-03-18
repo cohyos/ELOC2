@@ -122,6 +122,21 @@ function DefaultPanel() {
         <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Active Tasks</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{activeTasks}</span></div>
         <button onClick={() => selectView('tasks')} style={{ marginTop: '6px', background: '#333', color: '#aaa', border: 'none', padding: '4px 12px', borderRadius: '3px', cursor: 'pointer', fontSize: '11px', width: '100%' }}>View Tasks</button>
       </div>
+      {eoModuleStatus && (
+        <div style={{ marginBottom: '16px' }}>
+          <div style={sectionTitle}>EO Module (REQ-16)</div>
+          <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Mode</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: eoModuleStatus.mode === 'tracking' ? '#00cc44' : eoModuleStatus.mode === 'searching' ? '#ffcc00' : eoModuleStatus.mode === 'mixed' ? '#4a9eff' : '#888' }}>{eoModuleStatus.mode}</span></div>
+          <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Active Pipelines</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{eoModuleStatus.activePipelines.length}</span></div>
+          <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Enriched Tracks</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{eoModuleStatus.enrichedTrackCount}</span></div>
+          <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Ticks</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{eoModuleStatus.tickCount}</span></div>
+          {eoModuleStatus.activePipelines.length > 0 && (
+            <>
+              <div style={row}><span style={{ color: '#ff8800', fontSize: '12px' }}>Sub-pixel</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{eoModuleStatus.activePipelines.filter(p => p.pipeline === 'sub-pixel').length}</span></div>
+              <div style={row}><span style={{ color: '#aa44ff', fontSize: '12px' }}>Image</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{eoModuleStatus.activePipelines.filter(p => p.pipeline === 'image').length}</span></div>
+            </>
+          )}
+        </div>
+      )}
       <div style={{ marginBottom: '16px' }}>
         <div style={sectionTitle}>Build Info</div>
         <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Git SHA</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{__APP_REVISION__}</span></div>
