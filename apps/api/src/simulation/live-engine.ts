@@ -66,8 +66,11 @@ import {
   selectFusionMode,
   type FusionMode,
 } from '@eloc2/fusion-core';
+import { EoManagementModule } from '@eloc2/eo-management';
+import type { EoModuleStatus } from '@eloc2/eo-management';
 import { SimulationStateMachine } from './state-machine.js';
 import type { SimulationState, SimulationAction } from './state-machine.js';
+import { accumulateSample, resetAccumulator } from '../reports/report-generator.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -450,6 +453,12 @@ export class LiveEngine {
     method: '2-sensor' | 'multi-sensor';  // which method was used
   }> = [];
 
+  // ── EO Management Module (REQ-16) ────────────────────────────────────
+  /** Unified EO management module — delegates all EO-related processing. */
+  private eoModule = new EoManagementModule();
+  /** Cached EO module status for WS broadcast. */
+  private cachedEoModuleStatus: EoModuleStatus | null = null;
+
   // ── Convergence monitoring (REQ-5 Phase C) ────────────────────────────
   /** Tracks how triangulation quality improves over successive dwells */
   private convergenceState = new Map<string, {
@@ -783,6 +792,38 @@ export class LiveEngine {
     return this.eventEnvelopes;
   }
 
+  /** Public accessor exposing scenario metadata for report generation (REQ-12). */
+  getScenarioInfo(): {
+    id: string;
+    name: string;
+    description: string;
+    durationSec: number;
+    targetCount: number;
+    sensorCount: number;
+    radarCount: number;
+    eoCount: number;
+    policyMode: string;
+    targetNames: string[];
+    sensorNames: string[];
+    hasCoverZones: boolean;
+  } {
+    const s = this.scenario;
+    return {
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      durationSec: s.durationSec,
+      targetCount: s.targets.length,
+      sensorCount: s.sensors.length,
+      radarCount: s.sensors.filter(sen => sen.type === 'radar').length,
+      eoCount: s.sensors.filter(sen => sen.type === 'eo').length,
+      policyMode: s.policyMode,
+      targetNames: s.targets.map(t => t.name),
+      sensorNames: s.sensors.map(sen => `${sen.sensorId} (${sen.type})`),
+      hasCoverZones: (s.coverZones ?? []).length > 0,
+    };
+  }
+
   // ── Dwell & Revisit Public API ──────────────────────────────────────
 
   /** Get current dwell states for all sensors */
@@ -914,6 +955,7 @@ export class LiveEngine {
       if (s) this.scenario = s;
     }
     this.resetInternalState();
+    resetAccumulator();
     // Complete the reset: resetting → idle
     this.stateMachine.tryTransition('reset');
     this.pushEvent('scenario.reset', 'Scenario reset');
@@ -1280,6 +1322,9 @@ export class LiveEngine {
 
     // Multi-target bearing association (REQ-6)
     this.computeBearingAssociations();
+
+    // REQ-12: Accumulate report timeline data
+    accumulateSample(this);
 
     // Broadcast updated RAP to WebSocket clients
     this.broadcastRap();

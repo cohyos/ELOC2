@@ -27,6 +27,7 @@ import { NarrationPanel } from './demo/NarrationPanel';
 import { MetricsOverlay } from './demo/MetricsOverlay';
 import { ResizeHandle } from './components/ResizeHandle';
 import { QualityMetricsPanel } from './quality/QualityMetricsPanel';
+import { DeploymentView } from './deployment/DeploymentView';
 
 // Panel size defaults (must match ui-store defaults)
 const DEFAULT_RIGHT_PANEL_WIDTH = 380;
@@ -152,7 +153,7 @@ const btnBase = (isMobile: boolean): React.CSSProperties => ({
 
 export function App() {
   const isMobile = useIsMobile();
-  const [view, setView] = useState<'workstation' | 'editor'>('workstation');
+  const [view, setView] = useState<'workstation' | 'editor' | 'deployment'>('workstation');
   const detailView = useUiStore(s => s.detailView);
   const detailPanelOpen = useUiStore(s => s.detailPanelOpen);
   const timelinePanelOpen = useUiStore(s => s.timelinePanelOpen);
@@ -196,6 +197,25 @@ export function App() {
   const [simElapsed, setSimElapsed] = useState(0);
   const [currentScenarioId, setCurrentScenarioId] = useState('');
   const [availableScenarios, setAvailableScenarios] = useState<Array<{ id: string; name: string; description: string }>>([]);
+  const [reportGenerating, setReportGenerating] = useState(false);
+  const [reportUrl, setReportUrl] = useState<string | null>(null);
+
+  const handleGenerateReport = useCallback(async () => {
+    setReportGenerating(true);
+    setReportUrl(null);
+    try {
+      const res = await fetch('/api/report/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ format: 'md' }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setReportUrl(data.downloadUrl);
+      }
+    } catch { /* ignore */ }
+    setReportGenerating(false);
+  }, []);
 
   // Fetch available scenarios on mount
   useEffect(() => {
@@ -309,6 +329,10 @@ export function App() {
     return <ScenarioEditor onBack={() => setView('workstation')} />;
   }
 
+  if (view === 'deployment') {
+    return <DeploymentView onBack={() => setView('workstation')} />;
+  }
+
   if (isMobile) return <MobileLayout />;
 
   // ─── Desktop Layout ───────────────────────────────────────────────────
@@ -358,6 +382,7 @@ export function App() {
           </select>
         )}
         <button style={{ ...btn, background: '#2a2a4e', color: '#aa88ff', border: '1px solid #aa88ff44' }} onClick={() => setView('editor')}>Editor</button>
+        <button style={{ ...btn, background: '#2a2a4e', color: '#44ddaa', border: '1px solid #44ddaa44' }} onClick={() => setView('deployment')}>Deploy</button>
         <button
           style={{ ...btn, background: demoActive ? '#4a9eff' : '#2a2a4e', color: demoActive ? '#fff' : '#4a9eff', border: '1px solid #4a9eff44' }}
           onClick={() => {
@@ -371,6 +396,15 @@ export function App() {
           }}
           title="Presenter Dashboard (Ctrl+D)"
         >Demo</button>
+        <button
+          style={{ ...btn, background: reportGenerating ? '#555' : '#2a4e2a', color: '#88ff88', border: '1px solid #88ff8844', opacity: reportGenerating ? 0.6 : 1 }}
+          onClick={reportGenerating ? undefined : handleGenerateReport}
+          disabled={reportGenerating}
+          title="Generate scenario report (Markdown)"
+        >{reportGenerating ? 'Generating...' : 'Report'}</button>
+        {reportUrl && (
+          <a href={reportUrl} download style={{ fontSize: '10px', color: '#88ff88', textDecoration: 'underline', cursor: 'pointer' }} title="Download generated report">Download</a>
+        )}
 
         {/* Track summary with filter toggles */}
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center', fontSize: '11px' }}>
