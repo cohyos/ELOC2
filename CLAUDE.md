@@ -13,6 +13,9 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 - **Domain types**: `packages/domain` — SystemTrack, SensorState, Position3D, etc.
 - **EO Management**: `packages/eo-management` — Modular EO module (REQ-16): ingest, sub-pixel/image pipelines, mode controller
 - **Deployment Planner**: `packages/deployment-planner` — Sensor deployment optimization (REQ-15): grid, scorers, optimizer
+- **Database**: `packages/database` — PostgreSQL user/session management
+- **Terrain**: `packages/terrain` — SRTM DEM line-of-sight checker
+- **ASTERIX Adapter**: `packages/asterix-adapter` — Complete CAT-048/CAT-062 parsing + export
 - **Reports**: `apps/api/src/reports/report-generator.ts` — Scenario report generation (REQ-12)
 
 ## Key Files
@@ -40,6 +43,18 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 - `apps/api/src/routes/operator-routes.ts` — Operator override API (lock/release/classify/priority)
 - `apps/api/src/routes/quality-routes.ts` — Quality metrics + before/after + allocation API
 - `apps/api/src/simulation/state-machine.ts` — Simulation state machine (5 states)
+- `apps/api/src/auth/auth-plugin.ts` — Auth Fastify plugin
+- `apps/api/src/auth/auth-middleware.ts` — Session validation middleware
+- `apps/api/src/routes/auth-routes.ts` — Login/logout/user management
+- `apps/api/src/routes/asterix-routes.ts` — ASTERIX UDP feed control
+- `apps/workstation/src/auth/LoginPage.tsx` — Login page
+- `apps/workstation/src/auth/auth-store.ts` — Auth Zustand store
+- `apps/workstation/src/map/symbols/nato-symbols.ts` — NATO APP-6 SVG symbology
+- `apps/workstation/src/map/EoVideoPopup.tsx` — EO video popup with leader line
+- `apps/workstation/src/components/FusionConfigPanel.tsx` — Fusion threshold sliders
+- `packages/terrain/src/los-checker.ts` — Ray-march LOS checker
+- `packages/terrain/src/dem-loader.ts` — SRTM HGT tile loader
+- `configs/sensor-library.json` — Predefined sensor definitions
 
 ## Data Flow
 1. `ScenarioRunner.step()` generates `SimulationEvent[]` (observations, bearings, faults)
@@ -50,6 +65,8 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 6. `ReplayController.handleMessage()` calls `setTracks()`/`setSensors()` on Zustand stores
 7. `MapView` effects call `updateTrackLayer()`/`updateSensorLayer()` when data changes
 8. `DebugOverlay` renders HTML markers using `map.project()` as a fallback
+9. Auth middleware (`auth-plugin.ts`) validates session tokens on protected routes when `AUTH_ENABLED=true`
+10. ASTERIX adapter can ingest live CAT-048/CAT-062 UDP feeds and convert to internal observation format
 
 ## Knowledge Base — Source of Truth
 
@@ -105,6 +122,16 @@ See `Knowledge_Base_and_Agents_instructions/ELOC2_Corrections_and_Upgrades_Plan.
 | 6: Reports + Deploy | **Complete** | Report generator (REQ-12), deployment planner (REQ-15), EO module refactor (REQ-16) |
 | 7: Integration | **Complete** | E2E testing (33 integration + 12 deploy + 8 report + 9 perf = 62 new tests) |
 
+### Enhancement Plan Waves (1–5)
+
+| Wave | Status | Key Deliverables |
+|------|--------|-----------------|
+| 1: Foundation | **Complete** | Track proliferation fix, PostgreSQL+Auth infra, 4 new scenarios, NATO symbols, MHT/JPDA doc |
+| 2: UI + Roles | **Complete** | Fusion config sliders, role enforcement, deployment configs, EO popup, trail flash |
+| 3: Detection | **Complete** | RCS-based radar, EO max range, auto-loop, user count, threat profiles, sensor library, system load |
+| 4: Terrain + ASTERIX | **Complete** | SRTM LOS, ASTERIX CAT-048/062, investigation modes, feasibility docs |
+| 5: Environment + 3D | **Complete** | Weather effects, clutter, Deck.gl 3D, ballistic display, architecture docs |
+
 ## Recent Fixes (Rounds 1-3, branch `claude/eloc2-development-U3sup`)
 
 ### Round 1 — Core rendering fixes
@@ -159,6 +186,11 @@ See `Knowledge_Base_and_Agents_instructions/ELOC2_Corrections_and_Upgrades_Plan.
 - **MapLibre data layer code**: Kept as fallback but NOT the active rendering path. Do not rely on it.
 - **Full post-mortem**: See `Knowledge_Base_and_Agents_instructions/Blank_Map_Postmortem_and_Testing_Lessons.md`
 
+### Deck.gl 3D Rendering
+- Deck.gl uses a **separate WebGL context** from MapLibre, so it may work in environments where MapLibre WebGL data layers fail (e.g., Cloud Run).
+- 3D view (ballistic display, altitude extrusion) is rendered via Deck.gl overlay on the map.
+- If Deck.gl also fails in production, the same HTML/SVG fallback strategy from DebugOverlay applies.
+
 ### Deployment (ACTIVE)
 - Cloud Run service: `eloc2-820514480393.me-west1.run.app`
 - Cloud Build trigger active — merging to master triggers auto deploy
@@ -174,10 +206,12 @@ See `Knowledge_Base_and_Agents_instructions/ELOC2_Corrections_and_Upgrades_Plan.
 ## Development
 - Package manager: pnpm (v9.15.0) with workspaces
 - Build: `pnpm build` (uses Turbo)
-- Test: `pnpm test` (398+ tests, all passing)
+- Test: `pnpm test` (450+ tests, all passing)
 - Dev branch: `claude/eloc2-handover-deployment-XSyf8`
 - Dockerfile: 2-stage build, serves workstation static files from API on port 3001
 - Vite dev server on port 3000 proxies `/api` and `/ws` to 3001
+- Auth: Set `AUTH_ENABLED=true` env var to enable PostgreSQL-backed authentication (requires running DB)
+- PostgreSQL: Use `docker-compose.yml` to start the database for auth/session management
 
 ## Conventions
 - Branded types: `SystemTrackId`, `SensorId`, `Timestamp` (string/number underneath)
