@@ -328,31 +328,7 @@ export function App() {
   const checkAuthEnabled = useAuthStore(s => s.checkAuthEnabled);
   const checkSession = useAuthStore(s => s.checkSession);
 
-  // On mount: check if auth is enabled, then check session
-  useEffect(() => {
-    (async () => {
-      await checkAuthEnabled();
-      // After checkAuthEnabled, if auth is enabled, check session
-      const state = useAuthStore.getState();
-      if (state.authEnabled) {
-        await checkSession();
-      }
-    })();
-  }, [checkAuthEnabled, checkSession]);
-
-  // Show loading spinner while checking auth status
-  if (authEnabled === null || authLoading) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0d0d1a', color: '#888', fontFamily: 'system-ui, sans-serif', fontSize: '14px' }}>
-        Loading...
-      </div>
-    );
-  }
-
-  // Auth enabled but not authenticated — show login page
-  if (authEnabled && !isAuthenticated) {
-    return <LoginPage />;
-  }
+  // ── ALL hooks must be above early returns (Rules of Hooks) ─────────────
   const detailView = useUiStore(s => s.detailView);
   const detailPanelOpen = useUiStore(s => s.detailPanelOpen);
   const timelinePanelOpen = useUiStore(s => s.timelinePanelOpen);
@@ -367,7 +343,6 @@ export function App() {
   const demoActive = useDemoStore(s => s.active);
   const setDemoActive = useDemoStore(s => s.setActive);
   const viewMode = useDemoStore(s => s.viewMode);
-  const basicHiddenPanels = demoActive && viewMode === 'basic' ? getBasicModeHiddenPanels() : [];
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
@@ -384,13 +359,14 @@ export function App() {
   const setRightPanelWidth = useUiStore(s => s.setRightPanelWidth);
   const setTimelinePanelHeight = useUiStore(s => s.setTimelinePanelHeight);
 
-  // Sync demo mode to ui-store for convenience
   const setDemoMode = useUiStore(s => s.setDemoMode);
-  useEffect(() => { setDemoMode(demoActive); }, [demoActive, setDemoMode]);
-
   const fetchRap = useTrackStore(s => s.fetchRap);
   const fetchSensors = useSensorStore(s => s.fetchSensors);
   const fetchTasks = useTaskStore(s => s.fetchTasks);
+  const eoModuleStatus = useTaskStore(s => s.eoModuleStatus);
+  const latency = useUiStore(s => s.latency);
+  const systemLoad = useUiStore(s => s.systemLoad);
+  const connectedUsers = useUiStore(s => s.connectedUsers);
 
   const [simRunning, setSimRunning] = useState(false);
   const [simSpeed, setSimSpeed] = useState(1);
@@ -399,6 +375,20 @@ export function App() {
   const [availableScenarios, setAvailableScenarios] = useState<Array<{ id: string; name: string; description: string }>>([]);
   const [reportGenerating, setReportGenerating] = useState(false);
   const [reportUrl, setReportUrl] = useState<string | null>(null);
+
+  // On mount: check if auth is enabled, then check session
+  useEffect(() => {
+    (async () => {
+      await checkAuthEnabled();
+      const state = useAuthStore.getState();
+      if (state.authEnabled) {
+        await checkSession();
+      }
+    })();
+  }, [checkAuthEnabled, checkSession]);
+
+  // Sync demo mode to ui-store for convenience
+  useEffect(() => { setDemoMode(demoActive); }, [demoActive, setDemoMode]);
 
   const handleGenerateReport = useCallback(async () => {
     setReportGenerating(true);
@@ -524,6 +514,21 @@ export function App() {
     const interval = setInterval(() => { fetchRap(); fetchSensors(); }, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  // ── Auth early returns (AFTER all hooks) ─────────────────────────────
+  if (authEnabled === null || authLoading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0d0d1a', color: '#888', fontFamily: 'system-ui, sans-serif', fontSize: '14px' }}>
+        Loading...
+      </div>
+    );
+  }
+
+  if (authEnabled && !isAuthenticated) {
+    return <LoginPage />;
+  }
+
+  const basicHiddenPanels = demoActive && viewMode === 'basic' ? getBasicModeHiddenPanels() : [];
 
   if (view === 'editor') {
     return <ScenarioEditor onBack={() => setView('workstation')} />;
