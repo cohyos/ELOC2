@@ -464,6 +464,25 @@ export class LiveEngine {
   private tickLatencies: number[] = [];
   private static readonly LATENCY_WINDOW_SIZE = 100;
   private cachedLatency: { tickMs: number; avgMs: number; maxMs: number } = { tickMs: 0, avgMs: 0, maxMs: 0 };
+  private tickStartTime = 0;
+
+  /** Record tick processing latency and update rolling statistics. */
+  private recordTickLatency(): void {
+    const tickMs = Date.now() - this.tickStartTime;
+    this.tickLatencies.push(tickMs);
+    if (this.tickLatencies.length > LiveEngine.LATENCY_WINDOW_SIZE) {
+      this.tickLatencies.shift();
+    }
+    const sum = this.tickLatencies.reduce((a, b) => a + b, 0);
+    const avgMs = Math.round(sum / this.tickLatencies.length);
+    const maxMs = Math.max(...this.tickLatencies);
+    this.cachedLatency = { tickMs, avgMs, maxMs };
+  }
+
+  /** Get the latest latency metrics. */
+  getLatency(): { tickMs: number; avgMs: number; maxMs: number } {
+    return { ...this.cachedLatency };
+  }
 
   // ── Convergence monitoring (REQ-5 Phase C) ────────────────────────────
   /** Tracks how triangulation quality improves over successive dwells */
@@ -676,7 +695,26 @@ export class LiveEngine {
       searchModeStates: this.getSearchModeStatus().filter(s => s.active),
       convergenceStates: this.getConvergenceStates(),
       eoModuleStatus: this.cachedEoModuleStatus ?? undefined,
+      latency: this.cachedLatency,
     };
+  }
+
+  // ── Fusion Config API ────────────────────────────────────────────────
+
+  getFusionConfig(): { gateThreshold: number; mergeDistanceM: number } {
+    return {
+      gateThreshold: this.trackManager.getCorrelatorConfig().gateThreshold,
+      mergeDistanceM: this.trackManager.getMergeDistance(),
+    };
+  }
+
+  setFusionConfig(config: { gateThreshold?: number; mergeDistanceM?: number }): void {
+    if (config.gateThreshold !== undefined) {
+      this.trackManager.setCorrelatorConfig({ gateThreshold: config.gateThreshold });
+    }
+    if (config.mergeDistanceM !== undefined) {
+      this.trackManager.setMergeDistance(config.mergeDistanceM);
+    }
   }
 
   // ── Investigation Parameters API ─────────────────────────────────────
@@ -1273,6 +1311,7 @@ export class LiveEngine {
   }
 
   private tick(): void {
+    this.tickStartTime = Date.now();
     const dtSec = 1; // fixed 1-second simulation step
     const result = this.runner.step(dtSec);
     this.state.elapsedSec = result.currentTimeSec;
@@ -1379,6 +1418,9 @@ export class LiveEngine {
 
     // REQ-12: Accumulate report timeline data
     accumulateSample(this);
+
+    // Compute tick latency (tickStart set in tick())
+    this.recordTickLatency();
 
     // Broadcast updated RAP to WebSocket clients
     this.broadcastRap();
@@ -4168,6 +4210,8 @@ export class LiveEngine {
       convergenceStates: this.getConvergenceStates(),
       // REQ-16: EO management module status
       eoModuleStatus: this.cachedEoModuleStatus ?? undefined,
+      // Latency metrics
+      latency: this.cachedLatency,
     });
 
     // Separate ground truth broadcast

@@ -184,6 +184,9 @@ export class ReplayController {
     if (data.eoModuleStatus && typeof data.eoModuleStatus === 'object') {
       useTaskStore.getState().setEoModuleStatus(data.eoModuleStatus);
     }
+    if (data.latency && typeof data.latency === 'object') {
+      useUiStore.getState().setLatency(data.latency);
+    }
     // Update replay time from simulation
     if (typeof data.simTimeSec === 'number') {
       useUiStore.getState().setReplayTime(data.simTimeSec);

@@ -92,6 +92,12 @@ interface UiState {
   simulationState: string;
   allowedActions: string[];
 
+  // Fusion config
+  fusionConfig: { gateThreshold: number; mergeDistanceM: number };
+
+  // Latency
+  latency: { tickMs: number; avgMs: number; maxMs: number };
+
   // Actions
   selectTrack: (id: string | null) => void;
   selectSensor: (id: string | null) => void;
@@ -135,6 +141,12 @@ interface UiState {
 
   // Simulation state actions
   setSimulationState: (state: string, actions: string[]) => void;
+
+  // Fusion config actions
+  setFusionConfig: (config: { gateThreshold: number; mergeDistanceM: number }) => void;
+
+  // Latency actions
+  setLatency: (latency: { tickMs: number; avgMs: number; maxMs: number }) => void;
 }
 
 export interface SelectionBearingRay {
@@ -204,6 +216,8 @@ export const useUiStore = create<UiState>((set) => ({
   timelinePanelHeight: loadPanelSize(LS_TIMELINE_HEIGHT_KEY, PANEL_DEFAULTS.timelinePanelHeight, 80, 400),
   simulationState: 'idle',
   allowedActions: ['start', 'reset'],
+  fusionConfig: { gateThreshold: 16.27, mergeDistanceM: 3000 },
+  latency: { tickMs: 0, avgMs: 0, maxMs: 0 },
 
   selectTrack: (id) =>
     set({ selectedTrackId: id, selectedSensorId: null, selectedCueId: null, selectedGroupId: null, selectedGeometryTrackId: null, detailView: id ? 'track' : 'none', detailPanelOpen: !!id }),
@@ -292,4 +306,8 @@ export const useUiStore = create<UiState>((set) => ({
   },
 
   setSimulationState: (state, actions) => set({ simulationState: state, allowedActions: actions }),
+
+  setFusionConfig: (config) => set({ fusionConfig: config }),
+
+  setLatency: (latency) => set({ latency }),
 }));

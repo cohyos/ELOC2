@@ -61,4 +61,6 @@ export interface ScenarioDefinition {
   targets: TargetDefinition[];
   faults: FaultDefinition[];
   operatorActions: OperatorActionDef[];
+  seed?: number;          // Random seed for deterministic replay
+  center?: { lat: number; lon: number };  // Geographic center point
 }

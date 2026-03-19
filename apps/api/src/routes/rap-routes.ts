@@ -45,4 +45,26 @@ export async function rapRoutes(app: FastifyInstance) {
   app.get('/api/events', async () => {
     return engine.getState().eventLog.slice(-100);
   });
+
+  // GET /api/fusion/config — Current fusion configuration
+  app.get('/api/fusion/config', async () => {
+    return engine.getFusionConfig();
+  });
+
+  // POST /api/fusion/config — Update fusion configuration at runtime
+  app.post<{ Body: { gateThreshold?: number; mergeDistanceM?: number } }>(
+    '/api/fusion/config',
+    async (request) => {
+      const { gateThreshold, mergeDistanceM } = request.body ?? {};
+      const update: { gateThreshold?: number; mergeDistanceM?: number } = {};
+      if (typeof gateThreshold === 'number' && gateThreshold >= 1 && gateThreshold <= 50) {
+        update.gateThreshold = gateThreshold;
+      }
+      if (typeof mergeDistanceM === 'number' && mergeDistanceM >= 500 && mergeDistanceM <= 10000) {
+        update.mergeDistanceM = mergeDistanceM;
+      }
+      engine.setFusionConfig(update);
+      return engine.getFusionConfig();
+    },
+  );
 }

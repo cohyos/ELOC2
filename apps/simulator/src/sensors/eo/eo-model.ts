@@ -93,8 +93,9 @@ export function generateEoBearing(
   }
 
   // Add bearing noise: +/-0.1 deg
-  const noisyAzDeg = trueAzDeg + gaussianNoise(0.1);
-  const noisyElDeg = trueElDeg + gaussianNoise(0.1);
+  const r = rng ?? Math.random;
+  const noisyAzDeg = trueAzDeg + gaussianNoise(0.1, r);
+  const noisyElDeg = trueElDeg + gaussianNoise(0.1, r);
 
   // Apply azimuth bias fault
   const biasedAzDeg = applyAzimuthBias(noisyAzDeg, sensorFaults);
@@ -104,7 +105,7 @@ export function generateEoBearing(
   timestampMs = applyClockDrift(timestampMs, sensorFaults);
 
   // Image quality: 0.8-1.0 with some randomness
-  const imageQuality = 0.8 + Math.random() * 0.2;
+  const imageQuality = 0.8 + r() * 0.2;
 
   const bearing: BearingMeasurement = {
     azimuthDeg: biasedAzDeg,

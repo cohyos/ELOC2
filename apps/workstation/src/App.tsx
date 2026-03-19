@@ -30,6 +30,9 @@ import { MetricsOverlay } from './demo/MetricsOverlay';
 import { ResizeHandle } from './components/ResizeHandle';
 import { QualityMetricsPanel } from './quality/QualityMetricsPanel';
 import { DeploymentView } from './deployment/DeploymentView';
+import { FusionConfigPanel } from './components/FusionConfigPanel';
+import { useAuthStore } from './auth/auth-store';
+import { LoginPage } from './auth/LoginPage';
 
 // Panel size defaults (must match ui-store defaults)
 const DEFAULT_RIGHT_PANEL_WIDTH = 380;
@@ -265,6 +268,41 @@ const btnBase = (isMobile: boolean): React.CSSProperties => ({
 export function App() {
   const isMobile = useIsMobile();
   const [view, setView] = useState<'workstation' | 'editor' | 'deployment'>('workstation');
+
+  // ── Auth ────────────────────────────────────────────────────────────────
+  const authEnabled = useAuthStore(s => s.authEnabled);
+  const isAuthenticated = useAuthStore(s => s.isAuthenticated);
+  const authLoading = useAuthStore(s => s.isLoading);
+  const authUser = useAuthStore(s => s.user);
+  const authLogout = useAuthStore(s => s.logout);
+  const checkAuthEnabled = useAuthStore(s => s.checkAuthEnabled);
+  const checkSession = useAuthStore(s => s.checkSession);
+
+  // On mount: check if auth is enabled, then check session
+  useEffect(() => {
+    (async () => {
+      await checkAuthEnabled();
+      // After checkAuthEnabled, if auth is enabled, check session
+      const state = useAuthStore.getState();
+      if (state.authEnabled) {
+        await checkSession();
+      }
+    })();
+  }, [checkAuthEnabled, checkSession]);
+
+  // Show loading spinner while checking auth status
+  if (authEnabled === null || authLoading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0d0d1a', color: '#888', fontFamily: 'system-ui, sans-serif', fontSize: '14px' }}>
+        Loading...
+      </div>
+    );
+  }
+
+  // Auth enabled but not authenticated — show login page
+  if (authEnabled && !isAuthenticated) {
+    return <LoginPage />;
+  }
   const detailView = useUiStore(s => s.detailView);
   const detailPanelOpen = useUiStore(s => s.detailPanelOpen);
   const timelinePanelOpen = useUiStore(s => s.timelinePanelOpen);
@@ -633,6 +671,17 @@ export function App() {
           <button style={btn} onClick={toggleTimelinePanel}>{timelinePanelOpen ? 'Hide Timeline' : 'Show Timeline'}</button>
           <span><span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: wsConnected ? '#00cc44' : '#ff3333', marginRight: '4px' }} />{wsConnected ? 'Connected' : 'Disconnected'}</span>
           <span style={{ fontSize: '10px', opacity: 0.5 }} title="ELOC2 Air Defense Demonstrator">v0.3.0</span>
+          {authEnabled && authUser && (
+            <>
+              <span style={{ fontSize: '10px', color: '#aaa' }} title={`Role: ${authUser.role}`}>
+                {authUser.username}
+                <span style={{ marginLeft: '4px', padding: '1px 4px', borderRadius: '2px', fontSize: '9px', fontWeight: 600, background: authUser.role === 'instructor' ? '#4a9eff22' : '#ff880022', color: authUser.role === 'instructor' ? '#4a9eff' : '#ff8800', border: `1px solid ${authUser.role === 'instructor' ? '#4a9eff44' : '#ff880044'}` }}>
+                  {authUser.role}
+                </span>
+              </span>
+              <button style={{ ...btn, color: '#ff6666', fontSize: '10px' }} onClick={authLogout} title="Sign out">Logout</button>
+            </>
+          )}
         </div>
       </header>
 

@@ -710,10 +710,14 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
               pointer-events:auto;
             `;
             el.innerHTML = sym.svgHtml;
-            el.title = `${shortTrackLabel(track)} — ${track.status}${isMultiSensor ? ' (multi-sensor)' : ''}`;
+            el.title = `${shortTrackLabel(track)} — ${track.status}${isMultiSensor ? ' (multi-sensor)' : ''}\nDouble-click for EO feed`;
             if (onSelectTrack) {
               const tId = track.systemTrackId as string;
               el.addEventListener('click', (e) => { e.stopPropagation(); onSelectTrack(tId); });
+              el.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                useUiStore.getState().setEoVideoPopupTrackId(tId);
+              });
             }
             container.appendChild(el);
           } else {
@@ -734,10 +738,14 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
                 pointer-events:auto;
               `;
             }
-            el.title = `${shortTrackLabel(track)} — ${track.status}${isMultiSensor ? ' (multi-sensor)' : ''}`;
+            el.title = `${shortTrackLabel(track)} — ${track.status}${isMultiSensor ? ' (multi-sensor)' : ''}\nDouble-click for EO feed`;
             if (onSelectTrack) {
               const tId = track.systemTrackId as string;
               el.addEventListener('click', (e) => { e.stopPropagation(); onSelectTrack(tId); });
+              el.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                useUiStore.getState().setEoVideoPopupTrackId(tId);
+              });
             }
             container.appendChild(el);
           }
@@ -798,8 +806,45 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
     render();
   }, [tracks, sensors, trailHistory, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds, render]);
 
+  // EO Video Popup state
+  const eoVideoPopupTrackId = useUiStore(s => s.eoVideoPopupTrackId);
+  const setEoVideoPopupTrackId = useUiStore(s => s.setEoVideoPopupTrackId);
+
+  // Compute popup props when a track is selected for EO video
+  const eoPopupData = React.useMemo(() => {
+    if (!eoVideoPopupTrackId || !map) return null;
+    const track = tracks.find(t => (t.systemTrackId as string) === eoVideoPopupTrackId);
+    if (!track) return null;
+    // Only show for tracks with EO investigation
+    if (track.eoInvestigationStatus === 'none' && !track.classification) return null;
+
+    const { lon, lat } = track.state;
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
+    const px = map.project([lon, lat]);
+
+    const color = track.status === 'confirmed' ? '#00cc44' : track.status === 'tentative' ? '#ffcc00' : '#ff3333';
+    const classification = (track as any).classification ?? 'unknown';
+    const confidence = (track as any).classificationConfidence ?? 0.5;
+
+    return {
+      trackId: track.systemTrackId as string,
+      classification,
+      confidence,
+      statusColor: color,
+      trackScreenX: px.x,
+      trackScreenY: px.y,
+    };
+  }, [eoVideoPopupTrackId, tracks, map]);
+
   return (
     <>
+      {/* CSS keyframes for trail flash animation */}
+      <style>{`
+        @keyframes trail-flash {
+          0% { box-shadow: 0 0 8px 3px currentColor; transform: scale(1.3); }
+          100% { box-shadow: none; transform: scale(1); }
+        }
+      `}</style>
       {/* SVG layer for geometry (arcs, rays, lines) — below HTML markers */}
       <svg
         ref={svgRef}
@@ -827,6 +872,18 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
           zIndex: 15,
         }}
       />
+      {/* EO Video Popup — rendered above all other layers */}
+      {eoPopupData && (
+        <EoVideoPopup
+          trackId={eoPopupData.trackId}
+          classification={eoPopupData.classification}
+          confidence={eoPopupData.confidence}
+          statusColor={eoPopupData.statusColor}
+          trackScreenX={eoPopupData.trackScreenX}
+          trackScreenY={eoPopupData.trackScreenY}
+          onClose={() => setEoVideoPopupTrackId(null)}
+        />
+      )}
     </>
   );
 }

@@ -4,6 +4,7 @@
  */
 
 import type { Position3D } from '@eloc2/domain';
+import { createSeededRandom } from '@eloc2/shared-utils';
 import type {
   ScenarioDefinition,
   FaultDefinition,
@@ -41,6 +42,7 @@ export class ScenarioRunner {
   private currentTimeSec: number;
   private stepCount: number;
   private readonly baseTimestamp: number;
+  private readonly rng: (() => number) | undefined;
 
   // Track which faults/operator-actions have already been emitted
   private readonly emittedFaultStarts = new Set<string>();
@@ -52,6 +54,10 @@ export class ScenarioRunner {
     this.currentTimeSec = 0;
     this.stepCount = 0;
     this.baseTimestamp = Date.now();
+    // Create seeded PRNG for deterministic replay when seed is provided
+    this.rng = scenario.seed !== undefined
+      ? createSeededRandom(scenario.seed)
+      : undefined;
   }
 
   /**
@@ -133,6 +139,7 @@ export class ScenarioRunner {
               this.baseTimestamp,
               sensorFaults,
               tgtId,
+              this.rng,
             );
             if (obs) {
               events.push({
@@ -152,6 +159,7 @@ export class ScenarioRunner {
               this.baseTimestamp,
               sensorFaults,
               tgtId,
+              this.rng,
             );
             if (bearing) {
               events.push({
@@ -171,6 +179,7 @@ export class ScenarioRunner {
               this.currentTimeSec,
               this.baseTimestamp,
               sensorFaults,
+              this.rng,
             );
             if (obs) {
               events.push({
