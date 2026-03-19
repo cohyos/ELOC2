@@ -41,6 +41,7 @@ ENV BUILD_BRANCH=${BUILD_BRANCH}
 # Copy all source
 COPY packages/ packages/
 COPY apps/ apps/
+COPY configs/ configs/
 
 RUN pnpm build
 
@@ -55,6 +56,7 @@ COPY --from=builder /app/pnpm-lock.yaml /app/pnpm-workspace.yaml /app/package.js
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/apps ./apps
+COPY --from=builder /app/configs ./configs
 
 # Ensure turbo and other node_modules binaries are in PATH
 # (Cloud Build overrides WORKDIR, so pnpm may not resolve .bin correctly)

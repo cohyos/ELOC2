@@ -1,8 +1,37 @@
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import fs from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import { engine } from '../simulation/live-engine.js';
 import { scenarios } from '@eloc2/scenario-library';
 import { customScenarios } from './editor-routes.js';
 import { requireRole } from '../auth/auth-middleware.js';
+
+// ── Sensor Library ────────────────────────────────────────────────────────
+interface SensorLibraryEntry {
+  id: string;
+  name: string;
+  type: string;
+  coverage: Record<string, number>;
+  fov?: Record<string, number>;
+  description: string;
+}
+
+interface SensorLibrary {
+  sensors: SensorLibraryEntry[];
+}
+
+function loadSensorLibrary(): SensorLibrary {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  // Resolve from api src dir -> project root: src/routes -> src -> api -> apps -> root
+  const libPath = path.resolve(__dirname, '../../../../configs/sensor-library.json');
+  if (!fs.existsSync(libPath)) {
+    return { sensors: [] };
+  }
+  return JSON.parse(fs.readFileSync(libPath, 'utf-8')) as SensorLibrary;
+}
+
+const sensorLibrary = loadSensorLibrary();
 
 const AUTH_ENABLED = process.env.AUTH_ENABLED === 'true';
 
@@ -121,5 +150,21 @@ export async function scenarioRoutes(app: FastifyInstance) {
     } catch (err: any) {
       return reply.code(409).send({ error: err.message });
     }
+  });
+
+  // ── Sensor Library ──────────────────────────────────────────────────────
+
+  // GET /api/sensors/library — Returns the full sensor library
+  app.get('/api/sensors/library', async () => {
+    return sensorLibrary;
+  });
+
+  // GET /api/sensors/library/:id — Returns a specific sensor definition
+  app.get<{ Params: { id: string } }>('/api/sensors/library/:id', async (request, reply) => {
+    const sensor = sensorLibrary.sensors.find((s) => s.id === request.params.id);
+    if (!sensor) {
+      return reply.code(404).send({ error: `Sensor '${request.params.id}' not found in library` });
+    }
+    return sensor;
   });
 }

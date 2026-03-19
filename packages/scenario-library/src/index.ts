@@ -9,7 +9,12 @@ export type {
   OperatorActionDef,
   ScenarioDefinition,
   DeploymentDefinition,
+  ThreatProfile,
+  WeatherProfile,
 } from './types.js';
+
+// ── Composition ────────────────────────────────────────────────────────────
+export { composeScenario } from './types.js';
 
 // ── Scenarios ──────────────────────────────────────────────────────────────
 export { centralIsrael } from './scenarios/central-israel.js';
@@ -35,6 +40,13 @@ export {
 export { discoverySquadron } from './deployments/discovery-squadron.js';
 export { borderLine } from './deployments/border-line.js';
 export { deployments, getDeploymentById } from './deployments/index.js';
+
+// ── Threats ───────────────────────────────────────────────────────────────
+export { basicAir } from './threats/basic-air.js';
+export { ballisticThreat } from './threats/ballistic-threat.js';
+export { droneSwarmThreat } from './threats/drone-swarm-threat.js';
+export { gradBarrageThreat } from './threats/grad-barrage-threat.js';
+export { threats, getThreatById } from './threats/index.js';
 
 // ── Lookup ─────────────────────────────────────────────────────────────────
 import type { ScenarioDefinition } from './types.js';
