@@ -82,6 +82,7 @@ function DefaultPanel() {
   const fusionModes = useTaskStore(s => s.fusionModes);
   const eoModuleStatus = useTaskStore(s => s.eoModuleStatus);
   const selectView = useUiStore(s => s.setDetailView);
+  const latency = useUiStore(s => s.latency);
 
   const radarCount = sensors.filter(s => s.sensorType === 'radar').length;
   const eoCount = sensors.filter(s => s.sensorType === 'eo').length;
@@ -144,6 +145,21 @@ function DefaultPanel() {
         <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Fusion Mode</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: modeColor }}>{dominantMode}</span></div>
         <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Registration</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: degradedCount === 0 ? '#00cc44' : '#ffcc00' }}>{degradedCount === 0 ? 'Healthy' : `${degradedCount} degraded`}</span></div>
         {unsafeCount > 0 && <div style={row}><span style={{ color: '#ff3333', fontSize: '12px' }}>Fusion Unsafe</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#ff3333' }}>{unsafeCount} sensors</span></div>}
+        {(() => {
+          const avgColor = latency.avgMs < 50 ? '#00cc44' : latency.avgMs < 100 ? '#ffcc00' : '#ff3333';
+          const maxColor = latency.maxMs < 50 ? '#00cc44' : latency.maxMs < 100 ? '#ffcc00' : '#ff3333';
+          return (
+            <div style={row}>
+              <span style={{ color: '#888', fontSize: '12px' }}>Latency</span>
+              <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>
+                <span style={{ color: avgColor }}>{latency.avgMs}ms</span>
+                <span style={{ color: '#555' }}> avg / </span>
+                <span style={{ color: maxColor }}>{latency.maxMs}ms</span>
+                <span style={{ color: '#555' }}> max</span>
+              </span>
+            </div>
+          );
+        })()}
       </div>
       <div style={{ marginBottom: '16px' }}>
         <div style={sectionTitle}>EO Tasking</div>
@@ -165,6 +181,7 @@ function DefaultPanel() {
           )}
         </div>
       )}
+      <FusionConfigPanel />
       <div style={{ marginBottom: '16px' }}>
         <div style={sectionTitle}>Build Info</div>
         <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Git SHA</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{__APP_REVISION__}</span></div>
