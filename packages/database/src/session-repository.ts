@@ -1,4 +1,4 @@
-import type pg from 'pg';
+import type { Pool } from 'pg';
 
 const DEFAULT_SESSION_HOURS = 24;
 
@@ -15,7 +15,7 @@ export interface SessionRow {
  * Create a new session for a user.
  */
 export async function createSession(
-  pool: pg.Pool,
+  pool: Pool,
   userId: string,
   role: string,
   expiresInHours: number = DEFAULT_SESSION_HOURS,
@@ -33,7 +33,7 @@ export async function createSession(
  * Find an active, non-expired session by session_id.
  */
 export async function findSession(
-  pool: pg.Pool,
+  pool: Pool,
   sessionId: string,
 ): Promise<SessionRow | null> {
   const result = await pool.query<SessionRow>(
@@ -48,7 +48,7 @@ export async function findSession(
  * Delete (deactivate) a session.
  */
 export async function deleteSession(
-  pool: pg.Pool,
+  pool: Pool,
   sessionId: string,
 ): Promise<boolean> {
   const result = await pool.query(
@@ -61,7 +61,7 @@ export async function deleteSession(
 /**
  * Delete all expired sessions (cleanup).
  */
-export async function deleteExpiredSessions(pool: pg.Pool): Promise<number> {
+export async function deleteExpiredSessions(pool: Pool): Promise<number> {
   const result = await pool.query(
     'DELETE FROM sessions WHERE expires_at <= now() OR active = false',
   );
@@ -72,7 +72,7 @@ export async function deleteExpiredSessions(pool: pg.Pool): Promise<number> {
  * Count active (non-expired) sessions, optionally filtered by role.
  */
 export async function countActiveSessions(
-  pool: pg.Pool,
+  pool: Pool,
   role?: string,
 ): Promise<number> {
   let query = 'SELECT COUNT(*) as count FROM sessions WHERE active = true AND expires_at > now()';

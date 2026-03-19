@@ -1,4 +1,4 @@
-import type pg from 'pg';
+import type { Pool } from 'pg';
 import bcrypt from 'bcrypt';
 
 const SALT_ROUNDS = 10;
@@ -34,7 +34,7 @@ function toUserInfo(row: UserRow): UserInfo {
  * Create a new user with a bcrypt-hashed password.
  */
 export async function createUser(
-  pool: pg.Pool,
+  pool: Pool,
   username: string,
   password: string,
   role: 'instructor' | 'operator',
@@ -53,7 +53,7 @@ export async function createUser(
  * Find a user by username. Returns null if not found.
  */
 export async function findByUsername(
-  pool: pg.Pool,
+  pool: Pool,
   username: string,
 ): Promise<UserRow | null> {
   const result = await pool.query<UserRow>(
@@ -67,7 +67,7 @@ export async function findByUsername(
  * Find a user by ID. Returns null if not found.
  */
 export async function findById(
-  pool: pg.Pool,
+  pool: Pool,
   id: string,
 ): Promise<UserInfo | null> {
   const result = await pool.query<UserRow>(
@@ -81,7 +81,7 @@ export async function findById(
 /**
  * List all users (without password hashes).
  */
-export async function listUsers(pool: pg.Pool): Promise<UserInfo[]> {
+export async function listUsers(pool: Pool): Promise<UserInfo[]> {
   const result = await pool.query<UserRow>(
     'SELECT * FROM users ORDER BY created_at ASC',
   );
@@ -92,7 +92,7 @@ export async function listUsers(pool: pg.Pool): Promise<UserInfo[]> {
  * Update user fields (role, enabled).
  */
 export async function updateUser(
-  pool: pg.Pool,
+  pool: Pool,
   id: string,
   updates: { role?: 'instructor' | 'operator'; enabled?: boolean },
 ): Promise<UserInfo | null> {
@@ -123,7 +123,7 @@ export async function updateUser(
 /**
  * Delete a user by ID.
  */
-export async function deleteUser(pool: pg.Pool, id: string): Promise<boolean> {
+export async function deleteUser(pool: Pool, id: string): Promise<boolean> {
   const result = await pool.query('DELETE FROM users WHERE id = $1', [id]);
   return (result.rowCount ?? 0) > 0;
 }
@@ -132,7 +132,7 @@ export async function deleteUser(pool: pg.Pool, id: string): Promise<boolean> {
  * Toggle a user's enabled status.
  */
 export async function toggleEnabled(
-  pool: pg.Pool,
+  pool: Pool,
   id: string,
 ): Promise<UserInfo | null> {
   const result = await pool.query<UserRow>(
