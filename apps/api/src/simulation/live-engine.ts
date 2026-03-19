@@ -1060,7 +1060,7 @@ export class LiveEngine {
         }
       }
 
-      this.trackManager.mergeCloseTracks(3000);
+      this.trackManager.mergeCloseTracks();
       this.state.tracks = this.trackManager.getAllTracks().filter(tr => tr.status !== 'dropped');
       this.processAccumulatedBearings();
       this.expireStaleEoCues();
@@ -1365,7 +1365,7 @@ export class LiveEngine {
     }
 
     // Post-tick merge sweep: merge tracks within 3km to eliminate ghost tracks
-    this.trackManager.mergeCloseTracks(3000);
+    this.trackManager.mergeCloseTracks();
 
     // Snapshot tracks from track manager
     this.state.tracks = this.trackManager.getAllTracks().filter(t => t.status !== 'dropped');
