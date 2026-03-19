@@ -31,6 +31,12 @@ export interface UnresolvedGroupWS {
   reason: string;
 }
 
+export interface BallisticEstimateWS {
+  trackId: string;
+  launchPoint: { lat: number; lon: number; alt: number; uncertainty2SigmaM: number } | null;
+  impactPoint: { lat: number; lon: number; alt: number; uncertainty2SigmaM: number; timeToImpactSec: number } | null;
+}
+
 export interface EoModuleStatusWS {
   mode: 'idle' | 'tracking' | 'searching' | 'mixed';
   activePipelines: Array<{
@@ -75,6 +81,7 @@ interface TaskStoreState {
   unresolvedGroups: UnresolvedGroupWS[];
   fusionModes: Record<string, string>;
   eoModuleStatus: EoModuleStatusWS | null;
+  ballisticEstimates: BallisticEstimateWS[];
   loading: boolean;
   error: string | null;
 
@@ -82,6 +89,7 @@ interface TaskStoreState {
   setActiveCues: (cues: TaskStoreState['activeCues']) => void;
   setEoTracks: (eoTracks: TaskStoreState['eoTracks']) => void;
   setGeometryEstimates: (estimates: GeometryEstimateWS[]) => void;
+  setBallisticEstimates: (estimates: BallisticEstimateWS[]) => void;
   setRegistrationStates: (states: RegistrationStateWS[]) => void;
   setUnresolvedGroups: (groups: UnresolvedGroupWS[]) => void;
   setFusionModes: (modes: Record<string, string>) => void;
@@ -100,6 +108,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
   unresolvedGroups: [],
   fusionModes: {},
   eoModuleStatus: null,
+  ballisticEstimates: [],
   loading: false,
   error: null,
 
@@ -107,6 +116,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
   setActiveCues: (cues) => set({ activeCues: cues }),
   setEoTracks: (eoTracks) => set({ eoTracks }),
   setGeometryEstimates: (estimates) => set({ geometryEstimates: estimates }),
+  setBallisticEstimates: (estimates) => set({ ballisticEstimates: estimates }),
   setRegistrationStates: (states) => set({ registrationStates: states }),
   setUnresolvedGroups: (groups) => set({ unresolvedGroups: groups }),
   setFusionModes: (modes) => set({ fusionModes: modes }),

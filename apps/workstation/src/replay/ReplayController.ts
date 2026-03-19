@@ -184,6 +184,9 @@ export class ReplayController {
     if (data.eoModuleStatus && typeof data.eoModuleStatus === 'object') {
       useTaskStore.getState().setEoModuleStatus(data.eoModuleStatus);
     }
+    if (data.ballisticEstimates && Array.isArray(data.ballisticEstimates)) {
+      useTaskStore.getState().setBallisticEstimates(data.ballisticEstimates);
+    }
     if (data.latency && typeof data.latency === 'object') {
       useUiStore.getState().setLatency(data.latency);
     }

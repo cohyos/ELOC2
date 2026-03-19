@@ -61,6 +61,8 @@ import {
   triangulateMultiple,
   buildGeometryEstimate,
   scoreQuality,
+  estimateLaunchPoint,
+  estimateImpactPoint,
 } from '@eloc2/geometry';
 import {
   selectFusionMode,
@@ -347,6 +349,15 @@ export class LiveEngine {
 
   /** Per-track investigation event log for pyrite/audit mode */
   private investigationLog = new Map<string, InvestigationEvent[]>();
+
+  // ── Ballistic estimation (Task 6.5) ────────────────────────────────
+  private trackPositionHistory = new Map<string, Array<{ lat: number; lon: number; alt: number; timeSec: number }>>();
+  private cachedBallisticEstimates: Array<{
+    trackId: string;
+    launchPoint: { lat: number; lon: number; alt: number; uncertainty2SigmaM: number } | null;
+    impactPoint: { lat: number; lon: number; alt: number; uncertainty2SigmaM: number; timeToImpactSec: number } | null;
+  }> = [];
+  private static readonly MAX_POSITION_HISTORY = 20;
   private operatorPriorityTracks = new Set<string>();
   /** Sensors locked by operator — excluded from auto-assignment */
   private operatorLockedSensors = new Map<string, {
@@ -792,6 +803,7 @@ export class LiveEngine {
       eoModuleStatus: this.cachedEoModuleStatus ?? undefined,
       latency: this.cachedLatency,
       systemLoad: this.cachedSystemLoad,
+      ballisticEstimates: this.cachedBallisticEstimates,
       connectedUsers: this.getConnectedUsers(),
       autoLoopEnabled: this.autoLoopEnabled,
     };
@@ -1352,6 +1364,8 @@ export class LiveEngine {
     this.activeCuesById.clear();
     this.cueToTrack.clear();
     this.investigationLog.clear();
+    this.trackPositionHistory.clear();
+    this.cachedBallisticEstimates = [];
     this.pendingBearings.clear();
     this.lastEoTaskingSec = 0;
     this.fusionModePerSensor.clear();
@@ -1648,6 +1662,9 @@ export class LiveEngine {
 
     // Update system load metrics
     this.updateSystemLoad();
+
+    // Update ballistic estimates
+    this.updateBallisticEstimates();
 
     // Broadcast updated RAP to WebSocket clients
     this.broadcastRap();
@@ -4461,6 +4478,8 @@ export class LiveEngine {
       latency: this.cachedLatency,
       // System load metrics
       systemLoad: this.cachedSystemLoad,
+      // Ballistic estimates
+      ballisticEstimates: this.cachedBallisticEstimates,
       // Connected user counts
       connectedUsers: this.getConnectedUsers(),
       autoLoopEnabled: this.autoLoopEnabled,
@@ -4488,6 +4507,50 @@ export class LiveEngine {
         this.wsClients.delete(client);
       }
     }
+  }
+
+  // ── Ballistic Estimation ─────────────────────────────────────────────
+
+  private updateBallisticEstimates(): void {
+    const BALLISTIC_CLASSIFICATIONS = new Set(['missile', 'rocket']);
+    const estimates: typeof this.cachedBallisticEstimates = [];
+
+    for (const track of this.state.tracks) {
+      if (track.status === 'dropped') continue;
+      if (!track.classification || !BALLISTIC_CLASSIFICATIONS.has(track.classification)) continue;
+      if (!track.state || !Number.isFinite(track.state.lat) || !Number.isFinite(track.state.lon)) continue;
+
+      const trackId = track.systemTrackId as string;
+      let history = this.trackPositionHistory.get(trackId);
+      if (!history) {
+        history = [];
+        this.trackPositionHistory.set(trackId, history);
+      }
+
+      const pos = { lat: track.state.lat, lon: track.state.lon, alt: track.state.alt ?? 0, timeSec: this.state.elapsedSec };
+      if (history.length === 0 || history[history.length - 1].timeSec < pos.timeSec) {
+        history.push(pos);
+        if (history.length > LiveEngine.MAX_POSITION_HISTORY) {
+          history.shift();
+        }
+      }
+
+      if (history.length < 3) continue;
+
+      const positions = history.map(h => ({ lat: h.lat, lon: h.lon, altM: h.alt }));
+      const timestamps = history.map(h => h.timeSec);
+
+      const launch = estimateLaunchPoint(positions, timestamps);
+      const impact = estimateImpactPoint(positions, timestamps);
+
+      estimates.push({
+        trackId,
+        launchPoint: launch ? { lat: launch.point.lat, lon: launch.point.lon, alt: launch.point.altM, uncertainty2SigmaM: launch.uncertainty2SigmaM } : null,
+        impactPoint: impact ? { lat: impact.point.lat, lon: impact.point.lon, alt: impact.point.altM, uncertainty2SigmaM: impact.uncertainty2SigmaM, timeToImpactSec: impact.timeToImpactSec } : null,
+      });
+    }
+
+    this.cachedBallisticEstimates = estimates;
   }
 
   // ── Investigation Event Log ──────────────────────────────────────────

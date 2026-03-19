@@ -23,6 +23,8 @@ import { useGroundTruthStore } from '../stores/ground-truth-store';
 import { useCoverZoneStore } from '../stores/cover-zone-store';
 import { useFovOverlapStore } from '../stores/fov-overlap-store';
 import { useQualityStore } from '../stores/quality-store';
+import { DeckGlOverlay } from '../3d/DeckGlOverlay';
+import { useTaskStore as useTaskStoreForBallistic } from '../stores/task-store';
 
 export function MapView() {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -67,6 +69,7 @@ export function MapView() {
   const bearingAssociations = useFovOverlapStore(s => s.bearingAssociations);
   const multiSensorResolutions = useFovOverlapStore(s => s.multiSensorResolutions);
   const convergenceStates = useQualityStore(s => s.convergenceStates);
+  const ballisticEstimates = useTaskStoreForBallistic(s => s.ballisticEstimates);
 
   // Derive set of converged track IDs for DebugOverlay
   const convergedTrackIds = React.useMemo(() => {
@@ -542,6 +545,14 @@ export function MapView() {
           bearingAssociations={bearingAssociations}
           multiSensorResolutions={multiSensorResolutions}
           convergedTrackIds={convergedTrackIds}
+          ballisticEstimates={layerVisibility.ballisticEstimates ? ballisticEstimates : []}
+        />
+      )}
+      {layerVisibility.show3DOverlay && mapInstance && (
+        <DeckGlOverlay
+          map={mapInstance}
+          tracks={filteredTracksForOverlay}
+          trailHistory={trailHistory}
         />
       )}
     </div>

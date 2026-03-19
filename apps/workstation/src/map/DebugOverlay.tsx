@@ -7,6 +7,7 @@ import type { GroundTruthTarget } from '../stores/ground-truth-store';
 import type { CoverZone, OperationalZone } from '../stores/cover-zone-store';
 import type { SearchModeStateWS } from '../stores/sensor-store';
 import type { FovOverlap, BearingAssociation, MultiSensorResolution } from '../stores/fov-overlap-store';
+import type { BallisticEstimateWS } from '../stores/task-store';
 import { resolveTrackSymbol, resolveSensorSymbol } from './symbols/symbol-resolver';
 import { EoVideoPopup } from './EoVideoPopup';
 
@@ -93,9 +94,10 @@ interface DebugOverlayProps {
   bearingAssociations?: BearingAssociation[];
   multiSensorResolutions?: MultiSensorResolution[];
   convergedTrackIds?: Set<string>;
+  ballisticEstimates?: BallisticEstimateWS[];
 }
 
-export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor, onSelectGroundTruth, groundTruthTargets, showGroundTruth, coverZones, operationalZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds }: DebugOverlayProps) {
+export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor, onSelectGroundTruth, groundTruthTargets, showGroundTruth, coverZones, operationalZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds, ballisticEstimates }: DebugOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const frameRef = useRef<number>(0);
@@ -676,6 +678,62 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
           'stroke-width': '1',
         });
         svg.appendChild(ellipse);
+      }
+    }
+
+    // ── Ballistic launch/impact estimates ──
+    if (ballisticEstimates && ballisticEstimates.length > 0) {
+      for (const est of ballisticEstimates) {
+        // Launch point: green dashed circle
+        if (est.launchPoint && Number.isFinite(est.launchPoint.lat) && Number.isFinite(est.launchPoint.lon)) {
+          const lp = est.launchPoint;
+          const px = proj(lp.lon, lp.lat);
+          const mPerDegLat = 110540;
+          const uncertaintyDeg = lp.uncertainty2SigmaM / mPerDegLat;
+          const edgePx = proj(lp.lon, lp.lat + uncertaintyDeg);
+          const radiusPx = Math.max(8, Math.abs(px.y - edgePx.y));
+
+          svg.appendChild(createSvgEl('circle', {
+            cx: String(px.x), cy: String(px.y), r: String(radiusPx),
+            fill: 'rgba(0, 200, 68, 0.08)', stroke: '#00cc44',
+            'stroke-width': '2', 'stroke-dasharray': '6,4', 'stroke-opacity': '0.8',
+          }));
+          // Cross marker
+          const cs = 6;
+          svg.appendChild(createSvgEl('line', { x1: String(px.x - cs), y1: String(px.y), x2: String(px.x + cs), y2: String(px.y), stroke: '#00cc44', 'stroke-width': '2' }));
+          svg.appendChild(createSvgEl('line', { x1: String(px.x), y1: String(px.y - cs), x2: String(px.x), y2: String(px.y + cs), stroke: '#00cc44', 'stroke-width': '2' }));
+          // Label
+          svg.appendChild(createSvgEl('text', {
+            x: String(px.x + 10), y: String(px.y - 4), 'font-size': '10', 'font-family': 'monospace',
+            'font-weight': '600', fill: '#00cc44', 'text-anchor': 'start', 'pointer-events': 'none',
+          })).textContent = `LAUNCH ${(lp.uncertainty2SigmaM / 1000).toFixed(1)}km`;
+        }
+
+        // Impact point: red dashed circle
+        if (est.impactPoint && Number.isFinite(est.impactPoint.lat) && Number.isFinite(est.impactPoint.lon)) {
+          const ip = est.impactPoint;
+          const px = proj(ip.lon, ip.lat);
+          const mPerDegLat = 110540;
+          const uncertaintyDeg = ip.uncertainty2SigmaM / mPerDegLat;
+          const edgePx = proj(ip.lon, ip.lat + uncertaintyDeg);
+          const radiusPx = Math.max(8, Math.abs(px.y - edgePx.y));
+
+          svg.appendChild(createSvgEl('circle', {
+            cx: String(px.x), cy: String(px.y), r: String(radiusPx),
+            fill: 'rgba(255, 50, 50, 0.08)', stroke: '#ff3333',
+            'stroke-width': '2', 'stroke-dasharray': '6,4', 'stroke-opacity': '0.8',
+          }));
+          // X marker
+          const cs = 6;
+          svg.appendChild(createSvgEl('line', { x1: String(px.x - cs), y1: String(px.y - cs), x2: String(px.x + cs), y2: String(px.y + cs), stroke: '#ff3333', 'stroke-width': '2' }));
+          svg.appendChild(createSvgEl('line', { x1: String(px.x + cs), y1: String(px.y - cs), x2: String(px.x - cs), y2: String(px.y + cs), stroke: '#ff3333', 'stroke-width': '2' }));
+          // Label with time-to-impact
+          const tti = ip.timeToImpactSec > 0 ? ` T-${ip.timeToImpactSec.toFixed(0)}s` : '';
+          svg.appendChild(createSvgEl('text', {
+            x: String(px.x + 10), y: String(px.y - 4), 'font-size': '10', 'font-family': 'monospace',
+            'font-weight': '600', fill: '#ff3333', 'text-anchor': 'start', 'pointer-events': 'none',
+          })).textContent = `IMPACT ${(ip.uncertainty2SigmaM / 1000).toFixed(1)}km${tti}`;
+        }
       }
     }
 
