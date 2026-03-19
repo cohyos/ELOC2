@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+export type InvestigationMode = 'standard' | 'gt-comparison' | 'pyrite';
+
 export type DetailView = 'track' | 'sensor' | 'tasks' | 'investigation' | 'eo-window' | 'cue' | 'group' | 'geometry' | 'quality' | 'ground-truth' | 'none';
 
 export interface LayerVisibility {
@@ -112,6 +114,9 @@ interface UiState {
   connectedUsers: { total: number; instructors: number; operators: number };
   autoLoopEnabled: boolean;
 
+  // Investigation mode
+  investigationMode: InvestigationMode;
+
   // Actions
   selectTrack: (id: string | null) => void;
   selectSensor: (id: string | null) => void;
@@ -168,6 +173,9 @@ interface UiState {
   // Connected users actions
   setConnectedUsers: (users: { total: number; instructors: number; operators: number }) => void;
   setAutoLoopEnabled: (enabled: boolean) => void;
+
+  // Investigation mode actions
+  setInvestigationMode: (mode: InvestigationMode) => void;
 }
 
 export interface SelectionBearingRay {
@@ -243,6 +251,8 @@ export const useUiStore = create<UiState>((set) => ({
 
   connectedUsers: { total: 0, instructors: 0, operators: 0 },
   autoLoopEnabled: false,
+
+  investigationMode: 'standard',
 
   selectTrack: (id) =>
     set({ selectedTrackId: id, selectedSensorId: null, selectedCueId: null, selectedGroupId: null, selectedGeometryTrackId: null, detailView: id ? 'track' : 'none', detailPanelOpen: !!id }),
@@ -340,4 +350,6 @@ export const useUiStore = create<UiState>((set) => ({
 
   setConnectedUsers: (users) => set({ connectedUsers: users }),
   setAutoLoopEnabled: (enabled) => set({ autoLoopEnabled: enabled }),
+
+  setInvestigationMode: (mode) => set({ investigationMode: mode }),
 }));

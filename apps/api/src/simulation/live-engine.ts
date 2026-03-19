@@ -152,6 +152,15 @@ export interface InvestigationSummaryWS {
   };
 }
 
+export interface InvestigationEvent {
+  timestamp: number;
+  simTimeSec: number;
+  type: 'observation' | 'classification' | 'state_change' | 'eo_dwell' | 'bearing_report' | 'cue_issued' | 'task_assigned' | 'geometry_update';
+  sensorId: string;
+  trackId: string;
+  details: Record<string, unknown>;
+}
+
 const DEFAULT_INVESTIGATION_PARAMETERS: InvestigationParameters = {
   weights: {
     threat: 1.0,
@@ -335,6 +344,9 @@ export class LiveEngine {
   private activeCuesById = new Map<string, EoCue>();
   /** Maps cueId → systemTrackId for cue-to-track lookup. */
   private cueToTrack = new Map<string, string>();
+
+  /** Per-track investigation event log for pyrite/audit mode */
+  private investigationLog = new Map<string, InvestigationEvent[]>();
   private operatorPriorityTracks = new Set<string>();
   /** Sensors locked by operator — excluded from auto-assignment */
   private operatorLockedSensors = new Map<string, {
@@ -1339,6 +1351,7 @@ export class LiveEngine {
     this.unresolvedGroupsById.clear();
     this.activeCuesById.clear();
     this.cueToTrack.clear();
+    this.investigationLog.clear();
     this.pendingBearings.clear();
     this.lastEoTaskingSec = 0;
     this.fusionModePerSensor.clear();
@@ -4475,6 +4488,42 @@ export class LiveEngine {
         this.wsClients.delete(client);
       }
     }
+  }
+
+  // ── Investigation Event Log ──────────────────────────────────────────
+
+  /**
+   * Push an investigation event for a specific track (pyrite/audit trail).
+   */
+  private pushInvestigationEvent(
+    trackId: string,
+    type: InvestigationEvent['type'],
+    sensorId: string,
+    details: Record<string, unknown>,
+  ): void {
+    if (!this.investigationLog.has(trackId)) {
+      this.investigationLog.set(trackId, []);
+    }
+    const log = this.investigationLog.get(trackId)!;
+    log.push({
+      timestamp: Date.now(),
+      simTimeSec: this.state.elapsedSec,
+      type,
+      sensorId,
+      trackId,
+      details,
+    });
+    // Keep last 200 events per track
+    if (log.length > 200) {
+      this.investigationLog.set(trackId, log.slice(-200));
+    }
+  }
+
+  /**
+   * Get the investigation event log for a specific track.
+   */
+  getInvestigationLog(trackId: string): InvestigationEvent[] {
+    return this.investigationLog.get(trackId) ?? [];
   }
 }
 
