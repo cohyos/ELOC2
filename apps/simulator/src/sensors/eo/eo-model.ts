@@ -14,6 +14,7 @@ import {
   haversineDistanceM,
 } from '@eloc2/shared-utils';
 import type { Position3D } from '@eloc2/domain';
+import { checkLineOfSight } from '@eloc2/terrain';
 import type { SensorDefinition, FaultDefinition } from '../../types/scenario.js';
 import {
   applyAzimuthBias,
@@ -65,12 +66,24 @@ export function generateEoBearing(
   faults: FaultDefinition[],
   targetId: string = 'unknown',
   rng?: () => number,
+  options?: { terrainLos?: boolean },
 ): EoBearingObservation | undefined {
   const sensorFaults = faults.filter((f) => f.sensorId === sensor.sensorId);
 
   // Check outage
   if (isSensorInOutage(sensor.sensorId, sensorFaults)) {
     return undefined;
+  }
+
+  // Terrain line-of-sight check (opt-in via options.terrainLos)
+  if (options?.terrainLos) {
+    const los = checkLineOfSight(
+      { lat: sensor.position.lat, lon: sensor.position.lon, alt: sensor.position.alt },
+      { lat: targetPos.lat, lon: targetPos.lon, alt: targetPos.alt },
+    );
+    if (!los.visible) {
+      return undefined;
+    }
   }
 
   // Compute true azimuth

@@ -19,6 +19,7 @@ import {
   DEG_TO_RAD,
   RAD_TO_DEG,
 } from '@eloc2/shared-utils';
+import { checkLineOfSight } from '@eloc2/terrain';
 import type { SensorDefinition, FaultDefinition } from '../../types/scenario.js';
 import {
   applyAzimuthBias,
@@ -111,11 +112,22 @@ export function generateRadarObservation(
   faults: FaultDefinition[],
   targetId: string = 'unknown',
   rng?: () => number,
-  options?: { rcs?: number; classification?: string },
+  options?: { rcs?: number; classification?: string; terrainLos?: boolean },
 ): RadarObservation | undefined {
   // Check outage
   if (isSensorInOutage(sensor.sensorId, faults)) {
     return undefined;
+  }
+
+  // Terrain line-of-sight check (opt-in via options.terrainLos)
+  if (options?.terrainLos) {
+    const los = checkLineOfSight(
+      { lat: sensor.position.lat, lon: sensor.position.lon, alt: sensor.position.alt },
+      { lat: targetPos.lat, lon: targetPos.lon, alt: targetPos.alt },
+    );
+    if (!los.visible) {
+      return undefined;
+    }
   }
 
   // Compute effective range based on RCS
