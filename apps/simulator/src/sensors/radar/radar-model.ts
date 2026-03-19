@@ -9,6 +9,8 @@ import type {
   Timestamp,
   SourceObservation,
   Covariance3x3,
+  WeatherCondition,
+  ClutterZone,
 } from '@eloc2/domain';
 import { TARGET_RCS } from '@eloc2/domain';
 import {
@@ -112,7 +114,7 @@ export function generateRadarObservation(
   faults: FaultDefinition[],
   targetId: string = 'unknown',
   rng?: () => number,
-  options?: { rcs?: number; classification?: string; terrainLos?: boolean },
+  options?: { rcs?: number; classification?: string; terrainLos?: boolean; weather?: WeatherCondition },
 ): RadarObservation | undefined {
   // Check outage
   if (isSensorInOutage(sensor.sensorId, faults)) {
@@ -134,7 +136,13 @@ export function generateRadarObservation(
   // Priority: explicit rcs > classification lookup > default 1.0 m²
   const rcs = options?.rcs
     ?? (options?.classification ? TARGET_RCS[options.classification] ?? 1.0 : 1.0);
-  const effectiveMaxRange = computeEffectiveRange(sensor.coverage.maxRangeM, rcs);
+  let effectiveMaxRange = computeEffectiveRange(sensor.coverage.maxRangeM, rcs);
+
+  // Apply weather-based rain attenuation: up to 30% range reduction at 50+ mm/hr
+  if (options?.weather && options.weather.rainMmHr > 0) {
+    const rainFactor = 1 - 0.3 * Math.min(1, options.weather.rainMmHr / 50);
+    effectiveMaxRange *= rainFactor;
+  }
 
   // Check coverage
   const coverage = isInCoverage(sensor, targetPos, effectiveMaxRange);
@@ -203,4 +211,66 @@ export function generateRadarObservation(
     targetId,
     observation,
   };
+}
+
+/**
+ * Generate false alarm observations from radar clutter zones.
+ * For each clutter zone within radar range, rolls against density probability
+ * to produce a false detection at a random position within the zone.
+ */
+export function generateClutterFalseAlarms(
+  sensor: SensorDefinition,
+  clutterZones: ClutterZone[],
+  timeSec: number,
+  baseTimestamp: number,
+  rng?: () => number,
+): RadarObservation[] {
+  const results: RadarObservation[] = [];
+  const r = rng ?? Math.random;
+
+  for (const zone of clutterZones) {
+    const rangeM = haversineDistanceM(
+      sensor.position.lat, sensor.position.lon,
+      zone.center.lat, zone.center.lon,
+    );
+    if (rangeM > sensor.coverage.maxRangeM) continue;
+
+    if (r() > zone.density) continue;
+
+    const angle = r() * 2 * Math.PI;
+    const dist = Math.sqrt(r()) * zone.radiusM;
+    const mPerDegLon = 111320 * Math.cos(zone.center.lat * DEG_TO_RAD);
+    const mPerDegLat = 110540;
+    const falsePos: Position3D = {
+      lat: zone.center.lat + (dist * Math.cos(angle)) / mPerDegLat,
+      lon: zone.center.lon + (dist * Math.sin(angle)) / mPerDegLon,
+      alt: sensor.position.alt + gaussianNoise(200, r),
+    };
+
+    const highCov = 10000;
+    const cov: Covariance3x3 = [
+      [highCov, 0, 0],
+      [0, highCov, 0],
+      [0, 0, highCov],
+    ];
+
+    const timestampMs = baseTimestamp + timeSec * 1000;
+    const observation: SourceObservation = {
+      observationId: generateId(),
+      sensorId: sensor.sensorId as SensorId,
+      timestamp: timestampMs as Timestamp,
+      position: falsePos,
+      velocity: undefined,
+      covariance: cov,
+      sensorFrame: 'radar',
+    };
+
+    results.push({
+      sensorId: sensor.sensorId,
+      targetId: `clutter-${zone.id}-${generateId().slice(0, 6)}`,
+      observation,
+    });
+  }
+
+  return results;
 }

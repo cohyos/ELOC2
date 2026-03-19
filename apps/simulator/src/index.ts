@@ -33,6 +33,7 @@ export {
 // Sensor models
 export {
   generateRadarObservation,
+  generateClutterFalseAlarms,
 } from './sensors/radar/radar-model.js';
 export type { RadarObservation } from './sensors/radar/radar-model.js';
 

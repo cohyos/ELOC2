@@ -10,6 +10,8 @@ import type {
   CoverageArc,
   FieldOfView,
   TargetClassification,
+  WeatherCondition,
+  ClutterZone,
 } from '@eloc2/domain';
 
 export interface WaypointDef {
@@ -65,4 +67,6 @@ export interface ScenarioDefinition {
   operatorActions: OperatorActionDef[];
   seed?: number;          // Random seed for deterministic replay
   center?: { lat: number; lon: number };  // Geographic center point
+  weather?: WeatherCondition;             // Environmental conditions
+  clutterZones?: ClutterZone[];           // Radar clutter zones for false alarms
 }

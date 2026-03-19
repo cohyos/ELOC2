@@ -6,6 +6,7 @@ import type {
   SensorId,
   Timestamp,
   BearingMeasurement,
+  WeatherCondition,
 } from '@eloc2/domain';
 import {
   bearingDeg,
@@ -66,7 +67,7 @@ export function generateEoBearing(
   faults: FaultDefinition[],
   targetId: string = 'unknown',
   rng?: () => number,
-  options?: { terrainLos?: boolean },
+  options?: { terrainLos?: boolean; weather?: WeatherCondition },
 ): EoBearingObservation | undefined {
   const sensorFaults = faults.filter((f) => f.sensorId === sensor.sensorId);
 
@@ -112,7 +113,11 @@ export function generateEoBearing(
   // Check EO max detection range with time-of-day modulation
   if (sensor.maxDetectionRangeM !== undefined) {
     const todModifier = timeOfDayRangeModifier(timeSec);
-    const effectiveEoRange = sensor.maxDetectionRangeM * todModifier;
+    // Weather visibility reduction: full range at 10km+, linear reduction below
+    const weatherModifier = options?.weather
+      ? Math.min(1, options.weather.visibilityKm / 10)
+      : 1.0;
+    const effectiveEoRange = sensor.maxDetectionRangeM * todModifier * weatherModifier;
     if (rangeM > effectiveEoRange) {
       return undefined;
     }

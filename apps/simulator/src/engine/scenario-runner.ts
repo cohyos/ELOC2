@@ -14,8 +14,8 @@ import {
   interpolateVelocity,
   isTargetActive,
 } from '../targets/target-generator.js';
-import { getActiveFaults } from '../faults/fault-manager.js';
-import { generateRadarObservation } from '../sensors/radar/radar-model.js';
+import { getActiveFaults, isSensorInOutage } from '../faults/fault-manager.js';
+import { generateRadarObservation, generateClutterFalseAlarms } from '../sensors/radar/radar-model.js';
 import { generateEoBearing } from '../sensors/eo/eo-model.js';
 import { generateC4isrObservation } from '../sensors/c4isr-source/c4isr-model.js';
 
@@ -141,7 +141,7 @@ export class ScenarioRunner {
               sensorFaults,
               tgtId,
               this.rng,
-              { rcs: tgtDef?.rcs, classification: tgtDef?.classification },
+              { rcs: tgtDef?.rcs, classification: tgtDef?.classification, weather: this.scenario.weather },
             );
             if (obs) {
               events.push({
@@ -162,6 +162,7 @@ export class ScenarioRunner {
               sensorFaults,
               tgtId,
               this.rng,
+              { weather: this.scenario.weather },
             );
             if (bearing) {
               events.push({
@@ -192,6 +193,31 @@ export class ScenarioRunner {
             }
             break;
           }
+        }
+      }
+    }
+
+    // 4b. Generate clutter false alarms for radar sensors
+    if (this.scenario.clutterZones && this.scenario.clutterZones.length > 0) {
+      for (const sensor of this.scenario.sensors) {
+        if (sensor.type !== 'radar') continue;
+        const shouldUpdate = this.shouldSensorUpdate('radar', this.stepCount);
+        if (!shouldUpdate) continue;
+        if (isSensorInOutage(sensor.sensorId, activeFaults)) continue;
+
+        const falseAlarms = generateClutterFalseAlarms(
+          sensor,
+          this.scenario.clutterZones,
+          this.currentTimeSec,
+          this.baseTimestamp,
+          this.rng,
+        );
+        for (const fa of falseAlarms) {
+          events.push({
+            type: 'observation',
+            timeSec: this.currentTimeSec,
+            data: fa,
+          });
         }
       }
     }

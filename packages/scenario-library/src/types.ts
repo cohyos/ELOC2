@@ -8,6 +8,8 @@ import type {
   TargetClassification,
   CoverZone,
   OperationalZone,
+  WeatherCondition,
+  ClutterZone,
 } from '@eloc2/domain';
 
 export interface SensorDefinition {
@@ -66,6 +68,8 @@ export interface ScenarioDefinition {
   operationalZones?: OperationalZone[];
   seed?: number;          // Random seed for deterministic replay
   center?: { lat: number; lon: number };  // Geographic center point
+  weather?: WeatherCondition;             // Environmental conditions
+  clutterZones?: ClutterZone[];           // Radar clutter zones for false alarms
 }
 
 export interface DeploymentDefinition {
@@ -119,6 +123,16 @@ export function composeScenario(
     ? ` Weather: ${weather.name} (vis ${weather.visibility_km} km, rain ${weather.rain_mm_hr} mm/hr).`
     : '';
 
+  // Convert WeatherProfile to WeatherCondition for sensor models
+  const weatherCondition: WeatherCondition | undefined = weather
+    ? {
+        visibilityKm: weather.fog ? 0.5 : weather.visibility_km,
+        rainMmHr: weather.rain_mm_hr,
+        cloudCeilingFt: weather.cloud_ceiling_ft,
+        windSpeedKts: 10,
+      }
+    : undefined;
+
   return {
     id: composedId,
     name: `${deployment.name} + ${threat.name}`,
@@ -132,5 +146,6 @@ export function composeScenario(
     operatorActions: threat.operatorActions ?? [],
     seed: options?.seed,
     center: options?.center,
+    weather: weatherCondition,
   };
 }
