@@ -37,6 +37,12 @@ const LAYER_GROUPS: Array<{
       { key: 'ambiguityMarkers', label: 'Ambiguity markers', color: '#ff6699' },
     ],
   },
+  {
+    label: 'Symbology',
+    items: [
+      { key: 'useNatoSymbols', label: 'NATO APP-6 symbols', color: '#4a9eff' },
+    ],
+  },
 ];
 
 const panelStyle: React.CSSProperties = {

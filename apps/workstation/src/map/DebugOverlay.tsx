@@ -6,6 +6,7 @@ import type { GroundTruthTarget } from '../stores/ground-truth-store';
 import type { CoverZone, OperationalZone } from '../stores/cover-zone-store';
 import type { SearchModeStateWS } from '../stores/sensor-store';
 import type { FovOverlap, BearingAssociation, MultiSensorResolution } from '../stores/fov-overlap-store';
+import { resolveTrackSymbol, resolveSensorSymbol } from './symbols/symbol-resolver';
 
 /**
  * DebugOverlay — Primary HTML/SVG-based renderer.
@@ -473,7 +474,8 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
 
     // ── HTML: Sensors, trails, tracks ──
 
-    // Draw sensors as squares
+    // Draw sensors as squares (legacy) or NATO symbols
+    const useNato = layerVisibility.useNatoSymbols;
     if (showSensors || showSensorLabels) {
       for (const sensor of sensors) {
         const { lon, lat } = sensor.position;
@@ -481,25 +483,43 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
         const color = sensor.online ? sensorColor(sensor.sensorType) : '#555555';
 
         if (showSensors) {
-          const el = document.createElement('div');
-          el.style.cssText = `
-            position:absolute; left:${px.x - 7}px; top:${px.y - 7}px;
-            width:14px; height:14px; background:${color};
-            border:2px solid #000; z-index:20; cursor:pointer;
-            pointer-events:auto;
-          `;
-          el.title = `${shortSensorLabel(sensor)} — ${sensor.sensorId}`;
-          if (onSelectSensor) {
-            const sId = sensor.sensorId as string;
-            el.addEventListener('click', (e) => { e.stopPropagation(); onSelectSensor(sId); });
+          if (useNato) {
+            const sym = resolveSensorSymbol(sensor, false, 24);
+            const el = document.createElement('div');
+            el.style.cssText = `
+              position:absolute; left:${px.x - 12}px; top:${px.y - 12}px;
+              width:24px; height:24px; z-index:20; cursor:pointer;
+              pointer-events:auto;
+            `;
+            el.innerHTML = sym.svgHtml;
+            el.title = `${shortSensorLabel(sensor)} — ${sensor.sensorId}`;
+            if (onSelectSensor) {
+              const sId = sensor.sensorId as string;
+              el.addEventListener('click', (e) => { e.stopPropagation(); onSelectSensor(sId); });
+            }
+            container.appendChild(el);
+          } else {
+            const el = document.createElement('div');
+            el.style.cssText = `
+              position:absolute; left:${px.x - 7}px; top:${px.y - 7}px;
+              width:14px; height:14px; background:${color};
+              border:2px solid #000; z-index:20; cursor:pointer;
+              pointer-events:auto;
+            `;
+            el.title = `${shortSensorLabel(sensor)} — ${sensor.sensorId}`;
+            if (onSelectSensor) {
+              const sId = sensor.sensorId as string;
+              el.addEventListener('click', (e) => { e.stopPropagation(); onSelectSensor(sId); });
+            }
+            container.appendChild(el);
           }
-          container.appendChild(el);
         }
 
         if (showSensorLabels) {
+          const sensorLblOffset = useNato ? 14 : 10;
           const lbl = document.createElement('div');
           lbl.style.cssText = `
-            position:absolute; left:${px.x + 10}px; top:${px.y - 8}px;
+            position:absolute; left:${px.x + sensorLblOffset}px; top:${px.y - 8}px;
             font-size:10px; color:${color}; white-space:nowrap;
             text-shadow:0 0 3px #000, 0 0 3px #000; z-index:21;
             pointer-events:none; font-family:monospace; font-weight:bold;
@@ -652,7 +672,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
       }
     }
 
-    // Draw tracks as circles (or diamonds for multi-sensor resolved tracks)
+    // Draw tracks as circles/diamonds (legacy) or NATO symbols
     if (showTracks || showTrackLabels) {
       for (const track of tracks) {
         const { lon, lat } = track.state;
@@ -663,36 +683,56 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
         const isMultiSensor = multiSensorTrackIds.has(track.systemTrackId as string);
 
         if (showTracks) {
-          const el = document.createElement('div');
-          if (isMultiSensor) {
-            // Diamond shape for multi-sensor resolved tracks
+          if (useNato) {
+            // NATO APP-6D symbol
+            const sym = resolveTrackSymbol(track, false, 24);
+            const el = document.createElement('div');
             el.style.cssText = `
-              position:absolute; left:${px.x - 7}px; top:${px.y - 7}px;
-              width:12px; height:12px; background:#00ffcc;
-              border:2px solid #fff; z-index:22; cursor:pointer;
-              pointer-events:auto; transform:rotate(45deg);
-            `;
-          } else {
-            el.style.cssText = `
-              position:absolute; left:${px.x - 6}px; top:${px.y - 6}px;
-              width:12px; height:12px; border-radius:50%; background:${color};
-              border:2px solid #fff; z-index:22; cursor:pointer;
+              position:absolute; left:${px.x - 12}px; top:${px.y - 12}px;
+              width:24px; height:24px; z-index:22; cursor:pointer;
               pointer-events:auto;
             `;
+            el.innerHTML = sym.svgHtml;
+            el.title = `${shortTrackLabel(track)} — ${track.status}${isMultiSensor ? ' (multi-sensor)' : ''}`;
+            if (onSelectTrack) {
+              const tId = track.systemTrackId as string;
+              el.addEventListener('click', (e) => { e.stopPropagation(); onSelectTrack(tId); });
+            }
+            container.appendChild(el);
+          } else {
+            // Legacy circle/diamond rendering
+            const el = document.createElement('div');
+            if (isMultiSensor) {
+              el.style.cssText = `
+                position:absolute; left:${px.x - 7}px; top:${px.y - 7}px;
+                width:12px; height:12px; background:#00ffcc;
+                border:2px solid #fff; z-index:22; cursor:pointer;
+                pointer-events:auto; transform:rotate(45deg);
+              `;
+            } else {
+              el.style.cssText = `
+                position:absolute; left:${px.x - 6}px; top:${px.y - 6}px;
+                width:12px; height:12px; border-radius:50%; background:${color};
+                border:2px solid #fff; z-index:22; cursor:pointer;
+                pointer-events:auto;
+              `;
+            }
+            el.title = `${shortTrackLabel(track)} — ${track.status}${isMultiSensor ? ' (multi-sensor)' : ''}`;
+            if (onSelectTrack) {
+              const tId = track.systemTrackId as string;
+              el.addEventListener('click', (e) => { e.stopPropagation(); onSelectTrack(tId); });
+            }
+            container.appendChild(el);
           }
-          el.title = `${shortTrackLabel(track)} — ${track.status}${isMultiSensor ? ' (multi-sensor)' : ''}`;
-          if (onSelectTrack) {
-            const tId = track.systemTrackId as string;
-            el.addEventListener('click', (e) => { e.stopPropagation(); onSelectTrack(tId); });
-          }
-          container.appendChild(el);
 
           // REQ-5 Phase C: Green ring around converged tracks
           if (convergedTrackIds?.has(track.systemTrackId as string)) {
+            const ringSize = useNato ? 28 : 18;
+            const ringOffset = ringSize / 2;
             const ring = document.createElement('div');
             ring.style.cssText = `
-              position:absolute; left:${px.x - 9}px; top:${px.y - 9}px;
-              width:18px; height:18px; border-radius:50%;
+              position:absolute; left:${px.x - ringOffset}px; top:${px.y - ringOffset}px;
+              width:${ringSize}px; height:${ringSize}px; border-radius:50%;
               border:2px solid #00cc44; z-index:21;
               pointer-events:none;
             `;
@@ -701,9 +741,10 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
         }
 
         if (showTrackLabels) {
+          const lblOffset = useNato ? 14 : 9;
           const lbl = document.createElement('div');
           lbl.style.cssText = `
-            position:absolute; left:${px.x + 9}px; top:${px.y - 7}px;
+            position:absolute; left:${px.x + lblOffset}px; top:${px.y - 7}px;
             font-size:9px; color:#fff; white-space:nowrap;
             text-shadow:0 0 3px #000, 0 0 3px #000; z-index:23;
             pointer-events:none; font-family:monospace;

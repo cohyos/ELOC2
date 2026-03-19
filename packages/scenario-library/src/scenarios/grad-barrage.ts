@@ -101,7 +101,7 @@ export const gradBarrage: ScenarioDefinition = {
       targetId: `TGT-GR-${i + 1}`,
       name: `Grad Rocket ${i + 1}`,
       description: `Rocket ${i + 1} of 10 in simultaneous barrage.`,
-      classification: 'unknown' as const,
+      classification: 'missile' as const,
       startTime: 0,
       waypoints: [
         // Launch point (all rockets originate here)

@@ -87,7 +87,7 @@ export const ballistic: ScenarioDefinition = {
       description:
         'Single ballistic target with parabolic trajectory. Launched from 150 km north, ' +
         'climbs to 80 km altitude at apex, then descends rapidly toward defense point.',
-      classification: 'unknown',
+      classification: 'missile',
       startTime: 0,
       waypoints: [
         // Launch — low altitude, high initial speed heading south

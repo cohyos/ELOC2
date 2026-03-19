@@ -13,6 +13,10 @@ export type {
 // ── Scenarios ──────────────────────────────────────────────────────────────
 export { centralIsrael } from './scenarios/central-israel.js';
 export { fusionDemo } from './scenarios/fusion-demo.js';
+export { ballistic } from './scenarios/ballistic.js';
+export { gradBarrage } from './scenarios/grad-barrage.js';
+export { droneSwarm } from './scenarios/drone-swarm.js';
+export { combined } from './scenarios/combined.js';
 
 export {
   singleTargetConfirm,
@@ -30,11 +34,19 @@ export {
 import type { ScenarioDefinition } from './types.js';
 import { centralIsrael } from './scenarios/central-israel.js';
 import { fusionDemo } from './scenarios/fusion-demo.js';
+import { ballistic } from './scenarios/ballistic.js';
+import { gradBarrage } from './scenarios/grad-barrage.js';
+import { droneSwarm } from './scenarios/drone-swarm.js';
+import { combined } from './scenarios/combined.js';
 import { simpleScenarios } from './scenarios/simple-scenarios.js';
 
 const allScenarios: readonly ScenarioDefinition[] = [
   centralIsrael,
   fusionDemo,
+  ballistic,
+  gradBarrage,
+  droneSwarm,
+  combined,
   ...simpleScenarios,
 ];
 
