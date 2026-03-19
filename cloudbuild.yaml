@@ -118,10 +118,8 @@ steps:
       - '0'
       - '--max-instances'
       - '3'
-      - '--add-cloudsql-instances'
-      - '${PROJECT_ID}:${_REGION}:${_DB_INSTANCE}'
       - '--set-env-vars'
-      - 'NODE_ENV=production,AUTH_ENABLED=true,DATABASE_URL=postgresql://postgres:${_DB_PASSWORD}@localhost:5432/eloc2'
+      - 'NODE_ENV=production,AUTH_ENABLED=false'
 
   # Post-deploy: Quick health check
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
