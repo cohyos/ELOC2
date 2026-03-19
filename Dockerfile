@@ -22,6 +22,8 @@ COPY packages/validation/package.json    packages/validation/
 COPY packages/deployment-planner/package.json packages/deployment-planner/
 COPY packages/eo-management/package.json packages/eo-management/
 COPY packages/asterix-adapter/package.json packages/asterix-adapter/
+COPY packages/terrain/package.json       packages/terrain/
+COPY packages/database/package.json      packages/database/
 COPY apps/simulator/package.json         apps/simulator/
 COPY apps/api/package.json               apps/api/
 COPY apps/workstation/package.json       apps/workstation/
