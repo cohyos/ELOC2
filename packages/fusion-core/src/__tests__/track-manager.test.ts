@@ -285,4 +285,106 @@ describe('TrackManager', () => {
       expect(result2.track.confidence).toBeGreaterThan(initialConfidence);
     });
   });
+
+  describe('processObservationBatch — track proliferation fix', () => {
+    it('should produce exactly 1 track from 3 observations of the same target from different sensors', () => {
+      // Three sensors observe the same target at nearly the same position
+      const obs1 = makeObservation('radar-1', 32.0, 34.0, 1000, 100);
+      const obs2 = makeObservation('radar-2', 32.0002, 34.0002, 1000, 100);
+      const obs3 = makeObservation('eo-1', 32.0001, 34.0001, 1000, 100);
+
+      const results = manager.processObservationBatch([obs1, obs2, obs3]);
+
+      expect(results.length).toBe(3);
+
+      // All results should reference the same track
+      const activeTracks = manager.getAllTracks().filter(t => t.status !== 'dropped');
+      expect(activeTracks.length).toBe(1);
+
+      // The single track should have all three sensors as sources
+      expect(activeTracks[0].sources).toContain('radar-1');
+      expect(activeTracks[0].sources).toContain('radar-2');
+      expect(activeTracks[0].sources).toContain('eo-1');
+    });
+
+    it('should produce exactly 2 tracks from observations of 2 separate targets', () => {
+      // Two distinct targets ~100km apart
+      const obs1 = makeObservation('radar-1', 32.0, 34.0, 1000, 100);
+      const obs2 = makeObservation('radar-2', 32.0001, 34.0001, 1000, 100); // same target as obs1
+      const obs3 = makeObservation('radar-3', 33.0, 35.0, 1000, 100);       // different target
+
+      const results = manager.processObservationBatch([obs1, obs2, obs3]);
+
+      expect(results.length).toBe(3);
+
+      const activeTracks = manager.getAllTracks().filter(t => t.status !== 'dropped');
+      expect(activeTracks.length).toBe(2);
+
+      // One track should have radar-1 and radar-2, the other should have radar-3
+      const trackWithTwoSources = activeTracks.find(t => t.sources.length >= 2);
+      const trackWithOneSensor = activeTracks.find(t => t.sources.length === 1);
+
+      expect(trackWithTwoSources).toBeDefined();
+      expect(trackWithOneSensor).toBeDefined();
+      expect(trackWithOneSensor!.sources).toContain('radar-3');
+    });
+
+    it('should associate batch observations with existing tracks (not create duplicates)', () => {
+      // First tick: create a track from a single observation
+      const obs1 = makeObservation('radar-1', 32.0, 34.0, 1000, 100);
+      manager.processObservation(obs1);
+
+      const tracksAfterTick1 = manager.getAllTracks().filter(t => t.status !== 'dropped');
+      expect(tracksAfterTick1.length).toBe(1);
+      const existingTrackId = tracksAfterTick1[0].systemTrackId;
+
+      // Second tick: batch of observations at the same position from different sensors
+      const obs2 = makeObservation('radar-2', 32.0001, 34.0001, 1000, 100);
+      const obs3 = makeObservation('eo-1', 32.0002, 34.0002, 1000, 100);
+
+      manager.processObservationBatch([obs2, obs3]);
+
+      // Should still have only 1 active track — the existing one, updated
+      const tracksAfterTick2 = manager.getAllTracks().filter(t => t.status !== 'dropped');
+      expect(tracksAfterTick2.length).toBe(1);
+      expect(tracksAfterTick2[0].systemTrackId).toBe(existingTrackId);
+
+      // Track should now have all 3 sensors
+      expect(tracksAfterTick2[0].sources).toContain('radar-1');
+      expect(tracksAfterTick2[0].sources).toContain('radar-2');
+      expect(tracksAfterTick2[0].sources).toContain('eo-1');
+    });
+
+    it('should handle mixed batch: some correlate with existing tracks, some are new targets', () => {
+      // Pre-existing track at position A
+      const obs1 = makeObservation('radar-1', 32.0, 34.0, 1000, 100);
+      manager.processObservation(obs1);
+
+      const tracksBeforeBatch = manager.getAllTracks().filter(t => t.status !== 'dropped');
+      expect(tracksBeforeBatch.length).toBe(1);
+      const existingTrackId = tracksBeforeBatch[0].systemTrackId;
+
+      // Batch: obs2 near existing track A, obs3+obs4 at new location B (far away)
+      const obs2 = makeObservation('radar-2', 32.0001, 34.0001, 1000, 100); // near track A
+      const obs3 = makeObservation('radar-3', 33.0, 35.0, 1000, 100);       // new target B
+      const obs4 = makeObservation('eo-1', 33.0001, 35.0001, 1000, 100);    // also target B
+
+      manager.processObservationBatch([obs2, obs3, obs4]);
+
+      const activeTracks = manager.getAllTracks().filter(t => t.status !== 'dropped');
+      expect(activeTracks.length).toBe(2);
+
+      // The original track should have been updated with radar-2
+      const trackA = activeTracks.find(t => t.systemTrackId === existingTrackId);
+      expect(trackA).toBeDefined();
+      expect(trackA!.sources).toContain('radar-1');
+      expect(trackA!.sources).toContain('radar-2');
+
+      // The new target should have radar-3 and eo-1
+      const trackB = activeTracks.find(t => t.systemTrackId !== existingTrackId);
+      expect(trackB).toBeDefined();
+      expect(trackB!.sources).toContain('radar-3');
+      expect(trackB!.sources).toContain('eo-1');
+    });
+  });
 });

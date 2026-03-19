@@ -441,31 +441,39 @@ export class TrackManager {
   ): ProcessObservationResult[] {
     if (observations.length === 0) return [];
 
-    // If tracks already exist, just process normally (batch logic only matters for initial load)
-    const activeTracks = this.getAllTracks().filter(t => t.status !== 'dropped');
-    if (activeTracks.length > 0) {
-      return observations.map(obs => {
-        const health = registrationHealthMap?.get(obs.sensorId as string);
-        return this.processObservation(obs, health);
-      });
-    }
-
-    // Cluster observations spatially
+    // ALWAYS cluster observations spatially, regardless of whether tracks exist.
+    // This prevents multiple sensors reporting the same target from creating
+    // separate tracks when processed individually.
     const clusters = this.clusterObservations(observations, 5000); // 5km radius
 
     const results: ProcessObservationResult[] = [];
     for (const cluster of clusters) {
-      // Process first observation to create the track
-      const first = cluster[0];
-      const health0 = registrationHealthMap?.get(first.sensorId as string);
-      results.push(this.processObservation(first, health0));
+      // Try to correlate the cluster against existing tracks using the first member
+      const firstNormalized = normalizeObservation(cluster[0]);
+      const activeTracks = this.getAllTracks().filter(t => t.status !== 'dropped');
+      const correlationResult = correlate(firstNormalized, activeTracks);
 
-      // Process remaining observations — they should now correlate to the new track
-      for (let i = 1; i < cluster.length; i++) {
-        const health = registrationHealthMap?.get(cluster[i].sensorId as string);
-        results.push(this.processObservation(cluster[i], health));
+      if (correlationResult.decision === 'associated') {
+        // Match found: fuse ALL cluster members into the matched track sequentially
+        for (const obs of cluster) {
+          const health = registrationHealthMap?.get(obs.sensorId as string);
+          results.push(this.processObservation(obs, health));
+        }
+      } else {
+        // No match: create a new track from the first observation,
+        // then fuse remaining members into it
+        const health0 = registrationHealthMap?.get(cluster[0].sensorId as string);
+        results.push(this.processObservation(cluster[0], health0));
+
+        for (let i = 1; i < cluster.length; i++) {
+          const health = registrationHealthMap?.get(cluster[i].sensorId as string);
+          results.push(this.processObservation(cluster[i], health));
+        }
       }
     }
+
+    // Post-sweep safety net: merge any tracks that ended up too close
+    this.mergeCloseTracks();
 
     return results;
   }

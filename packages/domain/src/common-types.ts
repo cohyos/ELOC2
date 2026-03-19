@@ -100,7 +100,9 @@ export type TargetClassification =
   | 'helicopter'
   | 'uav'
   | 'small_uav'
-  | 'drone';
+  | 'drone'
+  | 'missile'
+  | 'rocket';
 
 /** Source that assigned a target classification. */
 export type ClassificationSource = 'operator' | 'eo_identification' | 'c4isr' | 'scenario';

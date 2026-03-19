@@ -15,6 +15,7 @@ export interface LayerVisibility {
   triangulation: boolean;
   bearingLines: boolean;
   ambiguityMarkers: boolean;
+  useNatoSymbols: boolean;
 }
 
 export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
@@ -30,6 +31,7 @@ export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
   triangulation: true,
   bearingLines: true,
   ambiguityMarkers: true,
+  useNatoSymbols: true,
 };
 
 interface UiState {
