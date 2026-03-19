@@ -19,12 +19,7 @@ const MAX_INSTRUCTORS = 1;
 const MAX_OPERATORS = 10;
 
 export function registerAuthRoutes(app: FastifyInstance): void {
-  // -----------------------------------------------------------------------
-  // GET /api/auth/status — Public: tells frontend whether auth is enabled
-  // -----------------------------------------------------------------------
-  app.get('/api/auth/status', async () => {
-    return { enabled: AUTH_ENABLED };
-  });
+  // Note: /api/auth/status is registered in server.ts (always available)
 
   // -----------------------------------------------------------------------
   // POST /api/auth/login

@@ -30,7 +30,12 @@ await server.register(fastifyWebsocket);
 // In production, serve workstation static files from the same port
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const workstationDist = path.resolve(__dirname, '../../workstation/dist');
-if (process.env.NODE_ENV === 'production' && fs.existsSync(workstationDist)) {
+const distExists = fs.existsSync(workstationDist);
+const indexExists = distExists && fs.existsSync(path.join(workstationDist, 'index.html'));
+
+console.log(`[static] NODE_ENV=${process.env.NODE_ENV}, distPath=${workstationDist}, distExists=${distExists}, indexExists=${indexExists}`);
+
+if (process.env.NODE_ENV === 'production' && distExists) {
   await server.register(fastifyStatic, { root: workstationDist, prefix: '/' });
   // SPA fallback: serve index.html for non-API routes
   server.setNotFoundHandler((req, reply) => {
@@ -40,6 +45,8 @@ if (process.env.NODE_ENV === 'production' && fs.existsSync(workstationDist)) {
       reply.sendFile('index.html');
     }
   });
+} else if (process.env.NODE_ENV === 'production') {
+  console.error(`[static] WARNING: workstation dist not found at ${workstationDist} — no UI will be served`);
 }
 
 // Health check
@@ -65,7 +72,12 @@ if (AUTH_ENABLED) {
   server.log.info('Auth system disabled — set AUTH_ENABLED=true to enable');
 }
 
-// Register auth routes (always available, middleware self-guards)
+// Always register /api/auth/status so the frontend can detect auth state
+server.get('/api/auth/status', async () => {
+  return { enabled: AUTH_ENABLED };
+});
+
+// Register full auth routes only when auth is enabled
 if (AUTH_ENABLED) {
   registerAuthRoutes(server);
 }
