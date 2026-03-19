@@ -4525,6 +4525,16 @@ export class LiveEngine {
   getInvestigationLog(trackId: string): InvestigationEvent[] {
     return this.investigationLog.get(trackId) ?? [];
   }
+
+  /**
+   * Inject an external observation (e.g. from an ASTERIX feed) directly into
+   * the track manager. This bypasses the ScenarioRunner simulation loop and
+   * feeds the observation straight into the fusion pipeline.
+   */
+  injectExternalObservation(obs: SourceObservation): void {
+    this.trackManager.processObservation(obs);
+    this.state.tracks = this.trackManager.getAllTracks().filter(t => t.status !== 'dropped');
+  }
 }
 
 // ---------------------------------------------------------------------------

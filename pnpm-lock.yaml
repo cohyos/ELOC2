@@ -32,6 +32,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@eloc2/asterix-adapter':
+        specifier: workspace:*
+        version: link:../../packages/asterix-adapter
       '@eloc2/database':
         specifier: workspace:*
         version: link:../../packages/database

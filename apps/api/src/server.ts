@@ -16,6 +16,7 @@ import { registerQualityRoutes } from './routes/quality-routes.js';
 import { registerReportRoutes } from './routes/report-routes.js';
 import { registerDeploymentRoutes } from './routes/deployment-routes.js';
 import { registerAuthRoutes } from './routes/auth-routes.js';
+import { registerAsterixRoutes } from './routes/asterix-routes.js';
 import { wsEventsRoute } from './routes/ws-events.js';
 import { engine } from './simulation/live-engine.js';
 
@@ -81,6 +82,7 @@ registerOperatorRoutes(server, engine);
 registerQualityRoutes(server, engine);
 registerReportRoutes(server, engine);
 registerDeploymentRoutes(server);
+registerAsterixRoutes(server, engine);
 await server.register(wsEventsRoute);
 
 const start = async () => {
