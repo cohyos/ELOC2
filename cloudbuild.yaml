@@ -118,8 +118,10 @@ steps:
       - '0'
       - '--max-instances'
       - '3'
+      - '--add-cloudsql-instances'
+      - '${PROJECT_ID}:${_REGION}:${_DB_INSTANCE}'
       - '--set-env-vars'
-      - 'NODE_ENV=production'
+      - 'NODE_ENV=production,AUTH_ENABLED=true,DATABASE_URL=postgresql://postgres:${_DB_PASSWORD}@localhost:5432/eloc2'
 
   # Post-deploy: Quick health check
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -154,6 +156,8 @@ substitutions:
   _REGION: me-west1
   _REPO: eloc2
   _SERVICE: eloc2
+  _DB_INSTANCE: eloc2-db
+  _DB_PASSWORD: ''  # Set via: --substitutions=_DB_PASSWORD=yourpassword
 
 options:
   logging: CLOUD_LOGGING_ONLY
