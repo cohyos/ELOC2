@@ -1,355 +1,454 @@
-# High-Load Architecture Design — ELOC2 at Scale
-
-## 1. Overview
-
-This document describes the architecture required to scale ELOC2 from its current single-process demonstration (1 CPU, 512Mi RAM, ~10 targets, 1-2 operators) to a production-grade system handling **100+ simultaneous targets, 10+ sensor feeds, and 10+ concurrent operators**.
-
-### Current Constraints
-| Resource | Current | Target |
-|----------|---------|--------|
-| Targets | ~10 | 100+ |
-| Sensors | 5-8 | 20+ |
-| Operators | 1-2 | 10+ |
-| Tick rate | 1 Hz | 1-5 Hz |
-| Latency (obs→track) | ~50ms | <100ms |
-| Memory | 512Mi | 2-4Gi |
-| CPU | 1 vCPU | 4-8 vCPU |
+# High-Load Architecture for ELOC2
 
 ---
 
-## 2. Bottleneck Analysis
+## Table of Contents
 
-### 2.1 Fusion Pipeline
-The current `TrackManager.processObservation()` runs sequentially. At 100 targets × 5 sensors × 1 Hz = **500 observations/sec**, key costs:
-
-- **Correlation**: O(N×M) where N=observations, M=active tracks. At 100 tracks, ~50,000 comparisons/sec.
-- **Information matrix fusion**: Matrix inversion per update. Currently ~0.1ms per fusion → 50ms/sec total.
-- **Spatial clustering**: `processObservationBatch` clusters by proximity. Linear scan is O(N²) — becomes ~125,000 comparisons at 500 obs.
-
-**Verdict**: Fusion is CPU-bound but manageable on 2+ cores with partitioning.
-
-### 2.2 WebSocket Broadcasting
-Current: JSON-serialize full RAP picture every tick → broadcast to all clients.
-
-At 100 tracks with geometry: ~50KB per broadcast × 10 clients × 5 Hz = **2.5 MB/sec outbound**. Manageable for network, but JSON serialization at 5 Hz becomes a bottleneck.
-
-### 2.3 Scenario Simulation
-`ScenarioRunner.step()` iterates all targets × all sensors per tick. At 100 × 20 = 2,000 detection checks, each involving range/bearing/noise computation. Currently ~0.05ms each → 100ms/tick. Tight at 5 Hz.
-
-### 2.4 Memory
-Per track: ~2KB (state, covariance, history). Per sensor: ~1KB. Event store: grows unbounded.
-At 100 tracks × 5 min: ~1MB tracks + ~50MB event store. Well within 2Gi.
-
----
-
-## 3. Horizontal Scaling Architecture
-
-### 3.1 Service Decomposition
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Load Balancer                         │
-│              (Cloud Run / nginx)                         │
-└──────┬───────────┬───────────┬──────────────────────────┘
-       │           │           │
-┌──────▼──┐  ┌─────▼───┐  ┌───▼──────┐
-│ API      │  │ API      │  │ API       │  ← Stateless HTTP/WS
-│ Gateway  │  │ Gateway  │  │ Gateway   │     (N replicas)
-│ + WS     │  │ + WS     │  │ + WS      │
-└────┬─────┘  └────┬─────┘  └────┬──────┘
-     │             │              │
-     └─────────┬───┘──────────────┘
-               │
-     ┌─────────▼──────────┐
-     │   Redis Pub/Sub    │ ← RAP broadcast relay
-     │   (Memorystore)    │
-     └─────────┬──────────┘
-               │
-     ┌─────────▼──────────┐
-     │  Fusion Engine      │ ← Single-writer process
-     │  (Cloud Run Job     │    (or primary replica)
-     │   or dedicated VM)  │
-     └─────────┬──────────┘
-               │
-     ┌─────────▼──────────┐
-     │   PostgreSQL        │ ← Persistent state
-     │   (Cloud SQL)       │
-     └────────────────────┘
-```
-
-### 3.2 Key Design Decisions
-
-**Single-Writer Fusion**: Track fusion requires consistent state (covariance matrices, track IDs). Running multiple fusion writers creates split-brain. Keep fusion as a **single process** with failover, not horizontal sharding.
-
-**Stateless API Gateways**: HTTP routes and WebSocket connections are stateless. Scale horizontally behind a load balancer. Each gateway subscribes to Redis Pub/Sub for RAP updates.
-
-**Redis Pub/Sub for Broadcast**: Replaces direct WS broadcast from fusion engine. Fusion publishes RAP updates to Redis channel; all API gateways receive and forward to their connected clients.
-
-**PostgreSQL for Durability**: Event store, user sessions, scenario configs, audit logs. Not in the hot path — fusion works in-memory, persists asynchronously.
+- [Executive Summary](#executive-summary)
+- [Current Architecture](#current-architecture)
+  - [Process Model](#process-model)
+  - [State Management](#state-management)
+  - [WebSocket Broadcasting](#websocket-broadcasting)
+- [Bottleneck Analysis](#bottleneck-analysis)
+  - [Correlation Complexity](#correlation-complexity)
+  - [Single-Threaded Event Loop](#single-threaded-event-loop)
+  - [Memory Pressure](#memory-pressure)
+  - [WebSocket Fan-Out](#websocket-fan-out)
+- [Proposed Architecture](#proposed-architecture)
+  - [System Overview](#system-overview)
+  - [Event-Sourced State with Redis Streams](#event-sourced-state-with-redis-streams)
+  - [Fusion Workers](#fusion-workers)
+  - [Shared Track Store](#shared-track-store)
+  - [WebSocket Gateway](#websocket-gateway)
+  - [API Tier](#api-tier)
+- [Horizontal Scaling Strategy](#horizontal-scaling-strategy)
+  - [Stateless API Tier](#stateless-api-tier)
+  - [Fusion Tier: Geographic Partitioning](#fusion-tier-geographic-partitioning)
+  - [WebSocket Tier: Session Affinity](#websocket-tier-session-affinity)
+- [Database Architecture](#database-architecture)
+  - [PostgreSQL: Durable State](#postgresql-durable-state)
+  - [Redis: Hot State](#redis-hot-state)
+- [Performance Targets](#performance-targets)
+- [Migration Path](#migration-path)
+  - [Phase 1: Optimize Current Architecture](#phase-1-optimize-current-architecture)
+  - [Phase 2: Extract WebSocket Gateway](#phase-2-extract-websocket-gateway)
+  - [Phase 3: Distributed Fusion](#phase-3-distributed-fusion)
+- [Cost Implications](#cost-implications)
+- [Recommendation](#recommendation)
+- [References](#references)
 
 ---
 
-## 4. Optimized Fusion Pipeline
+## Executive Summary
 
-### 4.1 Spatial Indexing
-Replace linear scan correlation with **R-tree** spatial index:
+The current ELOC2 system runs as a single Node.js process: `LiveEngine` manages simulation, fusion, track management, and WebSocket broadcasting in one event loop. This architecture works well for the demonstrator (10-20 targets, 4-6 sensors, 1-3 operators) but will not scale to operational loads of 100+ targets, 10+ sensors, and 10+ concurrent operator workstations.
 
-```typescript
-import RBush from 'rbush';
+This document identifies the scaling bottlenecks, proposes a distributed architecture that addresses them, and defines a three-phase migration path that preserves backward compatibility at each step.
 
-class SpatialTrackIndex {
-  private tree = new RBush<TrackEntry>();
-
-  // Insert/update track bounding box (position ± 3σ)
-  update(track: SystemTrack): void;
-
-  // Find candidate tracks within gate distance
-  query(obs: Observation, gateM: number): SystemTrack[];
-}
-```
-
-R-tree reduces correlation from O(N×M) to O(N × log(M)) for spatially distributed targets.
-
-### 4.2 Batch Processing
-Group observations arriving within a tick window (200ms) and process as a batch:
-
-```typescript
-// Current: process one at a time
-for (const obs of observations) {
-  trackManager.processObservation(obs);
-}
-
-// Optimized: batch with spatial clustering
-const clusters = spatialCluster(observations, clusterRadiusM);
-for (const cluster of clusters) {
-  trackManager.processObservationBatch(cluster);
-}
-```
-
-### 4.3 Covariance Computation
-The information matrix fusion involves 6×6 matrix operations. For 500 updates/sec:
-
-- Current JS: ~0.1ms per fusion → 50ms/sec (acceptable)
-- If needed: Pre-compiled WASM module for matrix math → ~10× speedup
-- Alternative: Simplified 2D fusion (4×4) for confirmed tracks where altitude is stable
-
-### 4.4 Track Partitioning (Future)
-For 500+ targets, partition tracks by geographic sector:
-
-```
-Sector A (North): Fusion Worker A handles tracks in [32°N-33°N]
-Sector B (South): Fusion Worker B handles tracks in [31°N-32°N]
-Overlap zone: Both workers correlate, primary resolves duplicates
-```
-
-Adds complexity — only justified above 500 simultaneous targets.
+The core insight is that the fusion pipeline is CPU-bound and grows super-linearly with target count, while the WebSocket broadcast is I/O-bound and grows linearly with operator count. These two workloads should be separated and scaled independently.
 
 ---
 
-## 5. WebSocket Optimization
+## Current Architecture
 
-### 5.1 Delta Encoding
-Instead of full RAP snapshot every tick, send only changed fields:
+### Process Model
 
-```typescript
-interface RapDelta {
-  tick: number;
-  updated: Array<{ id: string; lat?: number; lon?: number; alt?: number; status?: string }>;
-  removed: string[];  // Track IDs dropped
-  added: SystemTrack[];  // Full data for new tracks
-}
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Single Node.js Process                     │
+│                         (apps/api)                            │
+│                                                               │
+│  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐   │
+│  │ Fastify HTTP │  │  LiveEngine   │  │  WebSocket Server │   │
+│  │  (REST API)  │  │  (sim loop)   │  │  (ws broadcast)   │   │
+│  └──────┬──────┘  └──────┬───────┘  └────────┬──────────┘   │
+│         │                │                    │               │
+│         │         ┌──────▼───────┐            │               │
+│         │         │ TrackManager  │            │               │
+│         │         │ Correlator    │            │               │
+│         │         │ Fuser         │            │               │
+│         │         │ EventStore    │            │               │
+│         │         └──────────────┘            │               │
+│         │                                     │               │
+│         └──────────────────┬──────────────────┘               │
+│                            │                                  │
+│                    In-Memory State                             │
+│              (tracks, sensors, geometry)                       │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-Expected reduction: 50KB → 2-5KB per tick (90%+ reduction).
+All components share the same V8 event loop. The simulation loop (`LiveEngine.tick()`) runs on a `setInterval`, and each tick must complete before the next event loop iteration can process HTTP requests or WebSocket messages.
 
-### 5.2 Binary Encoding
-Replace JSON with MessagePack or Protocol Buffers for WS messages:
+### State Management
 
-| Format | 100 tracks payload | Encode time | Decode time |
-|--------|-------------------|-------------|-------------|
-| JSON | ~50KB | ~5ms | ~3ms |
-| MessagePack | ~25KB | ~2ms | ~1ms |
-| Protobuf | ~15KB | ~1ms | ~0.5ms |
+All state is held in memory:
 
-Recommendation: **MessagePack** — good compression, no schema compilation step, easy migration from JSON.
+| State                    | Structure                    | Size at 20 targets |
+|:-------------------------|:-----------------------------|:-------------------|
+| System tracks            | `Map<SystemTrackId, Track>`  | ~50 KB             |
+| Event store              | `Array<DomainEvent>`         | ~200 KB (growing)  |
+| Sensor state             | `Map<SensorId, SensorState>` | ~10 KB             |
+| Geometry (bearings, tri) | Arrays per track             | ~30 KB             |
+| EO management state      | `EoManagementModule`         | ~20 KB             |
 
-### 5.3 Client-Side Throttling
-Operators viewing zoomed-in regions don't need updates for off-screen tracks. Implement viewport-based filtering:
+Total memory at 20 targets: ~310 KB. At 100 targets this grows to ~2 MB for tracks but the event store grows unboundedly (mitigated by periodic compaction in the current code).
 
-```typescript
-// Server-side: client registers viewport
-ws.on('viewport', ({ bounds }) => {
-  client.viewport = bounds;
-});
+### WebSocket Broadcasting
 
-// Broadcast: filter per client
-for (const client of clients) {
-  const visible = tracks.filter(t => isInBounds(t, client.viewport));
-  client.send(encode(visible));
-}
-```
+`LiveEngine.broadcastRap()` serializes the full RAP state and sends it to every connected WebSocket client. With broadcast throttling (max 4/sec at >2x speed), each client receives up to 4 JSON messages per second, each containing the full track picture.
 
 ---
 
-## 6. Event Sourcing at Scale
+## Bottleneck Analysis
 
-### 6.1 Current Event Store
-In-memory array, unbounded growth. At 500 events/sec × 15 min = 450,000 events (~90MB).
+### Correlation Complexity
 
-### 6.2 Scaled Event Store
+The correlator checks every incoming observation against every existing system track. With `n` tracks and `m` observations per tick:
 
-```sql
-CREATE TABLE events (
-  id BIGSERIAL PRIMARY KEY,
-  session_id UUID NOT NULL,
-  tick INTEGER NOT NULL,
-  event_type VARCHAR(50) NOT NULL,
-  entity_id VARCHAR(100),
-  payload JSONB NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+- Current: O(n * m) per tick with distance gating
+- At 100 tracks, 10 sensors reporting 5 obs each: 100 * 50 = 5,000 correlation checks per tick
+- Each check involves covariance-weighted distance, which is computationally non-trivial
+- Measured: ~15ms per tick at 20 tracks, extrapolated ~180ms at 100 tracks
+- At 200ms tick interval, this leaves almost no headroom for fusion and broadcasting
 
-CREATE INDEX idx_events_session_tick ON events(session_id, tick);
-CREATE INDEX idx_events_entity ON events(entity_id);
+### Single-Threaded Event Loop
+
+Node.js processes JavaScript on a single thread. During a `LiveEngine.tick()`, the event loop is blocked:
+
+```
+Timeline for one tick at 100 targets (estimated):
+├── processSimEvents()     80 ms   (observation ingestion)
+├── correlate()           100 ms   (O(n*m) matching)
+├── fuse()                 30 ms   (state update)
+├── triangulate()          20 ms   (geometry)
+├── eoManagement()         15 ms   (tasking decisions)
+├── broadcastRap()         25 ms   (JSON serialize + send)
+└── TOTAL                 270 ms   ← exceeds 200ms tick interval
 ```
 
-**Write strategy**: Batch INSERT every 1 second (500 events/batch). PostgreSQL handles this easily.
+When tick processing exceeds the tick interval, ticks queue up, latency grows, and the system falls behind real time.
 
-**Read strategy**: Query by session + tick range for replay. JSONB indexing for entity-specific queries.
+### Memory Pressure
 
-**Retention**: Auto-delete sessions older than 30 days via pg_cron.
+The event store is append-only. At 100 targets with 10 sensors:
 
-### 6.3 Replay from Events
-Full deterministic replay by replaying events through fusion pipeline:
+- ~1,000 events/second (observations + state changes)
+- ~500 bytes per event
+- ~500 KB/second, ~1.8 GB/hour
+- V8 heap limit: 1.5 GB by default (can be raised, but GC pauses grow)
 
-```typescript
-async replaySession(sessionId: string, fromTick: number, toTick: number) {
-  const events = await db.query(
-    'SELECT * FROM events WHERE session_id = $1 AND tick BETWEEN $2 AND $3 ORDER BY tick, id',
-    [sessionId, fromTick, toTick]
-  );
-  for (const event of events) {
-    trackManager.processEvent(event);
-  }
-}
+### WebSocket Fan-Out
+
+Each broadcast serializes the full RAP and sends it to every client:
+
+- Full RAP at 100 tracks: ~150 KB JSON
+- 10 operators * 4 broadcasts/sec = 40 sends/sec
+- Bandwidth: ~6 MB/sec outbound (manageable, but serialization cost is the bottleneck)
+- JSON.stringify on a 100-track RAP takes ~5ms per call
+
+---
+
+## Proposed Architecture
+
+### System Overview
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  Operator    │     │  Operator    │     │  Operator    │
+│  Workstation │     │  Workstation │     │  Workstation │
+└──────┬──────┘     └──────┬──────┘     └──────┬──────┘
+       │                   │                   │
+       └───────────────────┼───────────────────┘
+                           │ WebSocket
+                    ┌──────▼──────┐
+                    │  WS Gateway  │  (horizontally scaled)
+                    │  (read from  │
+                    │   Redis pub) │
+                    └──────┬──────┘
+                           │ Redis Pub/Sub
+       ┌───────────────────┼───────────────────┐
+       │                   │                   │
+┌──────▼──────┐     ┌──────▼──────┐     ┌──────▼──────┐
+│ Fusion       │     │ Fusion       │     │ API          │
+│ Worker       │     │ Worker       │     │ (REST)       │
+│ (Sector A)   │     │ (Sector B)   │     │ (stateless)  │
+└──────┬──────┘     └──────┬──────┘     └──────┬──────┘
+       │                   │                   │
+       └───────────────────┼───────────────────┘
+                           │
+              ┌────────────┼────────────┐
+              │            │            │
+       ┌──────▼──┐  ┌──────▼──┐  ┌─────▼───┐
+       │  Redis   │  │  Redis   │  │ Postgres │
+       │  (hot    │  │  Streams │  │ (durable │
+       │   state) │  │  (events)│  │  state)  │
+       └─────────┘  └─────────┘  └─────────┘
 ```
 
----
+### Event-Sourced State with Redis Streams
 
-## 7. Cloud Run Deployment at Scale
+Replace the in-memory `EventStore` with Redis Streams:
 
-### 7.1 Resource Sizing
+- **Stream per sensor**: `events:sensor:{sensorId}` — raw observations
+- **Stream per sector**: `events:sector:{sectorId}` — correlated/fused events
+- **Consumer groups**: each fusion worker is a consumer in its sector group
+- **Retention**: 1 hour sliding window (configurable), with PostgreSQL for long-term storage
 
-| Component | CPU | Memory | Min Instances | Max Instances |
-|-----------|-----|--------|---------------|---------------|
-| API Gateway | 1 vCPU | 512Mi | 1 | 10 |
-| Fusion Engine | 4 vCPU | 2Gi | 1 | 1 |
-| PostgreSQL | 2 vCPU | 4Gi | 1 (Cloud SQL) | 1 |
-| Redis | — | 1Gi | 1 (Memorystore) | 1 |
+Benefits:
+- Events survive process restarts
+- Multiple consumers can replay from any point
+- Built-in backpressure via consumer group acknowledgment
+- Redis Streams throughput: >100K messages/sec on a single node
 
-### 7.2 Cost Estimate (GCP)
+### Fusion Workers
 
-| Component | Monthly Cost (est.) |
-|-----------|-------------------|
-| Cloud Run (API × 2 avg) | $30-60 |
-| Cloud Run (Fusion × 1) | $40-80 |
-| Cloud SQL (db-f1-micro) | $10-15 |
-| Memorystore (1GB) | $35 |
-| **Total** | **$115-190/mo** |
+Each fusion worker runs the existing `TrackManager` + `Correlator` + `Fuser` logic but scoped to a geographic sector:
 
-For demo/training use with intermittent load, costs drop significantly with min-instances=0 on API gateways.
+- Reads observations from its assigned sensor streams
+- Maintains its own track state for tracks within its sector
+- Publishes fused track updates to a shared Redis hash and a pub/sub channel
+- Handles sector boundary handoff by publishing "track-leaving" events
 
-### 7.3 Auto-Scaling Triggers
-- API Gateway: Scale on concurrent connections (threshold: 50 per instance)
-- Fusion Engine: No auto-scaling (single writer). Health check restarts on failure.
+Worker isolation means a slow sector does not block other sectors. Each worker can run on a dedicated CPU core or container.
 
----
+### Shared Track Store
 
-## 8. Monitoring & Observability
+The recognized air picture is stored in Redis as a hash:
 
-### 8.1 Key Metrics
-```typescript
-const metrics = {
-  // Fusion performance
-  'fusion.tick_duration_ms': histogram,
-  'fusion.observations_per_sec': gauge,
-  'fusion.active_tracks': gauge,
-  'fusion.correlation_time_ms': histogram,
-
-  // WebSocket
-  'ws.connected_clients': gauge,
-  'ws.broadcast_size_bytes': histogram,
-  'ws.messages_per_sec': gauge,
-
-  // System
-  'system.memory_mb': gauge,
-  'system.cpu_percent': gauge,
-  'system.event_store_size': gauge,
-};
+```
+HSET track:{trackId} state <JSON> covariance <JSON> status confirmed ...
 ```
 
-### 8.2 Alerting
-- Tick duration > 500ms → WARNING (fusion falling behind)
-- Tick duration > 900ms → CRITICAL (real-time broken)
-- Memory > 80% → WARNING
-- WebSocket disconnection rate > 10%/min → WARNING
+- **Optimistic locking** via Redis `WATCH`/`MULTI`/`EXEC` prevents conflicting updates from different fusion workers
+- **TTL on tracks**: dropped tracks expire after configurable timeout
+- **Pub/sub notification**: on every track update, publish to `channel:rap-updates`
+- The WS Gateway subscribes to this channel to push updates to operators
 
-### 8.3 Structured Logging
-```typescript
-logger.info({
-  component: 'fusion',
-  tick: currentTick,
-  tracks: activeTracks.length,
-  observations: obsCount,
-  durationMs: tickDuration,
-  msg: 'tick complete'
-});
+### WebSocket Gateway
+
+A dedicated service that:
+
+1. Subscribes to `channel:rap-updates` via Redis pub/sub
+2. Maintains WebSocket connections to operator workstations
+3. Assembles the RAP view by reading from the Redis track store
+4. Sends delta updates (not full snapshots) to reduce bandwidth
+5. Handles `rap.snapshot` requests by reading full state from Redis
+
+This service is stateless except for the WebSocket connections themselves, so it scales horizontally with session affinity.
+
+### API Tier
+
+The REST API (`/api/operator/*`, `/api/quality/*`, `/api/reports/*`, `/api/deployment/*`) becomes fully stateless:
+
+- Reads track state from Redis
+- Writes operator overrides to Redis (which fusion workers pick up)
+- Generates reports from PostgreSQL historical data
+- Scales horizontally via Cloud Run auto-scaling
+
+---
+
+## Horizontal Scaling Strategy
+
+### Stateless API Tier
+
+- Cloud Run auto-scales based on request concurrency
+- Target: 80 concurrent requests per instance
+- No sticky sessions needed
+- Shared state in Redis/PostgreSQL
+
+### Fusion Tier: Geographic Partitioning
+
+Partition the operational area into sectors. Each sector is assigned to one fusion worker.
+
+```
+┌─────────────────────────────────────────┐
+│           Operational Area               │
+│                                          │
+│   ┌──────────────┬──────────────┐       │
+│   │              │              │       │
+│   │  Sector A    │  Sector B    │       │
+│   │  (Worker 1)  │  (Worker 2)  │       │
+│   │              │              │       │
+│   ├──────────────┼──────────────┤       │
+│   │              │              │       │
+│   │  Sector C    │  Sector D    │       │
+│   │  (Worker 3)  │  (Worker 4)  │       │
+│   │              │              │       │
+│   └──────────────┴──────────────┘       │
+│                                          │
+└─────────────────────────────────────────┘
 ```
 
-Use Cloud Logging with structured JSON. Query by component, filter by duration.
+**Sector assignment rules:**
+- Sensors are assigned to sectors based on their geodetic position
+- Tracks are owned by the sector containing their current position
+- Tracks near sector boundaries are processed by both adjacent workers (overlap zone of 5 km)
+- Track handoff: when a track moves from Sector A to Sector B, Worker A publishes a `track-handoff` event; Worker B adopts the track state
+
+**Scaling:**
+- 4 sectors for 100 targets (25 tracks per worker)
+- 16 sectors for 400 targets
+- Sectors can be split dynamically based on track density
+
+### WebSocket Tier: Session Affinity
+
+- Cloud Run session affinity ensures a client stays connected to the same instance
+- Each WS Gateway instance handles up to 100 concurrent connections
+- 10 operators = 1 instance; 100 operators = 2 instances
+- State is in Redis, so failover is seamless (client reconnects, gets `rap.snapshot`)
 
 ---
 
-## 9. Migration Path
+## Database Architecture
 
-### Phase 1: Vertical Scaling (Current → 50 targets)
-- Increase Cloud Run to 2 vCPU, 1Gi
-- Add R-tree spatial indexing
-- Implement delta encoding for WS
-- Add event store batching to PostgreSQL
-- **Effort**: 1-2 weeks
+### PostgreSQL: Durable State
 
-### Phase 2: Service Split (50 → 200 targets)
-- Separate fusion engine from API gateway
-- Add Redis Pub/Sub for RAP relay
-- Stateless API gateways with horizontal scaling
-- MessagePack binary encoding
-- **Effort**: 2-3 weeks
+| Table               | Purpose                              | Write Rate     |
+|:--------------------|:-------------------------------------|:---------------|
+| `events`            | Event store (append-only)            | ~1,000/sec     |
+| `track_history`     | Track state snapshots (every 5 sec)  | ~20/sec        |
+| `operator_actions`  | Audit log of operator overrides      | ~1/min         |
+| `scenarios`         | Scenario definitions and results     | Rare           |
+| `reports`           | Generated report artifacts           | Rare           |
+| `sensor_config`     | Sensor positions, calibration        | Rare           |
 
-### Phase 3: Full Scale (200+ targets)
-- Geographic track partitioning
-- WASM matrix computation
-- Viewport-based client filtering
-- Event replay infrastructure
-- **Effort**: 3-4 weeks
+**Partitioning strategy:**
+- `events` table partitioned by timestamp (daily partitions)
+- `track_history` partitioned by timestamp (hourly partitions)
+- Retention: 30 days online, archive to Cloud Storage
+
+### Redis: Hot State
+
+| Key Pattern                  | Type       | Purpose                        | TTL      |
+|:-----------------------------|:-----------|:-------------------------------|:---------|
+| `track:{trackId}`            | Hash       | Current fused track state      | 60s      |
+| `sensor:{sensorId}`          | Hash       | Current sensor state           | 30s      |
+| `sector:{sectorId}:tracks`   | Set        | Track IDs in sector            | None     |
+| `events:sensor:{sensorId}`   | Stream     | Raw observation events         | 1 hour   |
+| `events:sector:{sectorId}`   | Stream     | Fused events per sector        | 1 hour   |
+| `channel:rap-updates`        | Pub/Sub    | Real-time track update channel | N/A      |
+| `lock:track:{trackId}`       | String     | Optimistic lock token          | 5s       |
+| `operator:overrides`         | Hash       | Active operator overrides      | None     |
+
+**Redis deployment:**
+- GCP Memorystore (managed Redis 7.0)
+- Minimum: 4 GB instance (handles 100 tracks comfortably)
+- High availability: replica in second zone
 
 ---
 
-## 10. Technology Recommendations
+## Performance Targets
 
-| Need | Recommended | Alternative |
-|------|-------------|-------------|
-| Spatial index | rbush (R-tree) | Flatbush (static) |
-| Message relay | Redis Pub/Sub | NATS |
-| Binary encoding | MessagePack | Protobuf |
-| Matrix math | Current JS | WASM (assemblyscript) |
-| Monitoring | Cloud Monitoring | Prometheus + Grafana |
-| Task queue | Bull (Redis) | Cloud Tasks |
+| Metric                         | Current (Demo) | Phase 2 Target  | Phase 3 Target  |
+|:-------------------------------|:---------------|:----------------|:----------------|
+| Max targets                    | ~50            | ~50             | 200+            |
+| Max sensors                    | ~8             | ~8              | 20+             |
+| Max concurrent operators       | ~3             | ~20             | 50+             |
+| Tick-to-display latency        | ~50 ms         | ~100 ms         | <200 ms         |
+| Correlation time (per tick)    | ~15 ms         | ~15 ms          | ~20 ms/sector   |
+| WebSocket broadcast size       | ~50 KB (full)  | ~5 KB (delta)   | ~5 KB (delta)   |
+| Memory per process             | ~300 MB        | ~200 MB (API)   | ~100 MB/worker  |
+| Event throughput               | ~200/sec       | ~500/sec        | ~5,000/sec      |
+| Recovery time (process crash)  | Full restart   | WS reconnect    | <5 sec failover |
 
 ---
 
-## 11. Conclusion
+## Migration Path
 
-ELOC2 can scale to 100+ targets on a single optimized process (Phase 1) with R-tree indexing and delta encoding. Beyond 50 targets, splitting fusion from API gateways (Phase 2) provides horizontal scaling for operators while maintaining fusion consistency. The architecture avoids premature complexity — each phase is adopted only when the previous phase's limits are reached.
+### Phase 1: Optimize Current Architecture (2-4 weeks)
 
-Key principle: **Fusion is inherently single-writer**. Scale reads (API, WebSocket) horizontally; scale writes (fusion) vertically until geographic partitioning is justified.
+**Goal: extend the single-process model to handle ~50 targets reliably.**
+
+No architectural changes. Optimizations within the existing codebase:
+
+1. **Spatial indexing for correlation**: Replace brute-force O(n*m) with a k-d tree or R-tree. Reduces correlation to O(m * log n). Libraries: `kd-tree-javascript` or `rbush`.
+
+2. **Delta broadcasts**: Instead of serializing the full RAP every tick, track what changed since the last broadcast and send only deltas. Reduces serialization from ~5ms to ~0.5ms.
+
+3. **Event store compaction**: Compact the in-memory event store every 60 seconds, keeping only the last 100 events per track. Caps memory growth.
+
+4. **Worker thread for fusion**: Move the correlation + fusion computation to a Node.js `worker_threads` worker. The main thread handles HTTP and WebSocket I/O while the worker computes the next tick.
+
+5. **Binary WebSocket messages**: Replace JSON serialization with MessagePack or Protocol Buffers. Reduces serialization CPU and bandwidth by ~60%.
+
+**Estimated effort**: 2 weeks of development, no infrastructure changes.
+
+### Phase 2: Extract WebSocket Gateway (4-6 weeks)
+
+**Goal: decouple operator connections from the fusion process.**
+
+1. Deploy Redis (Memorystore) for pub/sub and hot state
+2. `LiveEngine` publishes track updates to Redis instead of directly to WebSocket clients
+3. New `ws-gateway` service subscribes to Redis and manages operator connections
+4. API routes become stateless (read from Redis)
+5. `ws-gateway` scales independently on Cloud Run
+
+```
+Before:  [LiveEngine + WS + API]  (1 process)
+After:   [LiveEngine + API] ──Redis──> [WS Gateway x N]
+```
+
+**Key benefit**: operator count no longer affects fusion performance. Adding operators only scales the WS tier.
+
+**Estimated effort**: 4 weeks of development, Redis instance provisioned.
+
+### Phase 3: Distributed Fusion (8-12 weeks)
+
+**Goal: handle 100+ targets across geographic sectors.**
+
+1. Split `LiveEngine` into sector-scoped fusion workers
+2. Implement geographic partitioning and track handoff protocol
+3. Replace in-memory event store with Redis Streams
+4. Add PostgreSQL for durable event storage and reporting
+5. Implement sector boundary management (overlap zones, handoff events)
+6. Deploy fusion workers as separate Cloud Run services or Kubernetes pods
+
+**Estimated effort**: 8-12 weeks, significant testing required for sector handoff correctness.
+
+---
+
+## Cost Implications
+
+| Component              | Phase 1       | Phase 2          | Phase 3            |
+|:-----------------------|:--------------|:-----------------|:-------------------|
+| Cloud Run (API)        | $50/month     | $50/month        | $80/month          |
+| Cloud Run (WS Gateway) | Included      | $30/month        | $60/month          |
+| Cloud Run (Fusion)     | Included      | Included         | $120/month         |
+| Redis (Memorystore)    | Not needed    | $70/month (1GB)  | $140/month (4GB)   |
+| PostgreSQL (Cloud SQL) | Not needed    | Not needed       | $100/month (basic) |
+| **Total monthly**      | **$50**       | **$150**         | **$500**           |
+
+All estimates assume GCP `me-west1` region pricing with sustained use discounts. Costs scale sub-linearly: doubling operators adds ~$30/month (WS tier), doubling targets adds ~$60/month (fusion tier).
+
+---
+
+## Recommendation
+
+**Do not over-engineer prematurely.** The current single-process architecture is correct for the demonstrator and will remain correct for early operational use.
+
+| Trigger                                      | Action                     |
+|:---------------------------------------------|:---------------------------|
+| Demo and evaluation (current)                | Stay on Phase 1 (optimize) |
+| Deployed with >5 simultaneous operators      | Execute Phase 2            |
+| Operational requirement for >50 live targets  | Execute Phase 3            |
+| Customer requests multi-site federation       | Phase 3 + federation layer |
+
+The Phase 1 optimizations (spatial indexing, delta broadcasts, worker thread) should be implemented regardless, as they improve the demonstrator experience at minimal cost and risk.
+
+Phase 2 (WS gateway extraction) is the highest-value architectural change: it is relatively simple, low-risk, and decouples the two fundamentally different workloads (compute-bound fusion vs I/O-bound broadcasting).
+
+Phase 3 should only be pursued when there is a concrete operational requirement for >50 targets. The geographic partitioning and track handoff logic is complex and introduces new failure modes (split-brain sectors, handoff races). It should be thoroughly tested with synthetic load before deployment.
+
+---
+
+## References
+
+- Node.js Worker Threads: https://nodejs.org/api/worker_threads.html
+- Redis Streams: https://redis.io/docs/data-types/streams/
+- Cloud Run Session Affinity: https://cloud.google.com/run/docs/configuring/session-affinity
+- ELOC2 LiveEngine: `apps/api/src/simulation/live-engine.ts`
+- ELOC2 TrackManager: `packages/fusion-core/`
+- ELOC2 EventStore: `packages/fusion-core/src/event-store.ts`
+- ELOC2 Domain Types: `packages/domain/src/`
+- R-tree spatial index: https://github.com/mourner/rbush
+- MessagePack for JS: https://github.com/msgpack/msgpack-javascript
