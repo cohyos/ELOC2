@@ -2,11 +2,13 @@ import React, { useEffect, useRef, useCallback } from 'react';
 import type maplibregl from 'maplibre-gl';
 import type { SystemTrack, SensorState } from '@eloc2/domain';
 import type { LayerVisibility } from '../stores/ui-store';
+import { useUiStore } from '../stores/ui-store';
 import type { GroundTruthTarget } from '../stores/ground-truth-store';
 import type { CoverZone, OperationalZone } from '../stores/cover-zone-store';
 import type { SearchModeStateWS } from '../stores/sensor-store';
 import type { FovOverlap, BearingAssociation, MultiSensorResolution } from '../stores/fov-overlap-store';
 import { resolveTrackSymbol, resolveSensorSymbol } from './symbols/symbol-resolver';
+import { EoVideoPopup } from './EoVideoPopup';
 
 /**
  * DebugOverlay — Primary HTML/SVG-based renderer.
@@ -597,26 +599,41 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
       }
     }
 
-    // Draw trail dots (fading breadcrumbs behind tracks)
+    // Draw trail dots (fading breadcrumbs behind tracks) with newest-dot flash
     if (showTracks && trailHistory.size > 0) {
       const trackStatusMap = new Map(tracks.map(t => [t.systemTrackId as string, t.status]));
       for (const [trackId, positions] of trailHistory) {
         const status = trackStatusMap.get(trackId) ?? 'tentative';
         const color = statusColor(status);
         const count = positions.length;
+        // The newest trail dot is at index count - 2 (count - 1 is current position)
+        const newestTrailIdx = count - 2;
         // Skip last position (that's the current track icon position)
         for (let i = 0; i < count - 1; i++) {
           const age = count - 1 - i;
-          const opacity = Math.max(0.15, 1.0 - (age / 5) * 0.85);
+          const isNewest = i === newestTrailIdx;
+          const opacity = isNewest ? 1.0 : Math.max(0.15, 1.0 - (age / 5) * 0.85);
+          const size = isNewest ? 8 : 6;
+          const halfSize = size / 2;
           const { lon, lat } = positions[i];
           if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
           const px = proj(lon, lat);
           const dot = document.createElement('div');
-          dot.style.cssText = `
-            position:absolute; left:${px.x - 3}px; top:${px.y - 3}px;
-            width:6px; height:6px; border-radius:50%; background:${color};
-            opacity:${opacity}; z-index:18;
-          `;
+          if (isNewest) {
+            dot.style.cssText = `
+              position:absolute; left:${px.x - halfSize}px; top:${px.y - halfSize}px;
+              width:${size}px; height:${size}px; border-radius:50%; background:${color};
+              opacity:1; z-index:19;
+              box-shadow:0 0 6px 2px ${color};
+              animation:trail-flash 0.8s ease-out;
+            `;
+          } else {
+            dot.style.cssText = `
+              position:absolute; left:${px.x - halfSize}px; top:${px.y - halfSize}px;
+              width:${size}px; height:${size}px; border-radius:50%; background:${color};
+              opacity:${opacity}; z-index:18;
+            `;
+          }
           container.appendChild(dot);
         }
       }

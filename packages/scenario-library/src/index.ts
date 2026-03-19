@@ -8,6 +8,7 @@ export type {
   FaultDefinition,
   OperatorActionDef,
   ScenarioDefinition,
+  DeploymentDefinition,
 } from './types.js';
 
 // ── Scenarios ──────────────────────────────────────────────────────────────
@@ -29,6 +30,11 @@ export {
   operatorOverride,
   simpleScenarios,
 } from './scenarios/simple-scenarios.js';
+
+// ── Deployments ───────────────────────────────────────────────────────────
+export { discoverySquadron } from './deployments/discovery-squadron.js';
+export { borderLine } from './deployments/border-line.js';
+export { deployments, getDeploymentById } from './deployments/index.js';
 
 // ── Lookup ─────────────────────────────────────────────────────────────────
 import type { ScenarioDefinition } from './types.js';

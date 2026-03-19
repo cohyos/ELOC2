@@ -2,6 +2,14 @@ import type { FastifyInstance } from 'fastify';
 import type { LiveEngine } from '../simulation/live-engine.js';
 import type { ScenarioDefinition } from '@eloc2/scenario-library';
 import { generateId } from '@eloc2/shared-utils';
+import { requireRole } from '../auth/auth-middleware.js';
+
+const AUTH_ENABLED = process.env.AUTH_ENABLED === 'true';
+
+/** Returns instructor-only preHandler array when auth is enabled, empty otherwise */
+function instructorGuard() {
+  return AUTH_ENABLED ? [requireRole('instructor')] : [];
+}
 
 // ---------------------------------------------------------------------------
 // In-memory custom scenario storage (lost on restart — acceptable for demo)
@@ -55,8 +63,8 @@ export function validateScenario(def: ScenarioDefinition): { errors: string[]; w
 export async function editorRoutes(app: FastifyInstance, engine: LiveEngine) {
   // ── Custom Scenario CRUD ───────────────────────────────────────────────
 
-  // POST /api/scenarios/custom — Save a custom scenario
-  app.post<{ Body: ScenarioDefinition }>('/api/scenarios/custom', async (request, reply) => {
+  // POST /api/scenarios/custom — Save a custom scenario (Instructor only)
+  app.post<{ Body: ScenarioDefinition }>('/api/scenarios/custom', { preHandler: instructorGuard() }, async (request, reply) => {
     const def = request.body;
     if (!def || typeof def !== 'object') {
       return reply.code(400).send({ error: 'Request body must be a ScenarioDefinition' });
@@ -76,8 +84,8 @@ export async function editorRoutes(app: FastifyInstance, engine: LiveEngine) {
     return { ok: true, scenarioId };
   });
 
-  // GET /api/scenarios/custom — List custom scenarios
-  app.get('/api/scenarios/custom', async () => {
+  // GET /api/scenarios/custom — List custom scenarios (Instructor only)
+  app.get('/api/scenarios/custom', { preHandler: instructorGuard() }, async () => {
     const scenarios = [...customScenarios.values()].map(s => ({
       id: s.id,
       name: s.name,
@@ -89,8 +97,8 @@ export async function editorRoutes(app: FastifyInstance, engine: LiveEngine) {
     return { scenarios };
   });
 
-  // DELETE /api/scenarios/custom/:id — Delete a custom scenario
-  app.delete<{ Params: { id: string } }>('/api/scenarios/custom/:id', async (request, reply) => {
+  // DELETE /api/scenarios/custom/:id — Delete a custom scenario (Instructor only)
+  app.delete<{ Params: { id: string } }>('/api/scenarios/custom/:id', { preHandler: instructorGuard() }, async (request, reply) => {
     const { id } = request.params;
     if (!customScenarios.has(id)) {
       return reply.code(404).send({ error: 'Custom scenario not found', scenarioId: id });
@@ -99,8 +107,8 @@ export async function editorRoutes(app: FastifyInstance, engine: LiveEngine) {
     return { ok: true };
   });
 
-  // POST /api/scenarios/validate — Validate a ScenarioDefinition
-  app.post<{ Body: ScenarioDefinition }>('/api/scenarios/validate', async (request, reply) => {
+  // POST /api/scenarios/validate — Validate a ScenarioDefinition (Instructor only)
+  app.post<{ Body: ScenarioDefinition }>('/api/scenarios/validate', { preHandler: instructorGuard() }, async (request, reply) => {
     const def = request.body;
     if (!def || typeof def !== 'object') {
       return reply.code(400).send({ error: 'Request body must be a ScenarioDefinition' });
@@ -112,7 +120,7 @@ export async function editorRoutes(app: FastifyInstance, engine: LiveEngine) {
 
   // ── Live Injection ─────────────────────────────────────────────────────
 
-  // POST /api/scenario/inject-fault — Live inject fault during running scenario
+  // POST /api/scenario/inject-fault — Live inject fault during running scenario (Instructor only)
   app.post<{
     Body: {
       type: 'azimuth_bias' | 'clock_drift' | 'sensor_outage';
@@ -120,7 +128,7 @@ export async function editorRoutes(app: FastifyInstance, engine: LiveEngine) {
       magnitude?: number;
       durationSec: number;
     };
-  }>('/api/scenario/inject-fault', async (request, reply) => {
+  }>('/api/scenario/inject-fault', { preHandler: instructorGuard() }, async (request, reply) => {
     const { type, sensorId, magnitude, durationSec } = request.body;
 
     if (!type || !sensorId || !durationSec || durationSec <= 0) {
@@ -151,7 +159,7 @@ export async function editorRoutes(app: FastifyInstance, engine: LiveEngine) {
       headingDeg: number;
       label?: string;
     };
-  }>('/api/scenario/inject-target', async (request, reply) => {
+  }>('/api/scenario/inject-target', { preHandler: instructorGuard() }, async (request, reply) => {
     const { lat, lon, alt, speed, headingDeg, label } = request.body;
 
     if (lat == null || lon == null || alt == null || speed == null || headingDeg == null) {
@@ -175,7 +183,7 @@ export async function editorRoutes(app: FastifyInstance, engine: LiveEngine) {
       targetId?: string;
       durationSec?: number;
     };
-  }>('/api/scenario/inject-action', async (request, reply) => {
+  }>('/api/scenario/inject-action', { preHandler: instructorGuard() }, async (request, reply) => {
     const { type, sensorId, targetId, durationSec } = request.body;
 
     if (!type) {
@@ -191,8 +199,8 @@ export async function editorRoutes(app: FastifyInstance, engine: LiveEngine) {
     return { ok: true };
   });
 
-  // GET /api/scenario/injection-log — View injection history
-  app.get('/api/scenario/injection-log', async () => {
+  // GET /api/scenario/injection-log — View injection history (Instructor only)
+  app.get('/api/scenario/injection-log', { preHandler: instructorGuard() }, async () => {
     return { log: engine.getInjectionLog() };
   });
 }

@@ -14,10 +14,18 @@ import {
 } from '@eloc2/database';
 import { authMiddleware, requireRole } from '../auth/auth-middleware.js';
 
+const AUTH_ENABLED = process.env.AUTH_ENABLED === 'true';
 const MAX_INSTRUCTORS = 1;
 const MAX_OPERATORS = 10;
 
 export function registerAuthRoutes(app: FastifyInstance): void {
+  // -----------------------------------------------------------------------
+  // GET /api/auth/status — Public: tells frontend whether auth is enabled
+  // -----------------------------------------------------------------------
+  app.get('/api/auth/status', async () => {
+    return { enabled: AUTH_ENABLED };
+  });
+
   // -----------------------------------------------------------------------
   // POST /api/auth/login
   // -----------------------------------------------------------------------

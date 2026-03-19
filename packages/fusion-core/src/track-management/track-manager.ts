@@ -17,7 +17,7 @@ import { createEventEnvelope } from '@eloc2/events';
 import { generateId, haversineDistanceM } from '@eloc2/shared-utils';
 
 import { correlate } from '../correlation/correlator.js';
-import type { CorrelationResult } from '../correlation/correlator.js';
+import type { CorrelationResult, CorrelatorConfig } from '../correlation/correlator.js';
 import { fuseObservation, fuseWithRegistration } from '../fusion/fuser.js';
 import type { FusedState } from '../fusion/fuser.js';
 import { normalizeObservation } from '../ingest/source-ingest.js';
@@ -66,9 +66,42 @@ export class TrackManager {
 
   private readonly meta: Map<string, TrackMeta> = new Map();
   private readonly config: TrackManagerConfig;
+  private correlatorConfig: CorrelatorConfig = { gateThreshold: 16.27 };
+  private mergeDistanceM: number = 3000;
 
   constructor(config: Partial<TrackManagerConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+  }
+
+  // ── Runtime configuration ─────────────────────────────────────────────
+
+  /**
+   * Update the correlator configuration at runtime.
+   * Affects all subsequent correlate() calls.
+   */
+  setCorrelatorConfig(config: Partial<CorrelatorConfig>): void {
+    this.correlatorConfig = { ...this.correlatorConfig, ...config };
+  }
+
+  /**
+   * Get the current correlator configuration.
+   */
+  getCorrelatorConfig(): CorrelatorConfig {
+    return { ...this.correlatorConfig };
+  }
+
+  /**
+   * Set the merge distance used by mergeCloseTracks().
+   */
+  setMergeDistance(distanceM: number): void {
+    this.mergeDistanceM = distanceM;
+  }
+
+  /**
+   * Get the current merge distance.
+   */
+  getMergeDistance(): number {
+    return this.mergeDistanceM;
   }
 
   // ── Create ────────────────────────────────────────────────────────────────
@@ -338,7 +371,7 @@ export class TrackManager {
 
     // 2. Correlate against non-dropped tracks
     const activeTracks = this.getAllTracks().filter((t) => t.status !== 'dropped');
-    const correlationResult = correlate(normalized, activeTracks);
+    const correlationResult = correlate(normalized, activeTracks, this.correlatorConfig);
 
     // 3. Build correlation event
     const correlationEnvelope = createEventEnvelope(
@@ -451,7 +484,7 @@ export class TrackManager {
       // Try to correlate the cluster against existing tracks using the first member
       const firstNormalized = normalizeObservation(cluster[0]);
       const activeTracks = this.getAllTracks().filter(t => t.status !== 'dropped');
-      const correlationResult = correlate(firstNormalized, activeTracks);
+      const correlationResult = correlate(firstNormalized, activeTracks, this.correlatorConfig);
 
       if (correlationResult.decision === 'associated') {
         // Match found: fuse ALL cluster members into the matched track sequentially
@@ -516,7 +549,8 @@ export class TrackManager {
    * Called after each tick to clean up duplicate tracks that slipped through
    * the correlation gate. Returns the number of merges performed.
    */
-  mergeCloseTracks(maxDistM: number = 3000): number {
+  mergeCloseTracks(maxDistM?: number): number {
+    const effectiveMaxDist = maxDistM ?? this.mergeDistanceM;
     let mergeCount = 0;
     let merged = true;
 
@@ -530,7 +564,7 @@ export class TrackManager {
             active[i].state.lat, active[i].state.lon,
             active[j].state.lat, active[j].state.lon,
           );
-          if (dist <= maxDistM) {
+          if (dist <= effectiveMaxDist) {
             this.mergeTracks(active[i].systemTrackId, active[j].systemTrackId);
             mergeCount++;
             merged = true;

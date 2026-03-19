@@ -43,6 +43,7 @@ interface UiState {
   selectedGeometryTrackId: string | null;
   selectedGroundTruthId: string | null;
   investigationWindowTrackId: string | null;
+  eoVideoPopupTrackId: string | null;
   detailView: DetailView;
 
   // Panel visibility
@@ -99,6 +100,7 @@ interface UiState {
   selectGeometry: (trackId: string | null) => void;
   selectGroundTruth: (id: string | null) => void;
   setInvestigationWindowTrackId: (trackId: string | null) => void;
+  setEoVideoPopupTrackId: (trackId: string | null) => void;
   toggleDetailPanel: () => void;
   toggleTimelinePanel: () => void;
   toggleLayer: (layer: keyof LayerVisibility) => void;
@@ -178,6 +180,7 @@ export const useUiStore = create<UiState>((set) => ({
   selectedGeometryTrackId: null,
   selectedGroundTruthId: null,
   investigationWindowTrackId: null,
+  eoVideoPopupTrackId: null,
   detailView: 'none',
   detailPanelOpen: true,
   timelinePanelOpen: true,
@@ -222,6 +225,9 @@ export const useUiStore = create<UiState>((set) => ({
 
   setInvestigationWindowTrackId: (trackId) =>
     set({ investigationWindowTrackId: trackId, detailView: trackId ? 'eo-window' : 'investigation', detailPanelOpen: true }),
+
+  setEoVideoPopupTrackId: (trackId) =>
+    set({ eoVideoPopupTrackId: trackId }),
 
   toggleDetailPanel: () =>
     set((s) => ({ detailPanelOpen: !s.detailPanelOpen })),

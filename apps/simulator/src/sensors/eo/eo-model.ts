@@ -29,9 +29,9 @@ export interface EoBearingObservation {
 }
 
 /** Add Gaussian noise using Box-Muller transform. */
-function gaussianNoise(stddev: number): number {
-  const u1 = Math.random();
-  const u2 = Math.random();
+function gaussianNoise(stddev: number, rng: () => number = Math.random): number {
+  const u1 = rng();
+  const u2 = rng();
   return stddev * Math.sqrt(-2 * Math.log(u1 || 1e-10)) * Math.cos(2 * Math.PI * u2);
 }
 
@@ -46,6 +46,7 @@ export function generateEoBearing(
   baseTimestamp: number,
   faults: FaultDefinition[],
   targetId: string = 'unknown',
+  rng?: () => number,
 ): EoBearingObservation | undefined {
   const sensorFaults = faults.filter((f) => f.sensorId === sensor.sensorId);
 

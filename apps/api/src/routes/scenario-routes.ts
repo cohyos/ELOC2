@@ -2,6 +2,14 @@ import type { FastifyInstance } from 'fastify';
 import { engine } from '../simulation/live-engine.js';
 import { scenarios } from '@eloc2/scenario-library';
 import { customScenarios } from './editor-routes.js';
+import { requireRole } from '../auth/auth-middleware.js';
+
+const AUTH_ENABLED = process.env.AUTH_ENABLED === 'true';
+
+/** Returns instructor-only preHandler array when auth is enabled, empty otherwise */
+function instructorGuard() {
+  return AUTH_ENABLED ? [requireRole('instructor')] : [];
+}
 
 export async function scenarioRoutes(app: FastifyInstance) {
   // GET /api/scenario/state — Current state machine state + allowed actions
@@ -48,8 +56,8 @@ export async function scenarioRoutes(app: FastifyInstance) {
     };
   });
 
-  // POST /api/scenario/start — Start the scenario
-  app.post('/api/scenario/start', async (_request, reply) => {
+  // POST /api/scenario/start — Start the scenario (Instructor only)
+  app.post('/api/scenario/start', { preHandler: instructorGuard() }, async (_request, reply) => {
     try {
       engine.start();
       const s = engine.getState();
@@ -59,8 +67,8 @@ export async function scenarioRoutes(app: FastifyInstance) {
     }
   });
 
-  // POST /api/scenario/pause — Pause the scenario
-  app.post('/api/scenario/pause', async (_request, reply) => {
+  // POST /api/scenario/pause — Pause the scenario (Instructor only)
+  app.post('/api/scenario/pause', { preHandler: instructorGuard() }, async (_request, reply) => {
     try {
       engine.pause();
       return { ok: true, running: false };
@@ -69,8 +77,8 @@ export async function scenarioRoutes(app: FastifyInstance) {
     }
   });
 
-  // POST /api/scenario/speed — Set scenario speed
-  app.post<{ Body: { speed: number } }>('/api/scenario/speed', async (request, reply) => {
+  // POST /api/scenario/speed — Set scenario speed (Instructor only)
+  app.post<{ Body: { speed: number } }>('/api/scenario/speed', { preHandler: instructorGuard() }, async (request, reply) => {
     const { speed } = request.body;
     if (typeof speed !== 'number' || speed < 0.1 || speed > 100) {
       return reply.code(400).send({ error: 'Speed must be between 0.1 and 100' });
@@ -79,8 +87,8 @@ export async function scenarioRoutes(app: FastifyInstance) {
     return { ok: true, speed };
   });
 
-  // POST /api/scenario/reset — Reset and optionally switch scenario
-  app.post<{ Body: { scenarioId?: string } }>('/api/scenario/reset', async (request, reply) => {
+  // POST /api/scenario/reset — Reset and optionally switch scenario (Instructor only)
+  app.post<{ Body: { scenarioId?: string } }>('/api/scenario/reset', { preHandler: instructorGuard() }, async (request, reply) => {
     const scenarioId = request.body?.scenarioId;
 
     try {
@@ -100,8 +108,8 @@ export async function scenarioRoutes(app: FastifyInstance) {
     }
   });
 
-  // POST /api/replay/seek — Seek to a specific simulation time
-  app.post<{ Body: { timeSec: number } }>('/api/replay/seek', async (request, reply) => {
+  // POST /api/replay/seek — Seek to a specific simulation time (Instructor only)
+  app.post<{ Body: { timeSec: number } }>('/api/replay/seek', { preHandler: instructorGuard() }, async (request, reply) => {
     const { timeSec } = request.body;
     if (typeof timeSec !== 'number' || timeSec < 0) {
       return reply.code(400).send({ error: 'timeSec must be a non-negative number' });

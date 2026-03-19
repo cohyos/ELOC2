@@ -32,9 +32,9 @@ export interface RadarObservation {
 }
 
 /** Add Gaussian noise using Box-Muller transform. */
-function gaussianNoise(stddev: number): number {
-  const u1 = Math.random();
-  const u2 = Math.random();
+function gaussianNoise(stddev: number, rng: () => number = Math.random): number {
+  const u1 = rng();
+  const u2 = rng();
   return stddev * Math.sqrt(-2 * Math.log(u1 || 1e-10)) * Math.cos(2 * Math.PI * u2);
 }
 
@@ -96,6 +96,7 @@ export function generateRadarObservation(
   baseTimestamp: number,
   faults: FaultDefinition[],
   targetId: string = 'unknown',
+  rng?: () => number,
 ): RadarObservation | undefined {
   // Check outage
   if (isSensorInOutage(sensor.sensorId, faults)) {
@@ -110,19 +111,20 @@ export function generateRadarObservation(
 
   // Position noise: +/-50m
   const posNoise = 50;
+  const r = rng ?? Math.random;
   const noisyPos: Position3D = {
-    lat: targetPos.lat + gaussianNoise(posNoise / 111_320),
-    lon: targetPos.lon + gaussianNoise(posNoise / (111_320 * Math.cos(targetPos.lat * DEG_TO_RAD))),
-    alt: targetPos.alt + gaussianNoise(posNoise),
+    lat: targetPos.lat + gaussianNoise(posNoise / 111_320, r),
+    lon: targetPos.lon + gaussianNoise(posNoise / (111_320 * Math.cos(targetPos.lat * DEG_TO_RAD)), r),
+    alt: targetPos.alt + gaussianNoise(posNoise, r),
   };
 
   // Velocity noise: +/-2 m/s
   let noisyVel: Velocity3D | undefined;
   if (targetVel) {
     noisyVel = {
-      vx: targetVel.vx + gaussianNoise(2),
-      vy: targetVel.vy + gaussianNoise(2),
-      vz: targetVel.vz + gaussianNoise(2),
+      vx: targetVel.vx + gaussianNoise(2, r),
+      vy: targetVel.vy + gaussianNoise(2, r),
+      vz: targetVel.vz + gaussianNoise(2, r),
     };
   }
 

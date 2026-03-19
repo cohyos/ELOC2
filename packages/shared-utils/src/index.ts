@@ -21,6 +21,8 @@ export { generateId } from "./uuid.js";
 
 export { SimulationClock } from "./clock.js";
 
+export { createSeededRandom } from "./seeded-random.js";
+
 export {
   identity3x3,
   mat3x3Multiply,

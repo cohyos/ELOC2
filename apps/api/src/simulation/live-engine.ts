@@ -459,6 +459,12 @@ export class LiveEngine {
   /** Cached EO module status for WS broadcast. */
   private cachedEoModuleStatus: EoModuleStatus | null = null;
 
+  // ── Latency tracking ─────────────────────────────────────────────────
+  /** Rolling window of per-tick processing latencies (ms) */
+  private tickLatencies: number[] = [];
+  private static readonly LATENCY_WINDOW_SIZE = 100;
+  private cachedLatency: { tickMs: number; avgMs: number; maxMs: number } = { tickMs: 0, avgMs: 0, maxMs: 0 };
+
   // ── Convergence monitoring (REQ-5 Phase C) ────────────────────────────
   /** Tracks how triangulation quality improves over successive dwells */
   private convergenceState = new Map<string, {

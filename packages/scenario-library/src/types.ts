@@ -62,4 +62,13 @@ export interface ScenarioDefinition {
   operatorActions: OperatorActionDef[];
   coverZones?: CoverZone[];
   operationalZones?: OperationalZone[];
+  seed?: number;          // Random seed for deterministic replay
+  center?: { lat: number; lon: number };  // Geographic center point
+}
+
+export interface DeploymentDefinition {
+  id: string;
+  name: string;
+  description: string;
+  sensors: SensorDefinition[];
 }
