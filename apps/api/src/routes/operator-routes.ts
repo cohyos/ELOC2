@@ -1,6 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import type { LiveEngine } from '../simulation/live-engine.js';
 import type { TargetClassification } from '@eloc2/domain';
+import { requireRole } from '../auth/auth-middleware.js';
+
+const AUTH_ENABLED = process.env.AUTH_ENABLED === 'true';
+
+/** Returns operator-level preHandler (both roles allowed) when auth is enabled */
+function operatorGuard() {
+  return AUTH_ENABLED ? [requireRole('operator')] : [];
+}
 
 // ---------------------------------------------------------------------------
 // Operator Override API — Manual EO sensor control
@@ -18,7 +26,7 @@ export function registerOperatorRoutes(app: FastifyInstance, engine: LiveEngine)
   // POST /api/operator/lock-sensor — Lock a sensor on a target or position
   app.post<{
     Body: { sensorId: string; targetId?: string; position?: { lat: number; lon: number; alt: number } };
-  }>('/api/operator/lock-sensor', async (request, reply) => {
+  }>('/api/operator/lock-sensor', { preHandler: operatorGuard() }, async (request, reply) => {
     const { sensorId, targetId, position } = request.body ?? {};
     if (!sensorId || typeof sensorId !== 'string') {
       return reply.code(400).send({ error: 'sensorId is required' });
@@ -41,7 +49,7 @@ export function registerOperatorRoutes(app: FastifyInstance, engine: LiveEngine)
   // POST /api/operator/release-sensor — Release a locked sensor back to auto
   app.post<{
     Body: { sensorId: string };
-  }>('/api/operator/release-sensor', async (request, reply) => {
+  }>('/api/operator/release-sensor', { preHandler: operatorGuard() }, async (request, reply) => {
     const { sensorId } = request.body ?? {};
     if (!sensorId || typeof sensorId !== 'string') {
       return reply.code(400).send({ error: 'sensorId is required' });
@@ -58,7 +66,7 @@ export function registerOperatorRoutes(app: FastifyInstance, engine: LiveEngine)
   // POST /api/operator/classify — Manually classify a target
   app.post<{
     Body: { trackId: string; classification: TargetClassification; confidence?: number };
-  }>('/api/operator/classify', async (request, reply) => {
+  }>('/api/operator/classify', { preHandler: operatorGuard() }, async (request, reply) => {
     const { trackId, classification, confidence } = request.body ?? {};
     if (!trackId || typeof trackId !== 'string') {
       return reply.code(400).send({ error: 'trackId is required' });
@@ -83,7 +91,7 @@ export function registerOperatorRoutes(app: FastifyInstance, engine: LiveEngine)
   // POST /api/operator/set-priority — Set priority level for a track
   app.post<{
     Body: { trackId: string; priority: 'high' | 'normal' | 'low' };
-  }>('/api/operator/set-priority', async (request, reply) => {
+  }>('/api/operator/set-priority', { preHandler: operatorGuard() }, async (request, reply) => {
     const { trackId, priority } = request.body ?? {};
     if (!trackId || typeof trackId !== 'string') {
       return reply.code(400).send({ error: 'trackId is required' });
@@ -101,7 +109,7 @@ export function registerOperatorRoutes(app: FastifyInstance, engine: LiveEngine)
   });
 
   // GET /api/operator/overrides — Get all active operator overrides
-  app.get('/api/operator/overrides', async () => {
+  app.get('/api/operator/overrides', { preHandler: operatorGuard() }, async () => {
     return engine.getOperatorOverrides();
   });
 }

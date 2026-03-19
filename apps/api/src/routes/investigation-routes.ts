@@ -85,4 +85,13 @@ export function registerInvestigationRoutes(app: FastifyInstance, engine: LiveEn
       return { ok: true, groupId };
     },
   );
+
+  // GET /api/investigation/:trackId/log — Investigation event log for a track (pyrite mode)
+  app.get<{ Params: { trackId: string } }>(
+    '/api/investigation/:trackId/log',
+    async (request) => {
+      const { trackId } = request.params;
+      return engine.getInvestigationLog(trackId);
+    },
+  );
 }

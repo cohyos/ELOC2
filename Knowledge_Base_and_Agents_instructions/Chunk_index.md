@@ -26,6 +26,13 @@ This folder contains tighter retrieval oriented files derived from the master re
 | ELOC2 UI Requirements and VV Spec | Full UI/UX requirements, visual inventory, interaction flows, QA agent spec, acceptance criteria |
 | ELOC2 Implementation Plan       | Detailed implementation plan: 20 sub-tasks, file paths, agent prompts, execution order |
 | Blank Map Postmortem and Testing Lessons | Post-mortem: why MapLibre layers never rendered, testing gaps, 7 mandatory rules, dual rendering architecture |
+| ELOC2 Corrections and Upgrades Plan | Corrections & upgrades: 7 phases, 16 REQ items with traceability matrix |
+| MHT JPDA Design                      | MHT vs JPDA algorithm comparison for dense multi-target tracking scenarios |
+| ASTERIX Feasibility Study             | CAT-048/062 integration evaluation, Cloud Run deployment constraints |
+| ASTERIX Integration                   | ASTERIX implementation spec: AsterixListener, parsers, adapter architecture |
+| Map Renderer Evaluation               | Rendering approach evaluation (5 options), dual architecture justification |
+| EO Processing Server Architecture     | EO processing microservice: RTSP ingestion, YOLO detection, gRPC output |
+| High Load Architecture                | Distributed architecture for 100+ targets, 10+ operators, Redis Streams |
 
 These chunk files are written to improve retrieval precision for MCP or RAG while preserving the key research backed claims from the master report \[Joh05, Paw96, Kal04, San01, Cor11, Oke01, Pat09\].
 

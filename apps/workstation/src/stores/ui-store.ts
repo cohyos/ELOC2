@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+export type InvestigationMode = 'standard' | 'gt-comparison' | 'pyrite';
+
 export type DetailView = 'track' | 'sensor' | 'tasks' | 'investigation' | 'eo-window' | 'cue' | 'group' | 'geometry' | 'quality' | 'ground-truth' | 'none';
 
 export interface LayerVisibility {
@@ -15,6 +17,9 @@ export interface LayerVisibility {
   triangulation: boolean;
   bearingLines: boolean;
   ambiguityMarkers: boolean;
+  useNatoSymbols: boolean;
+  show3DOverlay: boolean;
+  ballisticEstimates: boolean;
 }
 
 export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
@@ -30,6 +35,9 @@ export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
   triangulation: true,
   bearingLines: true,
   ambiguityMarkers: true,
+  useNatoSymbols: true,
+  show3DOverlay: false,
+  ballisticEstimates: true,
 };
 
 interface UiState {
@@ -41,6 +49,7 @@ interface UiState {
   selectedGeometryTrackId: string | null;
   selectedGroundTruthId: string | null;
   investigationWindowTrackId: string | null;
+  eoVideoPopupTrackId: string | null;
   detailView: DetailView;
 
   // Panel visibility
@@ -89,6 +98,29 @@ interface UiState {
   simulationState: string;
   allowedActions: string[];
 
+  // Fusion config
+  fusionConfig: { gateThreshold: number; mergeDistanceM: number };
+
+  // Latency
+  latency: { tickMs: number; avgMs: number; maxMs: number };
+
+  // System load
+  systemLoad: {
+    tickMs: number;
+    observationsPerSec: number;
+    tracksActive: number;
+    wsMessagesPerSec: number;
+    memoryMB: number;
+    uptime: number;
+  };
+
+  // Connected users
+  connectedUsers: { total: number; instructors: number; operators: number };
+  autoLoopEnabled: boolean;
+
+  // Investigation mode
+  investigationMode: InvestigationMode;
+
   // Actions
   selectTrack: (id: string | null) => void;
   selectSensor: (id: string | null) => void;
@@ -97,6 +129,7 @@ interface UiState {
   selectGeometry: (trackId: string | null) => void;
   selectGroundTruth: (id: string | null) => void;
   setInvestigationWindowTrackId: (trackId: string | null) => void;
+  setEoVideoPopupTrackId: (trackId: string | null) => void;
   toggleDetailPanel: () => void;
   toggleTimelinePanel: () => void;
   toggleLayer: (layer: keyof LayerVisibility) => void;
@@ -131,6 +164,22 @@ interface UiState {
 
   // Simulation state actions
   setSimulationState: (state: string, actions: string[]) => void;
+
+  // Fusion config actions
+  setFusionConfig: (config: { gateThreshold: number; mergeDistanceM: number }) => void;
+
+  // Latency actions
+  setLatency: (latency: { tickMs: number; avgMs: number; maxMs: number }) => void;
+
+  // System load actions
+  setSystemLoad: (load: { tickMs: number; observationsPerSec: number; tracksActive: number; wsMessagesPerSec: number; memoryMB: number; uptime: number }) => void;
+
+  // Connected users actions
+  setConnectedUsers: (users: { total: number; instructors: number; operators: number }) => void;
+  setAutoLoopEnabled: (enabled: boolean) => void;
+
+  // Investigation mode actions
+  setInvestigationMode: (mode: InvestigationMode) => void;
 }
 
 export interface SelectionBearingRay {
@@ -176,6 +225,7 @@ export const useUiStore = create<UiState>((set) => ({
   selectedGeometryTrackId: null,
   selectedGroundTruthId: null,
   investigationWindowTrackId: null,
+  eoVideoPopupTrackId: null,
   detailView: 'none',
   detailPanelOpen: true,
   timelinePanelOpen: true,
@@ -199,6 +249,14 @@ export const useUiStore = create<UiState>((set) => ({
   timelinePanelHeight: loadPanelSize(LS_TIMELINE_HEIGHT_KEY, PANEL_DEFAULTS.timelinePanelHeight, 80, 400),
   simulationState: 'idle',
   allowedActions: ['start', 'reset'],
+  fusionConfig: { gateThreshold: 16.27, mergeDistanceM: 3000 },
+  latency: { tickMs: 0, avgMs: 0, maxMs: 0 },
+  systemLoad: { tickMs: 0, observationsPerSec: 0, tracksActive: 0, wsMessagesPerSec: 0, memoryMB: 0, uptime: 0 },
+
+  connectedUsers: { total: 0, instructors: 0, operators: 0 },
+  autoLoopEnabled: false,
+
+  investigationMode: 'standard',
 
   selectTrack: (id) =>
     set({ selectedTrackId: id, selectedSensorId: null, selectedCueId: null, selectedGroupId: null, selectedGeometryTrackId: null, detailView: id ? 'track' : 'none', detailPanelOpen: !!id }),
@@ -220,6 +278,9 @@ export const useUiStore = create<UiState>((set) => ({
 
   setInvestigationWindowTrackId: (trackId) =>
     set({ investigationWindowTrackId: trackId, detailView: trackId ? 'eo-window' : 'investigation', detailPanelOpen: true }),
+
+  setEoVideoPopupTrackId: (trackId) =>
+    set({ eoVideoPopupTrackId: trackId }),
 
   toggleDetailPanel: () =>
     set((s) => ({ detailPanelOpen: !s.detailPanelOpen })),
@@ -284,4 +345,15 @@ export const useUiStore = create<UiState>((set) => ({
   },
 
   setSimulationState: (state, actions) => set({ simulationState: state, allowedActions: actions }),
+
+  setFusionConfig: (config) => set({ fusionConfig: config }),
+
+  setLatency: (latency) => set({ latency }),
+
+  setSystemLoad: (load) => set({ systemLoad: load }),
+
+  setConnectedUsers: (users) => set({ connectedUsers: users }),
+  setAutoLoopEnabled: (enabled) => set({ autoLoopEnabled: enabled }),
+
+  setInvestigationMode: (mode) => set({ investigationMode: mode }),
 }));

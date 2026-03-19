@@ -35,3 +35,14 @@ export {
   buildGeometryEstimate,
   createGeometryEvent,
 } from './projection/geometry-projection.js';
+
+// Ballistic estimation
+export {
+  estimateLaunchPoint,
+  estimateImpactPoint,
+} from './ballistic/ballistic-estimator.js';
+export type {
+  BallisticEstimate,
+  LaunchEstimate,
+  ImpactEstimate,
+} from './ballistic/ballistic-estimator.js';

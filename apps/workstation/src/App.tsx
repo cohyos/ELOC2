@@ -30,6 +30,9 @@ import { MetricsOverlay } from './demo/MetricsOverlay';
 import { ResizeHandle } from './components/ResizeHandle';
 import { QualityMetricsPanel } from './quality/QualityMetricsPanel';
 import { DeploymentView } from './deployment/DeploymentView';
+import { FusionConfigPanel } from './components/FusionConfigPanel';
+import { useAuthStore } from './auth/auth-store';
+import { LoginPage } from './auth/LoginPage';
 
 // Panel size defaults (must match ui-store defaults)
 const DEFAULT_RIGHT_PANEL_WIDTH = 380;
@@ -79,6 +82,10 @@ function DefaultPanel() {
   const fusionModes = useTaskStore(s => s.fusionModes);
   const eoModuleStatus = useTaskStore(s => s.eoModuleStatus);
   const selectView = useUiStore(s => s.setDetailView);
+  const latency = useUiStore(s => s.latency);
+  const systemLoad = useUiStore(s => s.systemLoad);
+  const connectedUsers = useUiStore(s => s.connectedUsers);
+  const autoLoopEnabled = useUiStore(s => s.autoLoopEnabled);
 
   const radarCount = sensors.filter(s => s.sensorType === 'radar').length;
   const eoCount = sensors.filter(s => s.sensorType === 'eo').length;
@@ -141,6 +148,31 @@ function DefaultPanel() {
         <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Fusion Mode</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: modeColor }}>{dominantMode}</span></div>
         <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Registration</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: degradedCount === 0 ? '#00cc44' : '#ffcc00' }}>{degradedCount === 0 ? 'Healthy' : `${degradedCount} degraded`}</span></div>
         {unsafeCount > 0 && <div style={row}><span style={{ color: '#ff3333', fontSize: '12px' }}>Fusion Unsafe</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#ff3333' }}>{unsafeCount} sensors</span></div>}
+        {(() => {
+          const avgColor = latency.avgMs < 50 ? '#00cc44' : latency.avgMs < 100 ? '#ffcc00' : '#ff3333';
+          const maxColor = latency.maxMs < 50 ? '#00cc44' : latency.maxMs < 100 ? '#ffcc00' : '#ff3333';
+          return (
+            <div style={row}>
+              <span style={{ color: '#888', fontSize: '12px' }}>Latency</span>
+              <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>
+                <span style={{ color: avgColor }}>{latency.avgMs}ms</span>
+                <span style={{ color: '#555' }}> avg / </span>
+                <span style={{ color: maxColor }}>{latency.maxMs}ms</span>
+                <span style={{ color: '#555' }}> max</span>
+              </span>
+            </div>
+          );
+        })()}
+      </div>
+      <div style={{ marginBottom: '16px' }}>
+        <div style={sectionTitle}>Connected Users</div>
+        <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Online</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: connectedUsers.total > 0 ? '#00cc44' : '#888' }}>{connectedUsers.total}</span></div>
+        {connectedUsers.instructors > 0 && <div style={row}><span style={{ color: '#4a9eff', fontSize: '12px' }}>Instructors</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{connectedUsers.instructors}</span></div>}
+        {connectedUsers.operators > 0 && <div style={row}><span style={{ color: '#ff8800', fontSize: '12px' }}>Operators</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{connectedUsers.operators}</span></div>}
+        {connectedUsers.total - connectedUsers.instructors - connectedUsers.operators > 0 && (
+          <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Anonymous</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{connectedUsers.total - connectedUsers.instructors - connectedUsers.operators}</span></div>
+        )}
+        {autoLoopEnabled && <div style={row}><span style={{ color: '#ffcc00', fontSize: '12px' }}>Auto-Loop</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#ffcc00' }}>Active</span></div>}
       </div>
       <div style={{ marginBottom: '16px' }}>
         <div style={sectionTitle}>EO Tasking</div>
@@ -162,6 +194,27 @@ function DefaultPanel() {
           )}
         </div>
       )}
+      {/* System Load */}
+      <div style={{ marginBottom: '16px' }}>
+        <div style={sectionTitle}>System Load</div>
+        {(() => {
+          const tickColor = systemLoad.tickMs < 50 ? '#00cc44' : systemLoad.tickMs < 100 ? '#ffcc00' : '#ff3333';
+          const memColor = systemLoad.memoryMB < 256 ? '#00cc44' : systemLoad.memoryMB <= 400 ? '#ffcc00' : '#ff3333';
+          const uptimeH = Math.floor(systemLoad.uptime / 3600);
+          const uptimeM = Math.floor((systemLoad.uptime % 3600) / 60);
+          return (
+            <>
+              <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Tick</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: tickColor }}>{systemLoad.tickMs}ms</span></div>
+              <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Obs/sec</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{systemLoad.observationsPerSec}</span></div>
+              <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Tracks</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{systemLoad.tracksActive} active</span></div>
+              <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>WS msg/sec</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{systemLoad.wsMessagesPerSec}</span></div>
+              <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Memory</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: memColor }}>{systemLoad.memoryMB} MB</span></div>
+              <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Uptime</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{uptimeH}h {uptimeM}m</span></div>
+            </>
+          );
+        })()}
+      </div>
+      <FusionConfigPanel />
       <div style={{ marginBottom: '16px' }}>
         <div style={sectionTitle}>Build Info</div>
         <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Git SHA</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{__APP_REVISION__}</span></div>
@@ -265,6 +318,41 @@ const btnBase = (isMobile: boolean): React.CSSProperties => ({
 export function App() {
   const isMobile = useIsMobile();
   const [view, setView] = useState<'workstation' | 'editor' | 'deployment'>('workstation');
+
+  // ── Auth ────────────────────────────────────────────────────────────────
+  const authEnabled = useAuthStore(s => s.authEnabled);
+  const isAuthenticated = useAuthStore(s => s.isAuthenticated);
+  const authLoading = useAuthStore(s => s.isLoading);
+  const authUser = useAuthStore(s => s.user);
+  const authLogout = useAuthStore(s => s.logout);
+  const checkAuthEnabled = useAuthStore(s => s.checkAuthEnabled);
+  const checkSession = useAuthStore(s => s.checkSession);
+
+  // On mount: check if auth is enabled, then check session
+  useEffect(() => {
+    (async () => {
+      await checkAuthEnabled();
+      // After checkAuthEnabled, if auth is enabled, check session
+      const state = useAuthStore.getState();
+      if (state.authEnabled) {
+        await checkSession();
+      }
+    })();
+  }, [checkAuthEnabled, checkSession]);
+
+  // Show loading spinner while checking auth status
+  if (authEnabled === null || authLoading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0d0d1a', color: '#888', fontFamily: 'system-ui, sans-serif', fontSize: '14px' }}>
+        Loading...
+      </div>
+    );
+  }
+
+  // Auth enabled but not authenticated — show login page
+  if (authEnabled && !isAuthenticated) {
+    return <LoginPage />;
+  }
   const detailView = useUiStore(s => s.detailView);
   const detailPanelOpen = useUiStore(s => s.detailPanelOpen);
   const timelinePanelOpen = useUiStore(s => s.timelinePanelOpen);
@@ -633,6 +721,17 @@ export function App() {
           <button style={btn} onClick={toggleTimelinePanel}>{timelinePanelOpen ? 'Hide Timeline' : 'Show Timeline'}</button>
           <span><span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: wsConnected ? '#00cc44' : '#ff3333', marginRight: '4px' }} />{wsConnected ? 'Connected' : 'Disconnected'}</span>
           <span style={{ fontSize: '10px', opacity: 0.5 }} title="ELOC2 Air Defense Demonstrator">v0.3.0</span>
+          {authEnabled && authUser && (
+            <>
+              <span style={{ fontSize: '10px', color: '#aaa' }} title={`Role: ${authUser.role}`}>
+                {authUser.username}
+                <span style={{ marginLeft: '4px', padding: '1px 4px', borderRadius: '2px', fontSize: '9px', fontWeight: 600, background: authUser.role === 'instructor' ? '#4a9eff22' : '#ff880022', color: authUser.role === 'instructor' ? '#4a9eff' : '#ff8800', border: `1px solid ${authUser.role === 'instructor' ? '#4a9eff44' : '#ff880044'}` }}>
+                  {authUser.role}
+                </span>
+              </span>
+              <button style={{ ...btn, color: '#ff6666', fontSize: '10px' }} onClick={authLogout} title="Sign out">Logout</button>
+            </>
+          )}
         </div>
       </header>
 

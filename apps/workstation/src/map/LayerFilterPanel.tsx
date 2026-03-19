@@ -37,6 +37,19 @@ const LAYER_GROUPS: Array<{
       { key: 'ambiguityMarkers', label: 'Ambiguity markers', color: '#ff6699' },
     ],
   },
+  {
+    label: '3D / Ballistic',
+    items: [
+      { key: 'show3DOverlay', label: '3D track paths', color: '#44ddff' },
+      { key: 'ballisticEstimates', label: 'Ballistic estimates', color: '#ff4444' },
+    ],
+  },
+  {
+    label: 'Symbology',
+    items: [
+      { key: 'useNatoSymbols', label: 'NATO APP-6 symbols', color: '#4a9eff' },
+    ],
+  },
 ];
 
 const panelStyle: React.CSSProperties = {

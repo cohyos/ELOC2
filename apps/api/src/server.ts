@@ -15,8 +15,12 @@ import { registerOperatorRoutes } from './routes/operator-routes.js';
 import { registerQualityRoutes } from './routes/quality-routes.js';
 import { registerReportRoutes } from './routes/report-routes.js';
 import { registerDeploymentRoutes } from './routes/deployment-routes.js';
+import { registerAuthRoutes } from './routes/auth-routes.js';
+import { registerAsterixRoutes } from './routes/asterix-routes.js';
 import { wsEventsRoute } from './routes/ws-events.js';
 import { engine } from './simulation/live-engine.js';
+
+const AUTH_ENABLED = process.env.AUTH_ENABLED === 'true';
 
 const server = Fastify({ logger: true });
 
@@ -52,6 +56,20 @@ server.get('/api/health', async () => {
   };
 });
 
+// Initialize auth if enabled
+if (AUTH_ENABLED) {
+  const { authPlugin } = await import('./auth/auth-plugin.js');
+  await server.register(authPlugin);
+  server.log.info('Auth system enabled — DATABASE_URL required');
+} else {
+  server.log.info('Auth system disabled — set AUTH_ENABLED=true to enable');
+}
+
+// Register auth routes (always available, middleware self-guards)
+if (AUTH_ENABLED) {
+  registerAuthRoutes(server);
+}
+
 // Register route modules
 await server.register(rapRoutes);
 await server.register(sensorRoutes);
@@ -64,6 +82,7 @@ registerOperatorRoutes(server, engine);
 registerQualityRoutes(server, engine);
 registerReportRoutes(server, engine);
 registerDeploymentRoutes(server);
+registerAsterixRoutes(server, engine);
 await server.register(wsEventsRoute);
 
 const start = async () => {

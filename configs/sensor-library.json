@@ -1,0 +1,41 @@
+{
+  "sensors": [
+    {
+      "id": "radar-360-150km",
+      "name": "360\u00b0 Surveillance Radar",
+      "type": "radar",
+      "coverage": { "minAzDeg": 0, "maxAzDeg": 360, "maxRangeM": 150000 },
+      "description": "Full azimuth surveillance radar, 150km range"
+    },
+    {
+      "id": "radar-sector-180km",
+      "name": "Sector Radar 180\u00b0",
+      "type": "radar",
+      "coverage": { "minAzDeg": 0, "maxAzDeg": 180, "maxRangeM": 180000 },
+      "description": "Half-sector radar, 180km range"
+    },
+    {
+      "id": "eo-gimbal-40km",
+      "name": "Gimbal EO Sensor",
+      "type": "eo",
+      "coverage": { "minAzDeg": 0, "maxAzDeg": 360, "maxRangeM": 40000 },
+      "fov": { "halfAngleHDeg": 2, "depthM": 40000 },
+      "description": "Narrow FOV gimbal-mounted EO for investigation"
+    },
+    {
+      "id": "eo-staring-20km",
+      "name": "Staring EO Sensor",
+      "type": "eo",
+      "coverage": { "minAzDeg": 0, "maxAzDeg": 120, "maxRangeM": 20000 },
+      "fov": { "halfAngleHDeg": 15, "depthM": 20000 },
+      "description": "Wide FOV staring EO for area surveillance"
+    },
+    {
+      "id": "radar-longrange-200km",
+      "name": "Long-Range Surveillance Radar",
+      "type": "radar",
+      "coverage": { "minAzDeg": 0, "maxAzDeg": 360, "maxRangeM": 200000 },
+      "description": "Long-range area surveillance radar"
+    }
+  ]
+}

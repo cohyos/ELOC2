@@ -61,6 +61,8 @@ import {
   triangulateMultiple,
   buildGeometryEstimate,
   scoreQuality,
+  estimateLaunchPoint,
+  estimateImpactPoint,
 } from '@eloc2/geometry';
 import {
   selectFusionMode,
@@ -105,6 +107,18 @@ export interface LiveEvent {
 
 type WsClient = { send: (data: string) => void };
 
+export interface ConnectedUsers {
+  total: number;
+  instructors: number;
+  operators: number;
+}
+
+export interface WsClientInfo {
+  client: WsClient;
+  role: 'instructor' | 'operator' | 'anonymous';
+  connectedAt: number;
+}
+
 export interface InvestigationParameters {
   weights: {
     threat: number;
@@ -138,6 +152,15 @@ export interface InvestigationSummaryWS {
     geometry: number;
     intent: number;
   };
+}
+
+export interface InvestigationEvent {
+  timestamp: number;
+  simTimeSec: number;
+  type: 'observation' | 'classification' | 'state_change' | 'eo_dwell' | 'bearing_report' | 'cue_issued' | 'task_assigned' | 'geometry_update';
+  sensorId: string;
+  trackId: string;
+  details: Record<string, unknown>;
 }
 
 const DEFAULT_INVESTIGATION_PARAMETERS: InvestigationParameters = {
@@ -312,6 +335,10 @@ export class LiveEngine {
   private static readonly MIN_BROADCAST_INTERVAL_MS = 250;
   private timer: ReturnType<typeof setInterval> | null = null;
   private wsClients = new Set<WsClient>();
+  private wsClientInfos = new Map<WsClient, WsClientInfo>();
+  private autoLoopEnabled = false;
+  private autoLoopTimer: ReturnType<typeof setTimeout> | null = null;
+  private autoInjectTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Phase 5: EO orchestration internal state
   private eoTracksById = new Map<string, EoTrack>();
@@ -319,6 +346,18 @@ export class LiveEngine {
   private activeCuesById = new Map<string, EoCue>();
   /** Maps cueId → systemTrackId for cue-to-track lookup. */
   private cueToTrack = new Map<string, string>();
+
+  /** Per-track investigation event log for pyrite/audit mode */
+  private investigationLog = new Map<string, InvestigationEvent[]>();
+
+  // ── Ballistic estimation (Task 6.5) ────────────────────────────────
+  private trackPositionHistory = new Map<string, Array<{ lat: number; lon: number; alt: number; timeSec: number }>>();
+  private cachedBallisticEstimates: Array<{
+    trackId: string;
+    launchPoint: { lat: number; lon: number; alt: number; uncertainty2SigmaM: number } | null;
+    impactPoint: { lat: number; lon: number; alt: number; uncertainty2SigmaM: number; timeToImpactSec: number } | null;
+  }> = [];
+  private static readonly MAX_POSITION_HISTORY = 20;
   private operatorPriorityTracks = new Set<string>();
   /** Sensors locked by operator — excluded from auto-assignment */
   private operatorLockedSensors = new Map<string, {
@@ -458,6 +497,98 @@ export class LiveEngine {
   private eoModule = new EoManagementModule();
   /** Cached EO module status for WS broadcast. */
   private cachedEoModuleStatus: EoModuleStatus | null = null;
+
+  // ── Latency tracking ─────────────────────────────────────────────────
+  /** Rolling window of per-tick processing latencies (ms) */
+  private tickLatencies: number[] = [];
+  private static readonly LATENCY_WINDOW_SIZE = 100;
+  private cachedLatency: { tickMs: number; avgMs: number; maxMs: number } = { tickMs: 0, avgMs: 0, maxMs: 0 };
+  private tickStartTime = 0;
+
+  // ── System load metrics ─────────────────────────────────────────────
+  /** Rolling 10-second window of observation counts per tick */
+  private observationCounts: number[] = [];
+  private static readonly SYSTEM_LOAD_WINDOW = 10;
+  /** Rolling 10-second window of WS messages sent per tick */
+  private wsMessageCounts: number[] = [];
+  /** Observations processed in the current tick */
+  private currentTickObservations = 0;
+  /** WS messages sent in the current tick */
+  private currentTickWsMessages = 0;
+  /** Cached system load for broadcast */
+  private cachedSystemLoad: {
+    tickMs: number;
+    observationsPerSec: number;
+    tracksActive: number;
+    wsMessagesPerSec: number;
+    memoryMB: number;
+    uptime: number;
+  } = { tickMs: 0, observationsPerSec: 0, tracksActive: 0, wsMessagesPerSec: 0, memoryMB: 0, uptime: 0 };
+
+  /** Record tick processing latency and update rolling statistics. */
+  private recordTickLatency(): void {
+    const tickMs = Date.now() - this.tickStartTime;
+    this.tickLatencies.push(tickMs);
+    if (this.tickLatencies.length > LiveEngine.LATENCY_WINDOW_SIZE) {
+      this.tickLatencies.shift();
+    }
+    const sum = this.tickLatencies.reduce((a, b) => a + b, 0);
+    const avgMs = Math.round(sum / this.tickLatencies.length);
+    const maxMs = Math.max(...this.tickLatencies);
+    this.cachedLatency = { tickMs, avgMs, maxMs };
+  }
+
+  /** Update system load metrics at end of tick. */
+  private updateSystemLoad(): void {
+    // Track observation count for this tick
+    this.observationCounts.push(this.currentTickObservations);
+    if (this.observationCounts.length > LiveEngine.SYSTEM_LOAD_WINDOW) {
+      this.observationCounts.shift();
+    }
+    // Track WS message count for this tick
+    this.wsMessageCounts.push(this.currentTickWsMessages);
+    if (this.wsMessageCounts.length > LiveEngine.SYSTEM_LOAD_WINDOW) {
+      this.wsMessageCounts.shift();
+    }
+
+    const obsSum = this.observationCounts.reduce((a, b) => a + b, 0);
+    const wsSum = this.wsMessageCounts.reduce((a, b) => a + b, 0);
+    const windowSec = this.observationCounts.length || 1;
+
+    const activeTracks = this.state.tracks.filter(
+      t => t.status === 'confirmed' || t.status === 'tentative',
+    ).length;
+
+    this.cachedSystemLoad = {
+      tickMs: this.cachedLatency.tickMs,
+      observationsPerSec: Math.round((obsSum / windowSec) * 10) / 10,
+      tracksActive: activeTracks,
+      wsMessagesPerSec: Math.round((wsSum / windowSec) * 10) / 10,
+      memoryMB: Math.round((process.memoryUsage().heapUsed / 1024 / 1024) * 10) / 10,
+      uptime: Math.round(process.uptime()),
+    };
+
+    // Reset per-tick counters
+    this.currentTickObservations = 0;
+    this.currentTickWsMessages = 0;
+  }
+
+  /** Get the latest system load metrics. */
+  getSystemLoad(): {
+    tickMs: number;
+    observationsPerSec: number;
+    tracksActive: number;
+    wsMessagesPerSec: number;
+    memoryMB: number;
+    uptime: number;
+  } {
+    return { ...this.cachedSystemLoad };
+  }
+
+  /** Get the latest latency metrics. */
+  getLatency(): { tickMs: number; avgMs: number; maxMs: number } {
+    return { ...this.cachedLatency };
+  }
 
   // ── Convergence monitoring (REQ-5 Phase C) ────────────────────────────
   /** Tracks how triangulation quality improves over successive dwells */
@@ -670,7 +801,30 @@ export class LiveEngine {
       searchModeStates: this.getSearchModeStatus().filter(s => s.active),
       convergenceStates: this.getConvergenceStates(),
       eoModuleStatus: this.cachedEoModuleStatus ?? undefined,
+      latency: this.cachedLatency,
+      systemLoad: this.cachedSystemLoad,
+      ballisticEstimates: this.cachedBallisticEstimates,
+      connectedUsers: this.getConnectedUsers(),
+      autoLoopEnabled: this.autoLoopEnabled,
     };
+  }
+
+  // ── Fusion Config API ────────────────────────────────────────────────
+
+  getFusionConfig(): { gateThreshold: number; mergeDistanceM: number } {
+    return {
+      gateThreshold: this.trackManager.getCorrelatorConfig().gateThreshold,
+      mergeDistanceM: this.trackManager.getMergeDistance(),
+    };
+  }
+
+  setFusionConfig(config: { gateThreshold?: number; mergeDistanceM?: number }): void {
+    if (config.gateThreshold !== undefined) {
+      this.trackManager.setCorrelatorConfig({ gateThreshold: config.gateThreshold });
+    }
+    if (config.mergeDistanceM !== undefined) {
+      this.trackManager.setMergeDistance(config.mergeDistanceM);
+    }
   }
 
   // ── Investigation Parameters API ─────────────────────────────────────
@@ -1016,7 +1170,7 @@ export class LiveEngine {
         }
       }
 
-      this.trackManager.mergeCloseTracks(3000);
+      this.trackManager.mergeCloseTracks();
       this.state.tracks = this.trackManager.getAllTracks().filter(tr => tr.status !== 'dropped');
       this.processAccumulatedBearings();
       this.expireStaleEoCues();
@@ -1209,6 +1363,9 @@ export class LiveEngine {
     this.unresolvedGroupsById.clear();
     this.activeCuesById.clear();
     this.cueToTrack.clear();
+    this.investigationLog.clear();
+    this.trackPositionHistory.clear();
+    this.cachedBallisticEstimates = [];
     this.pendingBearings.clear();
     this.lastEoTaskingSec = 0;
     this.fusionModePerSensor.clear();
@@ -1246,12 +1403,136 @@ export class LiveEngine {
     this.state = this.buildInitialState();
   }
 
-  addWsClient(client: WsClient): void {
+  addWsClient(client: WsClient, role?: 'instructor' | 'operator' | 'anonymous'): void {
     this.wsClients.add(client);
+    this.wsClientInfos.set(client, {
+      client,
+      role: role ?? 'anonymous',
+      connectedAt: Date.now(),
+    });
+    this.onUserConnected();
   }
 
   removeWsClient(client: WsClient): void {
     this.wsClients.delete(client);
+    this.wsClientInfos.delete(client);
+    this.onUserDisconnected();
+  }
+
+  getConnectedUsers(): ConnectedUsers {
+    let instructors = 0;
+    let operators = 0;
+    for (const info of this.wsClientInfos.values()) {
+      if (info.role === 'instructor') instructors++;
+      else if (info.role === 'operator') operators++;
+    }
+    return {
+      total: this.wsClientInfos.size,
+      instructors,
+      operators,
+    };
+  }
+
+  // ── Auto-loop & idle shutdown ──────────────────────────────────────────
+
+  private onUserConnected(): void {
+    const users = this.getConnectedUsers();
+    if (users.total === 1) {
+      // First user connected — check if we should auto-loop
+      if (users.instructors === 0) {
+        this.startAutoLoop();
+      }
+    } else if (users.instructors > 0 && this.autoLoopEnabled) {
+      // An instructor just connected — stop auto-loop and hand over control
+      this.stopAutoLoop();
+    }
+  }
+
+  private onUserDisconnected(): void {
+    const users = this.getConnectedUsers();
+    if (users.total === 0) {
+      // All users disconnected — idle shutdown
+      this.onAllUsersDisconnected();
+    } else if (users.instructors === 0 && !this.autoLoopEnabled && !this.state.running) {
+      // Last instructor left, no one driving — start auto-loop
+      this.startAutoLoop();
+    }
+  }
+
+  startAutoLoop(): void {
+    if (this.autoLoopEnabled) return;
+    this.autoLoopEnabled = true;
+    this.pushEvent('autoloop.started', 'Auto-loop scenario started (no instructor present)');
+
+    // Reset to central-israel and start
+    try {
+      // Only reset if idle or completed
+      if (!this.state.running) {
+        this.reset('central-israel');
+        this.start();
+      }
+    } catch {
+      // State machine may reject — that's fine, try to start anyway
+      try { this.start(); } catch { /* already running */ }
+    }
+
+    // Schedule random target injections every 30-60 seconds
+    this.scheduleAutoInject();
+  }
+
+  stopAutoLoop(): void {
+    if (!this.autoLoopEnabled) return;
+    this.autoLoopEnabled = false;
+    if (this.autoLoopTimer) {
+      clearTimeout(this.autoLoopTimer);
+      this.autoLoopTimer = null;
+    }
+    if (this.autoInjectTimer) {
+      clearTimeout(this.autoInjectTimer);
+      this.autoInjectTimer = null;
+    }
+    this.pushEvent('autoloop.stopped', 'Auto-loop stopped (instructor connected)');
+  }
+
+  private scheduleAutoInject(): void {
+    if (!this.autoLoopEnabled) return;
+    // Random interval between 30-60 seconds real time
+    const delaySec = 30 + Math.random() * 30;
+    this.autoInjectTimer = setTimeout(() => {
+      if (!this.autoLoopEnabled || !this.state.running) return;
+      // Inject 1-2 random targets
+      const count = Math.random() < 0.5 ? 1 : 2;
+      for (let i = 0; i < count; i++) {
+        try {
+          // Generate random target within scenario area (Central Israel bounding box)
+          const lat = 31.5 + Math.random() * 1.5; // ~31.5 to 33.0
+          const lon = 34.5 + Math.random() * 1.0; // ~34.5 to 35.5
+          const alt = 500 + Math.random() * 5000; // 500m to 5500m
+          const speed = 100 + Math.random() * 200; // 100-300 m/s
+          const headingDeg = Math.random() * 360;
+          this.injectTarget({ lat, lon, alt, speed, headingDeg, label: `Auto-${Date.now().toString(36).slice(-4)}` });
+        } catch {
+          // Injection may fail if engine is in wrong state — ignore
+        }
+      }
+      // Schedule next injection
+      this.scheduleAutoInject();
+    }, delaySec * 1000);
+  }
+
+  private onAllUsersDisconnected(): void {
+    this.stopAutoLoop();
+    // Stop simulation loop and clear state
+    if (this.state.running) {
+      try { this.pause(); } catch { /* ignore state machine errors */ }
+    }
+    // Clear timer
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    this.state.running = false;
+    this.pushEvent('idle.shutdown', 'All users disconnected — engine idle');
   }
 
   // ── Simulation step ──────────────────────────────────────────────────
@@ -1267,6 +1548,7 @@ export class LiveEngine {
   }
 
   private tick(): void {
+    this.tickStartTime = Date.now();
     const dtSec = 1; // fixed 1-second simulation step
     const result = this.runner.step(dtSec);
     this.state.elapsedSec = result.currentTimeSec;
@@ -1286,6 +1568,7 @@ export class LiveEngine {
     }
 
     // Process observations as a batch through TrackManager (spatial clustering)
+    this.currentTickObservations += observationEvents.length;
     this.processObservationBatch(observationEvents);
 
     // Process other events individually
@@ -1320,7 +1603,7 @@ export class LiveEngine {
     }
 
     // Post-tick merge sweep: merge tracks within 3km to eliminate ghost tracks
-    this.trackManager.mergeCloseTracks(3000);
+    this.trackManager.mergeCloseTracks();
 
     // Snapshot tracks from track manager
     this.state.tracks = this.trackManager.getAllTracks().filter(t => t.status !== 'dropped');
@@ -1374,6 +1657,15 @@ export class LiveEngine {
     // REQ-12: Accumulate report timeline data
     accumulateSample(this);
 
+    // Compute tick latency (tickStart set in tick())
+    this.recordTickLatency();
+
+    // Update system load metrics
+    this.updateSystemLoad();
+
+    // Update ballistic estimates
+    this.updateBallisticEstimates();
+
     // Broadcast updated RAP to WebSocket clients
     this.broadcastRap();
 
@@ -1381,6 +1673,20 @@ export class LiveEngine {
     if (result.isComplete) {
       this.pause();
       this.pushEvent('scenario.completed', `Scenario completed at T+${result.currentTimeSec}s`);
+      // Auto-loop: restart scenario if enabled
+      if (this.autoLoopEnabled) {
+        this.autoLoopTimer = setTimeout(() => {
+          if (!this.autoLoopEnabled) return;
+          this.pushEvent('autoloop.restart', 'Auto-loop restarting scenario');
+          try {
+            this.reset('central-israel');
+            this.start();
+            this.scheduleAutoInject();
+          } catch {
+            // State machine rejection — ignore
+          }
+        }, 3000); // 3 second pause before restart
+      }
     }
   }
 
@@ -1422,6 +1728,9 @@ export class LiveEngine {
     }
 
     if (observations.length === 0) return;
+
+    // Track observation count for system load metrics
+    this.currentTickObservations += observations.length;
 
     // Batch process through TrackManager (clusters spatially, creates fewer tracks)
     const results = this.trackManager.processObservationBatch(observations, healthMap);
@@ -1468,6 +1777,9 @@ export class LiveEngine {
         const sensorType = this.state.sensors.find(s => s.sensorId === obs.sensorId)?.sensorType ?? 'radar';
         const fusionDecision = selectFusionMode(health ?? undefined, sensorType, 0.5);
         this.fusionModePerSensor.set(obs.sensorId as string, fusionDecision.mode);
+
+        // Track observation count for system load metrics
+        this.currentTickObservations++;
 
         // Process through track manager (correlate + fuse)
         const tmResult = this.trackManager.processObservation(obs, health ?? undefined);
@@ -4162,6 +4474,15 @@ export class LiveEngine {
       convergenceStates: this.getConvergenceStates(),
       // REQ-16: EO management module status
       eoModuleStatus: this.cachedEoModuleStatus ?? undefined,
+      // Latency metrics
+      latency: this.cachedLatency,
+      // System load metrics
+      systemLoad: this.cachedSystemLoad,
+      // Ballistic estimates
+      ballisticEstimates: this.cachedBallisticEstimates,
+      // Connected user counts
+      connectedUsers: this.getConnectedUsers(),
+      autoLoopEnabled: this.autoLoopEnabled,
     });
 
     // Separate ground truth broadcast
@@ -4181,10 +4502,101 @@ export class LiveEngine {
     for (const client of this.wsClients) {
       try {
         client.send(json);
+        this.currentTickWsMessages++;
       } catch {
         this.wsClients.delete(client);
       }
     }
+  }
+
+  // ── Ballistic Estimation ─────────────────────────────────────────────
+
+  private updateBallisticEstimates(): void {
+    const BALLISTIC_CLASSIFICATIONS = new Set(['missile', 'rocket']);
+    const estimates: typeof this.cachedBallisticEstimates = [];
+
+    for (const track of this.state.tracks) {
+      if (track.status === 'dropped') continue;
+      if (!track.classification || !BALLISTIC_CLASSIFICATIONS.has(track.classification)) continue;
+      if (!track.state || !Number.isFinite(track.state.lat) || !Number.isFinite(track.state.lon)) continue;
+
+      const trackId = track.systemTrackId as string;
+      let history = this.trackPositionHistory.get(trackId);
+      if (!history) {
+        history = [];
+        this.trackPositionHistory.set(trackId, history);
+      }
+
+      const pos = { lat: track.state.lat, lon: track.state.lon, alt: track.state.alt ?? 0, timeSec: this.state.elapsedSec };
+      if (history.length === 0 || history[history.length - 1].timeSec < pos.timeSec) {
+        history.push(pos);
+        if (history.length > LiveEngine.MAX_POSITION_HISTORY) {
+          history.shift();
+        }
+      }
+
+      if (history.length < 3) continue;
+
+      const positions = history.map(h => ({ lat: h.lat, lon: h.lon, altM: h.alt }));
+      const timestamps = history.map(h => h.timeSec);
+
+      const launch = estimateLaunchPoint(positions, timestamps);
+      const impact = estimateImpactPoint(positions, timestamps);
+
+      estimates.push({
+        trackId,
+        launchPoint: launch ? { lat: launch.point.lat, lon: launch.point.lon, alt: launch.point.altM, uncertainty2SigmaM: launch.uncertainty2SigmaM } : null,
+        impactPoint: impact ? { lat: impact.point.lat, lon: impact.point.lon, alt: impact.point.altM, uncertainty2SigmaM: impact.uncertainty2SigmaM, timeToImpactSec: impact.timeToImpactSec } : null,
+      });
+    }
+
+    this.cachedBallisticEstimates = estimates;
+  }
+
+  // ── Investigation Event Log ──────────────────────────────────────────
+
+  /**
+   * Push an investigation event for a specific track (pyrite/audit trail).
+   */
+  private pushInvestigationEvent(
+    trackId: string,
+    type: InvestigationEvent['type'],
+    sensorId: string,
+    details: Record<string, unknown>,
+  ): void {
+    if (!this.investigationLog.has(trackId)) {
+      this.investigationLog.set(trackId, []);
+    }
+    const log = this.investigationLog.get(trackId)!;
+    log.push({
+      timestamp: Date.now(),
+      simTimeSec: this.state.elapsedSec,
+      type,
+      sensorId,
+      trackId,
+      details,
+    });
+    // Keep last 200 events per track
+    if (log.length > 200) {
+      this.investigationLog.set(trackId, log.slice(-200));
+    }
+  }
+
+  /**
+   * Get the investigation event log for a specific track.
+   */
+  getInvestigationLog(trackId: string): InvestigationEvent[] {
+    return this.investigationLog.get(trackId) ?? [];
+  }
+
+  /**
+   * Inject an external observation (e.g. from an ASTERIX feed) directly into
+   * the track manager. This bypasses the ScenarioRunner simulation loop and
+   * feeds the observation straight into the fusion pipeline.
+   */
+  injectExternalObservation(obs: SourceObservation): void {
+    this.trackManager.processObservation(obs);
+    this.state.tracks = this.trackManager.getAllTracks().filter(t => t.status !== 'dropped');
   }
 }
 

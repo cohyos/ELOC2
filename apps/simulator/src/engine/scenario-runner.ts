@@ -4,6 +4,7 @@
  */
 
 import type { Position3D } from '@eloc2/domain';
+import { createSeededRandom } from '@eloc2/shared-utils';
 import type {
   ScenarioDefinition,
   FaultDefinition,
@@ -13,8 +14,8 @@ import {
   interpolateVelocity,
   isTargetActive,
 } from '../targets/target-generator.js';
-import { getActiveFaults } from '../faults/fault-manager.js';
-import { generateRadarObservation } from '../sensors/radar/radar-model.js';
+import { getActiveFaults, isSensorInOutage } from '../faults/fault-manager.js';
+import { generateRadarObservation, generateClutterFalseAlarms } from '../sensors/radar/radar-model.js';
 import { generateEoBearing } from '../sensors/eo/eo-model.js';
 import { generateC4isrObservation } from '../sensors/c4isr-source/c4isr-model.js';
 
@@ -41,6 +42,7 @@ export class ScenarioRunner {
   private currentTimeSec: number;
   private stepCount: number;
   private readonly baseTimestamp: number;
+  private readonly rng: (() => number) | undefined;
 
   // Track which faults/operator-actions have already been emitted
   private readonly emittedFaultStarts = new Set<string>();
@@ -52,6 +54,10 @@ export class ScenarioRunner {
     this.currentTimeSec = 0;
     this.stepCount = 0;
     this.baseTimestamp = Date.now();
+    // Create seeded PRNG for deterministic replay when seed is provided
+    this.rng = scenario.seed !== undefined
+      ? createSeededRandom(scenario.seed)
+      : undefined;
   }
 
   /**
@@ -122,6 +128,7 @@ export class ScenarioRunner {
 
       for (const [tgtId, tgtPos] of targetPositions) {
         const tgtVel = this.getTargetVelocity(tgtId);
+        const tgtDef = this.scenario.targets.find((t) => t.targetId === tgtId);
 
         switch (sensor.type) {
           case 'radar': {
@@ -133,6 +140,8 @@ export class ScenarioRunner {
               this.baseTimestamp,
               sensorFaults,
               tgtId,
+              this.rng,
+              { rcs: tgtDef?.rcs, classification: tgtDef?.classification, weather: this.scenario.weather },
             );
             if (obs) {
               events.push({
@@ -152,6 +161,8 @@ export class ScenarioRunner {
               this.baseTimestamp,
               sensorFaults,
               tgtId,
+              this.rng,
+              { weather: this.scenario.weather },
             );
             if (bearing) {
               events.push({
@@ -171,6 +182,7 @@ export class ScenarioRunner {
               this.currentTimeSec,
               this.baseTimestamp,
               sensorFaults,
+              this.rng,
             );
             if (obs) {
               events.push({
@@ -181,6 +193,31 @@ export class ScenarioRunner {
             }
             break;
           }
+        }
+      }
+    }
+
+    // 4b. Generate clutter false alarms for radar sensors
+    if (this.scenario.clutterZones && this.scenario.clutterZones.length > 0) {
+      for (const sensor of this.scenario.sensors) {
+        if (sensor.type !== 'radar') continue;
+        const shouldUpdate = this.shouldSensorUpdate('radar', this.stepCount);
+        if (!shouldUpdate) continue;
+        if (isSensorInOutage(sensor.sensorId, activeFaults)) continue;
+
+        const falseAlarms = generateClutterFalseAlarms(
+          sensor,
+          this.scenario.clutterZones,
+          this.currentTimeSec,
+          this.baseTimestamp,
+          this.rng,
+        );
+        for (const fa of falseAlarms) {
+          events.push({
+            type: 'observation',
+            timeSec: this.currentTimeSec,
+            data: fa,
+          });
         }
       }
     }

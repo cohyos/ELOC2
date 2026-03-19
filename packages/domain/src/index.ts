@@ -23,6 +23,12 @@ export type {
   OperationalZone,
 } from './common-types.js';
 
+export { TARGET_RCS } from './common-types.js';
+
+// Weather & clutter
+export type { WeatherCondition, ClutterZone } from './weather.js';
+export { CLEAR_WEATHER } from './weather.js';
+
 // Source track
 export type {
   SensorFrame,

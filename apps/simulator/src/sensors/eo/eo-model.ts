@@ -6,6 +6,7 @@ import type {
   SensorId,
   Timestamp,
   BearingMeasurement,
+  WeatherCondition,
 } from '@eloc2/domain';
 import {
   bearingDeg,
@@ -14,6 +15,7 @@ import {
   haversineDistanceM,
 } from '@eloc2/shared-utils';
 import type { Position3D } from '@eloc2/domain';
+import { checkLineOfSight } from '@eloc2/terrain';
 import type { SensorDefinition, FaultDefinition } from '../../types/scenario.js';
 import {
   applyAzimuthBias,
@@ -29,10 +31,28 @@ export interface EoBearingObservation {
 }
 
 /** Add Gaussian noise using Box-Muller transform. */
-function gaussianNoise(stddev: number): number {
-  const u1 = Math.random();
-  const u2 = Math.random();
+function gaussianNoise(stddev: number, rng: () => number = Math.random): number {
+  const u1 = rng();
+  const u2 = rng();
   return stddev * Math.sqrt(-2 * Math.log(u1 || 1e-10)) * Math.cos(2 * Math.PI * u2);
+}
+
+/**
+ * Compute time-of-day range modifier for EO sensors.
+ * Assumes scenario start at 08:00 local time.
+ *   Day   (06:00-18:00): 100%
+ *   Dawn  (05:00-06:00): 70%
+ *   Dusk  (18:00-19:00): 70%
+ *   Night (19:00-05:00): 40%
+ */
+function timeOfDayRangeModifier(timeSec: number): number {
+  const SCENARIO_START_HOUR = 8; // 08:00 local
+  const hourOfDay = (SCENARIO_START_HOUR + timeSec / 3600) % 24;
+
+  if (hourOfDay >= 6 && hourOfDay < 18) return 1.0;   // Day
+  if (hourOfDay >= 5 && hourOfDay < 6) return 0.7;     // Dawn
+  if (hourOfDay >= 18 && hourOfDay < 19) return 0.7;   // Dusk
+  return 0.4;                                           // Night
 }
 
 /**
@@ -46,12 +66,25 @@ export function generateEoBearing(
   baseTimestamp: number,
   faults: FaultDefinition[],
   targetId: string = 'unknown',
+  rng?: () => number,
+  options?: { terrainLos?: boolean; weather?: WeatherCondition },
 ): EoBearingObservation | undefined {
   const sensorFaults = faults.filter((f) => f.sensorId === sensor.sensorId);
 
   // Check outage
   if (isSensorInOutage(sensor.sensorId, sensorFaults)) {
     return undefined;
+  }
+
+  // Terrain line-of-sight check (opt-in via options.terrainLos)
+  if (options?.terrainLos) {
+    const los = checkLineOfSight(
+      { lat: sensor.position.lat, lon: sensor.position.lon, alt: sensor.position.alt },
+      { lat: targetPos.lat, lon: targetPos.lon, alt: targetPos.alt },
+    );
+    if (!los.visible) {
+      return undefined;
+    }
   }
 
   // Compute true azimuth
@@ -77,6 +110,19 @@ export function generateEoBearing(
     return undefined;
   }
 
+  // Check EO max detection range with time-of-day modulation
+  if (sensor.maxDetectionRangeM !== undefined) {
+    const todModifier = timeOfDayRangeModifier(timeSec);
+    // Weather visibility reduction: full range at 10km+, linear reduction below
+    const weatherModifier = options?.weather
+      ? Math.min(1, options.weather.visibilityKm / 10)
+      : 1.0;
+    const effectiveEoRange = sensor.maxDetectionRangeM * todModifier * weatherModifier;
+    if (rangeM > effectiveEoRange) {
+      return undefined;
+    }
+  }
+
   // Check coverage arc (FOR — Field of Regard)
   const { minAzDeg, maxAzDeg, minElDeg, maxElDeg } = sensor.coverage;
   let azInRange: boolean;
@@ -92,8 +138,9 @@ export function generateEoBearing(
   }
 
   // Add bearing noise: +/-0.1 deg
-  const noisyAzDeg = trueAzDeg + gaussianNoise(0.1);
-  const noisyElDeg = trueElDeg + gaussianNoise(0.1);
+  const r = rng ?? Math.random;
+  const noisyAzDeg = trueAzDeg + gaussianNoise(0.1, r);
+  const noisyElDeg = trueElDeg + gaussianNoise(0.1, r);
 
   // Apply azimuth bias fault
   const biasedAzDeg = applyAzimuthBias(noisyAzDeg, sensorFaults);
@@ -103,7 +150,7 @@ export function generateEoBearing(
   timestampMs = applyClockDrift(timestampMs, sensorFaults);
 
   // Image quality: 0.8-1.0 with some randomness
-  const imageQuality = 0.8 + Math.random() * 0.2;
+  const imageQuality = 0.8 + r() * 0.2;
 
   const bearing: BearingMeasurement = {
     azimuthDeg: biasedAzDeg,

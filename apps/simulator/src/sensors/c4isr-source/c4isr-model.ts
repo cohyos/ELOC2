@@ -17,9 +17,9 @@ import type { SensorDefinition, FaultDefinition } from '../../types/scenario.js'
 import { isSensorInOutage, applyClockDrift } from '../../faults/fault-manager.js';
 
 /** Add Gaussian noise using Box-Muller transform. */
-function gaussianNoise(stddev: number): number {
-  const u1 = Math.random();
-  const u2 = Math.random();
+function gaussianNoise(stddev: number, rng: () => number = Math.random): number {
+  const u1 = rng();
+  const u2 = rng();
   return stddev * Math.sqrt(-2 * Math.log(u1 || 1e-10)) * Math.cos(2 * Math.PI * u2);
 }
 
@@ -36,6 +36,7 @@ export function generateC4isrObservation(
   timeSec: number,
   baseTimestamp: number,
   faults: FaultDefinition[] = [],
+  rng?: () => number,
 ): SourceObservation | undefined {
   // Check for sensor outage
   if (isSensorInOutage(sensor.sensorId, faults)) {
@@ -43,19 +44,20 @@ export function generateC4isrObservation(
   }
   // Position noise: +/-200m
   const posNoise = 200;
+  const r = rng ?? Math.random;
   const noisyPos: Position3D = {
-    lat: targetPos.lat + gaussianNoise(posNoise / 111_320),
-    lon: targetPos.lon + gaussianNoise(posNoise / (111_320 * Math.cos(targetPos.lat * DEG_TO_RAD))),
-    alt: targetPos.alt + gaussianNoise(posNoise),
+    lat: targetPos.lat + gaussianNoise(posNoise / 111_320, r),
+    lon: targetPos.lon + gaussianNoise(posNoise / (111_320 * Math.cos(targetPos.lat * DEG_TO_RAD)), r),
+    alt: targetPos.alt + gaussianNoise(posNoise, r),
   };
 
   // Velocity noise: +/-5 m/s
   let noisyVel: Velocity3D | undefined;
   if (targetVel) {
     noisyVel = {
-      vx: targetVel.vx + gaussianNoise(5),
-      vy: targetVel.vy + gaussianNoise(5),
-      vz: targetVel.vz + gaussianNoise(5),
+      vx: targetVel.vx + gaussianNoise(5, r),
+      vy: targetVel.vy + gaussianNoise(5, r),
+      vz: targetVel.vz + gaussianNoise(5, r),
     };
   }
 

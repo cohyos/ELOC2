@@ -11,6 +11,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@eloc2/asterix-adapter": "workspace:*",
+    "@eloc2/database": "workspace:*",
     "@eloc2/deployment-planner": "workspace:*",
     "@eloc2/domain": "workspace:*",
     "@eloc2/eo-investigation": "workspace:*",
