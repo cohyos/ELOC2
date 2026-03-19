@@ -143,6 +143,22 @@ export interface OperationalZone {
 // Bearing measurement
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Radar Cross Section
+// ---------------------------------------------------------------------------
+
+/** Radar Cross Section in square meters for common target types */
+export const TARGET_RCS: Record<string, number> = {
+  fighter_aircraft: 5.0,    // 5 m²
+  civilian_aircraft: 10.0,  // 10 m²
+  uav: 0.1,                // 0.1 m²
+  drone: 0.01,             // 0.01 m²
+  helicopter: 3.0,         // 3 m²
+  missile: 0.05,           // 0.05 m²
+  rocket: 0.02,            // 0.02 m²
+  unknown: 1.0,            // 1 m² default
+};
+
 /** A single angular measurement from a sensor. */
 export interface BearingMeasurement {
   azimuthDeg: number;

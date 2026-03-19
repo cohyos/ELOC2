@@ -83,6 +83,9 @@ function DefaultPanel() {
   const eoModuleStatus = useTaskStore(s => s.eoModuleStatus);
   const selectView = useUiStore(s => s.setDetailView);
   const latency = useUiStore(s => s.latency);
+  const systemLoad = useUiStore(s => s.systemLoad);
+  const connectedUsers = useUiStore(s => s.connectedUsers);
+  const autoLoopEnabled = useUiStore(s => s.autoLoopEnabled);
 
   const radarCount = sensors.filter(s => s.sensorType === 'radar').length;
   const eoCount = sensors.filter(s => s.sensorType === 'eo').length;
@@ -162,6 +165,16 @@ function DefaultPanel() {
         })()}
       </div>
       <div style={{ marginBottom: '16px' }}>
+        <div style={sectionTitle}>Connected Users</div>
+        <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Online</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: connectedUsers.total > 0 ? '#00cc44' : '#888' }}>{connectedUsers.total}</span></div>
+        {connectedUsers.instructors > 0 && <div style={row}><span style={{ color: '#4a9eff', fontSize: '12px' }}>Instructors</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{connectedUsers.instructors}</span></div>}
+        {connectedUsers.operators > 0 && <div style={row}><span style={{ color: '#ff8800', fontSize: '12px' }}>Operators</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{connectedUsers.operators}</span></div>}
+        {connectedUsers.total - connectedUsers.instructors - connectedUsers.operators > 0 && (
+          <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Anonymous</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{connectedUsers.total - connectedUsers.instructors - connectedUsers.operators}</span></div>
+        )}
+        {autoLoopEnabled && <div style={row}><span style={{ color: '#ffcc00', fontSize: '12px' }}>Auto-Loop</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#ffcc00' }}>Active</span></div>}
+      </div>
+      <div style={{ marginBottom: '16px' }}>
         <div style={sectionTitle}>EO Tasking</div>
         <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Active Tasks</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{activeTasks}</span></div>
         <button onClick={() => selectView('tasks')} style={{ marginTop: '6px', background: '#333', color: '#aaa', border: 'none', padding: '4px 12px', borderRadius: '3px', cursor: 'pointer', fontSize: '11px', width: '100%' }}>View Tasks</button>
@@ -181,6 +194,26 @@ function DefaultPanel() {
           )}
         </div>
       )}
+      {/* System Load */}
+      <div style={{ marginBottom: '16px' }}>
+        <div style={sectionTitle}>System Load</div>
+        {(() => {
+          const tickColor = systemLoad.tickMs < 50 ? '#00cc44' : systemLoad.tickMs < 100 ? '#ffcc00' : '#ff3333';
+          const memColor = systemLoad.memoryMB < 256 ? '#00cc44' : systemLoad.memoryMB <= 400 ? '#ffcc00' : '#ff3333';
+          const uptimeH = Math.floor(systemLoad.uptime / 3600);
+          const uptimeM = Math.floor((systemLoad.uptime % 3600) / 60);
+          return (
+            <>
+              <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Tick</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: tickColor }}>{systemLoad.tickMs}ms</span></div>
+              <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Obs/sec</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{systemLoad.observationsPerSec}</span></div>
+              <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Tracks</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{systemLoad.tracksActive} active</span></div>
+              <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>WS msg/sec</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{systemLoad.wsMessagesPerSec}</span></div>
+              <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Memory</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: memColor }}>{systemLoad.memoryMB} MB</span></div>
+              <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Uptime</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{uptimeH}h {uptimeM}m</span></div>
+            </>
+          );
+        })()}
+      </div>
       <FusionConfigPanel />
       <div style={{ marginBottom: '16px' }}>
         <div style={sectionTitle}>Build Info</div>

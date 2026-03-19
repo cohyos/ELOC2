@@ -17,6 +17,7 @@ export interface SensorDefinition {
   coverage: CoverageArc;
   fov?: FieldOfView;  // EO only
   slewRateDegPerSec?: number;  // EO only
+  maxDetectionRangeM?: number;  // EO only — max detection range in meters
 }
 
 export interface WaypointDef {
@@ -32,6 +33,7 @@ export interface TargetDefinition {
   waypoints: WaypointDef[];  // linear interpolation between waypoints
   startTime: number;  // seconds from scenario start
   classification?: TargetClassification;
+  rcs?: number;  // Radar Cross Section in m² (overrides TARGET_RCS lookup)
 }
 
 export interface FaultDefinition {
@@ -71,4 +73,64 @@ export interface DeploymentDefinition {
   name: string;
   description: string;
   sensors: SensorDefinition[];
+}
+
+// ── Composition Types ────────────────────────────────────────────────────────
+
+export interface ThreatProfile {
+  id: string;
+  name: string;
+  description: string;
+  targets: TargetDefinition[];
+  faults?: FaultDefinition[];
+  operatorActions?: OperatorActionDef[];
+}
+
+export interface WeatherProfile {
+  id: string;
+  name: string;
+  visibility_km: number;      // EO range modifier
+  rain_mm_hr: number;         // Radar clutter modifier
+  cloud_ceiling_ft: number;   // Altitude-dependent detection
+  fog: boolean;               // Heavy EO degradation
+}
+
+/** Compose a scenario from deployment + threat + weather */
+export function composeScenario(
+  deployment: DeploymentDefinition,
+  threat: ThreatProfile,
+  weather?: WeatherProfile,
+  options?: { durationSec?: number; seed?: number; center?: { lat: number; lon: number } },
+): ScenarioDefinition {
+  // Determine duration: explicit option > max target end time > 60s minimum
+  let durationSec = options?.durationSec ?? 0;
+  if (!durationSec) {
+    for (const t of threat.targets) {
+      const lastWp = t.waypoints[t.waypoints.length - 1];
+      const endTime = t.startTime + (lastWp?.time ?? 0);
+      if (endTime > durationSec) durationSec = endTime;
+    }
+    // Add 10% buffer, minimum 60s
+    durationSec = Math.max(60, Math.ceil(durationSec * 1.1));
+  }
+
+  const composedId = `${deployment.id}--${threat.id}${weather ? `--${weather.id}` : ''}`;
+  const weatherNote = weather
+    ? ` Weather: ${weather.name} (vis ${weather.visibility_km} km, rain ${weather.rain_mm_hr} mm/hr).`
+    : '';
+
+  return {
+    id: composedId,
+    name: `${deployment.name} + ${threat.name}`,
+    description:
+      `Composed scenario: ${deployment.description} | ${threat.description}${weatherNote}`,
+    durationSec,
+    policyMode: 'auto_with_veto',
+    sensors: deployment.sensors,
+    targets: threat.targets,
+    faults: threat.faults ?? [],
+    operatorActions: threat.operatorActions ?? [],
+    seed: options?.seed,
+    center: options?.center,
+  };
 }

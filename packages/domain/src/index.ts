@@ -23,6 +23,8 @@ export type {
   OperationalZone,
 } from './common-types.js';
 
+export { TARGET_RCS } from './common-types.js';
+
 // Source track
 export type {
   SensorFrame,

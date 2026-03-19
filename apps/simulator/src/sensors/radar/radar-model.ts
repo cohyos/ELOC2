@@ -10,6 +10,7 @@ import type {
   SourceObservation,
   Covariance3x3,
 } from '@eloc2/domain';
+import { TARGET_RCS } from '@eloc2/domain';
 import {
   generateId,
   haversineDistanceM,
@@ -39,19 +40,32 @@ function gaussianNoise(stddev: number, rng: () => number = Math.random): number 
 }
 
 /**
+ * Compute effective radar detection range based on target RCS.
+ * Uses the radar equation: range proportional to RCS^0.25
+ * Reference RCS = 1.0 m² (base range spec assumes 1 m² target).
+ */
+function computeEffectiveRange(baseRangeM: number, rcs: number): number {
+  const REFERENCE_RCS = 1.0; // m²
+  const factor = Math.pow(rcs / REFERENCE_RCS, 0.25);
+  return Math.min(baseRangeM * factor, baseRangeM * 2); // cap at 2x base range
+}
+
+/**
  * Check if a target is within the sensor's coverage arc.
  */
 function isInCoverage(
   sensor: SensorDefinition,
   targetPos: Position3D,
+  effectiveMaxRangeM?: number,
 ): { inCoverage: boolean; rangeM: number; azDeg: number; elDeg: number } {
+  const maxRange = effectiveMaxRangeM ?? sensor.coverage.maxRangeM;
   const rangeM = haversineDistanceM(
     sensor.position.lat, sensor.position.lon,
     targetPos.lat, targetPos.lon,
   );
 
   // Check range
-  if (rangeM > sensor.coverage.maxRangeM) {
+  if (rangeM > maxRange) {
     return { inCoverage: false, rangeM, azDeg: 0, elDeg: 0 };
   }
 
@@ -97,14 +111,21 @@ export function generateRadarObservation(
   faults: FaultDefinition[],
   targetId: string = 'unknown',
   rng?: () => number,
+  options?: { rcs?: number; classification?: string },
 ): RadarObservation | undefined {
   // Check outage
   if (isSensorInOutage(sensor.sensorId, faults)) {
     return undefined;
   }
 
+  // Compute effective range based on RCS
+  // Priority: explicit rcs > classification lookup > default 1.0 m²
+  const rcs = options?.rcs
+    ?? (options?.classification ? TARGET_RCS[options.classification] ?? 1.0 : 1.0);
+  const effectiveMaxRange = computeEffectiveRange(sensor.coverage.maxRangeM, rcs);
+
   // Check coverage
-  const coverage = isInCoverage(sensor, targetPos);
+  const coverage = isInCoverage(sensor, targetPos, effectiveMaxRange);
   if (!coverage.inCoverage) {
     return undefined;
   }

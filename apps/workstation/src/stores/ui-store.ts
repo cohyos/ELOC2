@@ -98,6 +98,20 @@ interface UiState {
   // Latency
   latency: { tickMs: number; avgMs: number; maxMs: number };
 
+  // System load
+  systemLoad: {
+    tickMs: number;
+    observationsPerSec: number;
+    tracksActive: number;
+    wsMessagesPerSec: number;
+    memoryMB: number;
+    uptime: number;
+  };
+
+  // Connected users
+  connectedUsers: { total: number; instructors: number; operators: number };
+  autoLoopEnabled: boolean;
+
   // Actions
   selectTrack: (id: string | null) => void;
   selectSensor: (id: string | null) => void;
@@ -147,6 +161,13 @@ interface UiState {
 
   // Latency actions
   setLatency: (latency: { tickMs: number; avgMs: number; maxMs: number }) => void;
+
+  // System load actions
+  setSystemLoad: (load: { tickMs: number; observationsPerSec: number; tracksActive: number; wsMessagesPerSec: number; memoryMB: number; uptime: number }) => void;
+
+  // Connected users actions
+  setConnectedUsers: (users: { total: number; instructors: number; operators: number }) => void;
+  setAutoLoopEnabled: (enabled: boolean) => void;
 }
 
 export interface SelectionBearingRay {
@@ -218,6 +239,10 @@ export const useUiStore = create<UiState>((set) => ({
   allowedActions: ['start', 'reset'],
   fusionConfig: { gateThreshold: 16.27, mergeDistanceM: 3000 },
   latency: { tickMs: 0, avgMs: 0, maxMs: 0 },
+  systemLoad: { tickMs: 0, observationsPerSec: 0, tracksActive: 0, wsMessagesPerSec: 0, memoryMB: 0, uptime: 0 },
+
+  connectedUsers: { total: 0, instructors: 0, operators: 0 },
+  autoLoopEnabled: false,
 
   selectTrack: (id) =>
     set({ selectedTrackId: id, selectedSensorId: null, selectedCueId: null, selectedGroupId: null, selectedGeometryTrackId: null, detailView: id ? 'track' : 'none', detailPanelOpen: !!id }),
@@ -310,4 +335,9 @@ export const useUiStore = create<UiState>((set) => ({
   setFusionConfig: (config) => set({ fusionConfig: config }),
 
   setLatency: (latency) => set({ latency }),
+
+  setSystemLoad: (load) => set({ systemLoad: load }),
+
+  setConnectedUsers: (users) => set({ connectedUsers: users }),
+  setAutoLoopEnabled: (enabled) => set({ autoLoopEnabled: enabled }),
 }));

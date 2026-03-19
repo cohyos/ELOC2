@@ -128,6 +128,7 @@ export class ScenarioRunner {
 
       for (const [tgtId, tgtPos] of targetPositions) {
         const tgtVel = this.getTargetVelocity(tgtId);
+        const tgtDef = this.scenario.targets.find((t) => t.targetId === tgtId);
 
         switch (sensor.type) {
           case 'radar': {
@@ -140,6 +141,7 @@ export class ScenarioRunner {
               sensorFaults,
               tgtId,
               this.rng,
+              { rcs: tgtDef?.rcs, classification: tgtDef?.classification },
             );
             if (obs) {
               events.push({

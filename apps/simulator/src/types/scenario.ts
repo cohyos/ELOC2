@@ -25,6 +25,7 @@ export interface TargetDefinition {
   waypoints: WaypointDef[];
   startTime: number;
   classification?: TargetClassification;
+  rcs?: number;  // Radar Cross Section in m² (overrides TARGET_RCS lookup)
 }
 
 export interface SensorDefinition {
@@ -34,6 +35,7 @@ export interface SensorDefinition {
   coverage: CoverageArc;
   fov?: FieldOfView;
   slewRateDegPerSec?: number;
+  maxDetectionRangeM?: number;  // EO only — max detection range in meters
 }
 
 export interface FaultDefinition {

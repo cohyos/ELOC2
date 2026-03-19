@@ -187,6 +187,15 @@ export class ReplayController {
     if (data.latency && typeof data.latency === 'object') {
       useUiStore.getState().setLatency(data.latency);
     }
+    if (data.systemLoad && typeof data.systemLoad === 'object') {
+      useUiStore.getState().setSystemLoad(data.systemLoad);
+    }
+    if (data.connectedUsers && typeof data.connectedUsers === 'object') {
+      useUiStore.getState().setConnectedUsers(data.connectedUsers);
+    }
+    if (typeof data.autoLoopEnabled === 'boolean') {
+      useUiStore.getState().setAutoLoopEnabled(data.autoLoopEnabled);
+    }
     // Update replay time from simulation
     if (typeof data.simTimeSec === 'number') {
       useUiStore.getState().setReplayTime(data.simTimeSec);
