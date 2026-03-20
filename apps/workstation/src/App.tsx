@@ -456,7 +456,7 @@ export function App() {
   useEffect(() => { fetchRap(); fetchSensors(); fetchTasks(); }, []);
 
   // WebSocket connection
-  useEffect(() => { replayController.connect(); return () => replayController.disconnect(); }, []);
+  useEffect(() => { replayController.connect(useUiStore.getState().selectedRole); return () => replayController.disconnect(); }, []);
 
   // Keyboard shortcuts for playback control
   useEffect(() => {
