@@ -105,10 +105,11 @@ function DeploymentMap() {
 
     // HTML markers for placed sensors (draggable)
     let html = '';
-    for (const ps of placedSensors) {
+    for (let idx = 0; idx < placedSensors.length; idx++) {
+      const ps = placedSensors[idx];
       const px = map.latLngToContainerPoint([ps.position.lat, ps.position.lon]);
       const sensorColor = ps.spec.type === 'eo' ? colors.eo : colors.radar;
-      html += `<div style="position:absolute;left:${px.x}px;top:${px.y}px;transform:translate(-50%,-50%);cursor:grab;pointer-events:auto;" data-placed-sensor="${i}">
+      html += `<div style="position:absolute;left:${px.x}px;top:${px.y}px;transform:translate(-50%,-50%);cursor:grab;pointer-events:auto;" data-placed-sensor="${idx}">
         <div style="width:12px;height:12px;border-radius:50%;background:${sensorColor};border:2px solid #fff;box-shadow:0 0 6px ${sensorColor}88;"></div>
       </div>`;
       html += `<div style="position:absolute;left:${px.x + 10}px;top:${px.y - 16}px;pointer-events:none;font:bold 11px monospace;color:${sensorColor};text-shadow:0 0 3px #000,0 0 6px #000;">
@@ -155,8 +156,11 @@ function DeploymentMap() {
     map.on('move', scheduleRedraw);
     map.on('zoom', scheduleRedraw);
     map.on('resize', scheduleRedraw);
-    // Draw immediately once tiles are loaded
-    map.whenReady(() => drawOverlays());
+    // Draw immediately once tiles are loaded; invalidateSize for flex layout
+    map.whenReady(() => {
+      map.invalidateSize();
+      drawOverlays();
+    });
 
     mapRef.current = map;
 
@@ -172,12 +176,37 @@ function DeploymentMap() {
     if (mapRef.current) drawOverlays();
   }, [drawOverlays]);
 
+  // Place-sensor click handler
+  useEffect(() => {
+    const m = mapRef.current;
+    if (!m) return;
+
+    const onClick = (e: L.LeafletMouseEvent) => {
+      const state = useDeploymentStore.getState();
+      const mode = state.drawMode;
+
+      if (mode === 'place-sensor') {
+        state.placeSensorAtPosition({ lat: e.latlng.lat, lon: e.latlng.lng });
+        return;
+      }
+
+      // Polygon drawing modes
+      if (mode === 'draw-area' || mode === 'draw-exclusion' || mode === 'draw-threat') {
+        state.addDrawVertex({ lat: e.latlng.lat, lon: e.latlng.lng });
+      }
+    };
+
+    m.on('click', onClick);
+    return () => { m.off('click', onClick); };
+  }, []);
+
   // Update cursor for drawing modes
   useEffect(() => {
     const m = mapRef.current;
     if (!m) return;
-    m.getCanvas().style.cursor = drawMode !== 'select' ? 'crosshair' : '';
-    m.getCanvas().style.userSelect = 'none';
+    const container = m.getContainer();
+    container.style.cursor = drawMode !== 'select' ? 'crosshair' : '';
+    container.style.userSelect = 'none';
   }, [drawMode]);
 
   // Draggable sensors
@@ -196,18 +225,18 @@ function DeploymentMap() {
 
     const onMouseMove = (e: MouseEvent) => {
       if (!dragState.current) return;
-      const rect = m.getCanvas().getBoundingClientRect();
-      const lngLat = m.unproject([e.clientX - rect.left, e.clientY - rect.top]);
+      const rect = m.getContainer().getBoundingClientRect();
+      const latlng = m.containerPointToLatLng([e.clientX - rect.left, e.clientY - rect.top]);
       useDeploymentStore.getState().updatePlacedSensorPosition(dragState.current.index, {
-        lat: lngLat.lat, lon: lngLat.lng,
+        lat: latlng.lat, lon: latlng.lng,
       });
-      m.getCanvas().style.cursor = 'grabbing';
+      m.getContainer().style.cursor = 'grabbing';
     };
 
     const onMouseUp = () => {
       if (!dragState.current) return;
       dragState.current = null;
-      if (m) m.getCanvas().style.cursor = '';
+      if (m) m.getContainer().style.cursor = '';
     };
 
     markerDiv.addEventListener('mousedown', onMouseDown);
@@ -233,7 +262,7 @@ function DeploymentMap() {
   return (
     <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%' }}>
       {/* Leaflet container (raster tiles only) */}
-      <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
+      <div ref={mapContainerRef} style={{ width: '100%', height: '100%', userSelect: 'none' }} />
 
       <svg ref={svgRef} style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 14 }} />
       <div ref={markersRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 15 }} />

@@ -63,6 +63,8 @@ function speedToColor(speedMs: number): string {
 export function EditorMap() {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const markersRef = useRef<HTMLDivElement>(null);
   const [layersReady, setLayersReady] = useState(false);
   const dragState = useRef<{
     type: 'waypoint';
@@ -160,7 +162,7 @@ export function EditorMap() {
           template: 'long-range-radar',
         };
         // Auto-fetch terrain height
-        fetch(`/api/terrain/elevation?lat=${e.lngLat.lat}&lon=${e.lngLat.lng}`)
+        fetch(`/api/terrain/elevation?lat=${e.latlng.lat}&lon=${e.latlng.lng}`)
           .then(r => r.json())
           .then(data => {
             if (data.elevationM != null) {
@@ -174,8 +176,8 @@ export function EditorMap() {
       } else if (currentMode === 'place-launch-point') {
         const targetId = state.activeTargetId;
         if (!targetId) return;
-        const lat = e.lngLat.lat;
-        const lon = e.lngLat.lng;
+        const lat = e.latlng.lat;
+        const lon = e.latlng.lng;
         // Auto-fetch terrain height for launch
         fetch(`/api/terrain/elevation?lat=${lat}&lon=${lon}`)
           .then(r => r.json())
@@ -240,7 +242,6 @@ export function EditorMap() {
 
   // Update sensor layer
   useEffect(() => {
-    const markerDiv = markersRef.current;
     const m = mapRef.current;
     if (!m || !layersReady || !sensorGroupRef.current || !coverageGroupRef.current) return;
 
