@@ -16,9 +16,11 @@
     "test:e2e:gcp": "npx playwright test --config tests/e2e/playwright.config.ts tests/e2e/gcp/",
     "test:e2e:scenarios": "npx playwright test --config tests/e2e/playwright.config.ts tests/e2e/scenarios/",
     "test:e2e:report": "npx tsx tests/e2e/reporting/html-dashboard.ts",
-    "test:e2e:full": "npx playwright test --config tests/e2e/playwright.config.ts && npx tsx tests/e2e/reporting/html-dashboard.ts"
+    "test:e2e:full": "npx playwright test --config tests/e2e/playwright.config.ts && npx tsx tests/e2e/reporting/html-dashboard.ts",
+    "analyze-build": "npx tsx scripts/analyze-build.ts"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
     "@playwright/test": "^1.58.2",
     "@types/ws": "^8.18.1",
     "prettier": "^3.4.0",
