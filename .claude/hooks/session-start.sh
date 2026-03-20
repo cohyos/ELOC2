@@ -6,6 +6,10 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
   exit 0
 fi
 
+# Async mode: session starts immediately, hook runs in background
+# Timeout 5 minutes to allow full build of 20 packages
+echo '{"async": true, "asyncTimeout": 300000}'
+
 cd "${CLAUDE_PROJECT_DIR:-.}"
 
 echo "Installing pnpm via corepack..."
