@@ -215,6 +215,24 @@ See `Knowledge_Base_and_Agents_instructions/ELOC2_Corrections_and_Upgrades_Plan.
     --project=eloc2demo
   ```
 
+### Deployment Guardrails (GCP Cloud Run + Cloud SQL)
+- **GCP Edition**: Project uses **Enterprise Plus** Cloud SQL edition — NEVER suggest `db-f1-micro` or `db-g1-small` tiers (incompatible). Use `db-custom-*` or `db-n1-*` tiers only
+- **Required GCP APIs** — verify these are enabled before any deployment:
+  - `sqladmin.googleapis.com` (Cloud SQL Admin)
+  - `run.googleapis.com` (Cloud Run)
+  - `cloudbuild.googleapis.com` (Cloud Build)
+  - `artifactregistry.googleapis.com` (Artifact Registry)
+- **Auth startup safety**: Auth plugin (`auth-plugin.ts`) connects to PostgreSQL synchronously at startup. If `AUTH_ENABLED=true` but `DATABASE_URL` is missing/wrong, the container will hang and fail Cloud Run health check. Always set `AUTH_ENABLED=false` in CI unless DB credentials are configured in the build trigger
+- **DB password**: Never hardcode in `cloudbuild.yaml`. Pass via `--substitutions=_DB_PASSWORD=xxx` or use Secret Manager
+- **Cloud SQL proxy**: The `--add-cloudsql-instances` flag is only needed when `AUTH_ENABLED=true`
+- **Health check**: Cloud Run expects HTTP 200 on `/api/health` within startup timeout. If server hangs on DB connection, increase `--startup-cpu-boost` or fix the root cause
+
+### Docker / CI Build Checklist
+- After adding new source files or directories, always verify the Dockerfile includes the necessary COPY steps for `package.json` (line ~10-29) and source dirs
+- Test container startup locally before pushing to Cloud Build: `docker build -t eloc2-test . && docker run -p 3001:3001 -e NODE_ENV=production eloc2-test`
+- Ensure all route endpoints (especially `/api/auth/status`) are registered before deploying
+- When fixing a blank page or UI issue in production, check BOTH the backend (missing routes/endpoints) AND the frontend build output (static files copied correctly) before declaring the fix complete
+
 ## Development
 - Package manager: pnpm (v9.15.0) with workspaces
 - Build: `pnpm build` (uses Turbo)
