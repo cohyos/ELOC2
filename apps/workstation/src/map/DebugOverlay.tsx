@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useCallback } from 'react';
-import type maplibregl from 'maplibre-gl';
+import type { MapAdapter } from './map-adapter';
 import type { SystemTrack, SensorState } from '@eloc2/domain';
 import type { LayerVisibility } from '../stores/ui-store';
 import { useUiStore } from '../stores/ui-store';
@@ -76,7 +76,7 @@ function geoOffset(lon: number, lat: number, azDeg: number, rangeM: number): [nu
 }
 
 interface DebugOverlayProps {
-  map: maplibregl.Map | null;
+  map: MapAdapter | null;
   tracks: SystemTrack[];
   sensors: SensorState[];
   trailHistory: Map<string, Array<{ lon: number; lat: number }>>;
@@ -1022,7 +1022,7 @@ function createSvgEl(tag: string, attrs: Record<string, string>): SVGElement {
  */
 function drawCoverageArc(
   svg: SVGSVGElement,
-  map: maplibregl.Map,
+  map: MapAdapter,
   sensor: SensorState,
   cov: { minAzDeg: number; maxAzDeg: number; maxRangeM: number },
   fillColor: string,
@@ -1064,7 +1064,7 @@ function drawCoverageArc(
  */
 function drawFovCone(
   svg: SVGSVGElement,
-  map: maplibregl.Map,
+  map: MapAdapter,
   sensor: SensorState,
   fillColor: string,
   fillOpacity: number,

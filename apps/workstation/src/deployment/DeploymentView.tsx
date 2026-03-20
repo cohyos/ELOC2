@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useCallback } from 'react';
-import maplibregl from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { DeploymentPanel } from './DeploymentPanel';
 import { DeploymentMetrics } from './DeploymentMetrics';
 import { useDeploymentStore } from './deployment-store';
 import type { GeoPolygon, PlacedSensor } from './deployment-store';
 import { enableCtrlBoxZoom } from '../map/ctrl-box-zoom';
+import { LeafletAdapter } from '../map/map-adapter';
 
 const colors = {
   bg: '#0d0d1a',
@@ -23,26 +24,25 @@ const colors = {
 };
 
 /**
- * Convert a GeoPolygon to an SVG path string using map.project().
+ * Convert a GeoPolygon to an SVG path string using Leaflet projection.
  */
 function polygonToSvgPath(
   polygon: GeoPolygon,
-  map: maplibregl.Map,
+  map: L.Map,
 ): string {
   if (polygon.length < 3) return '';
   return polygon.map((p, i) => {
-    const px = map.project([p.lon, p.lat]);
+    const px = map.latLngToContainerPoint([p.lat, p.lon]);
     return `${i === 0 ? 'M' : 'L'}${px.x},${px.y}`;
   }).join(' ') + ' Z';
 }
 
 /**
- * Render the deployment map using MapLibre (raster tiles only) + HTML/SVG overlays.
- * Same architecture as the main workstation: MapLibre for tiles, all data drawn via overlays.
+ * Render the deployment map using Leaflet (raster tiles only) + HTML/SVG overlays.
  */
 function DeploymentMap() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const markersRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
@@ -52,16 +52,16 @@ function DeploymentMap() {
   const threatCorridors = useDeploymentStore(s => s.threatCorridors);
   const placedSensors = useDeploymentStore(s => s.placedSensors);
 
-  // Draw overlays: SVG polygons + HTML markers, projected via map.project()
+  // Draw overlays: SVG polygons + HTML markers
   const drawOverlays = useCallback(() => {
     const map = mapRef.current;
     const svg = svgRef.current;
     const markerContainer = markersRef.current;
     if (!map || !svg || !markerContainer) return;
 
-    const canvas = map.getCanvas();
-    const w = canvas.width / (window.devicePixelRatio || 1);
-    const h = canvas.height / (window.devicePixelRatio || 1);
+    const container = map.getContainer();
+    const w = container.clientWidth;
+    const h = container.clientHeight;
     svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
     svg.style.width = `${w}px`;
     svg.style.height = `${h}px`;
@@ -89,13 +89,12 @@ function DeploymentMap() {
       svgContent += `<path d="${path}" fill="rgba(255,51,51,0.15)" stroke="${colors.danger}" stroke-width="1.5" />`;
     }
 
-    // Sensor coverage circles (approximate as SVG ellipses)
+    // Sensor coverage circles
     for (const ps of placedSensors) {
-      const center = map.project([ps.position.lon, ps.position.lat]);
+      const center = map.latLngToContainerPoint([ps.position.lat, ps.position.lon]);
       const sensorColor = ps.spec.type === 'eo' ? colors.eo : colors.radar;
-      // Approximate radius: project a point maxRangeM north
       const degOffset = ps.spec.maxRangeM / 111320;
-      const edge = map.project([ps.position.lon, ps.position.lat + degOffset]);
+      const edge = map.latLngToContainerPoint([ps.position.lat + degOffset, ps.position.lon]);
       const rPx = Math.abs(center.y - edge.y);
       svgContent += `<circle cx="${center.x}" cy="${center.y}" r="${rPx}" fill="${sensorColor}15" stroke="${sensorColor}50" stroke-width="1.5" />`;
     }
@@ -105,7 +104,7 @@ function DeploymentMap() {
     // Build HTML markers for placed sensors
     let html = '';
     for (const ps of placedSensors) {
-      const px = map.project([ps.position.lon, ps.position.lat]);
+      const px = map.latLngToContainerPoint([ps.position.lat, ps.position.lon]);
       const sensorColor = ps.spec.type === 'eo' ? colors.eo : colors.radar;
       html += `<div style="position:absolute;left:${px.x}px;top:${px.y}px;transform:translate(-50%,-50%);pointer-events:none;">
         <div style="width:12px;height:12px;border-radius:50%;background:${sensorColor};border:2px solid #fff;box-shadow:0 0 6px ${sensorColor}88;"></div>
@@ -120,7 +119,7 @@ function DeploymentMap() {
     markerContainer.innerHTML = html;
   }, [scannedArea, exclusionZones, threatCorridors, placedSensors]);
 
-  // Initialize MapLibre
+  // Initialize Leaflet
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
@@ -128,33 +127,24 @@ function DeploymentMap() {
     const cLat = scannedArea.reduce((s, p) => s + p.lat, 0) / (scannedArea.length || 1);
     const cLon = scannedArea.reduce((s, p) => s + p.lon, 0) / (scannedArea.length || 1);
 
-    const map = new maplibregl.Map({
-      container: mapContainerRef.current,
-      style: {
-        version: 8,
-        sources: {
-          osm: {
-            type: 'raster',
-            tiles: ['https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'],
-            tileSize: 256,
-            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-          },
-        },
-        layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
-      },
-      center: [cLon, cLat],
+    const map = L.map(mapContainerRef.current, {
+      center: [cLat, cLon],
       zoom: 8.5,
+      zoomControl: false,
+      attributionControl: true,
     });
 
-    map.addControl(new maplibregl.NavigationControl(), 'top-right');
-    map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+    L.tileLayer('https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png', {
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+      maxZoom: 19,
+    }).addTo(map);
 
-    // Ctrl+left-click+drag rectangle zoom
-    const cleanupBoxZoom = enableCtrlBoxZoom(map);
+    L.control.zoom({ position: 'topright' }).addTo(map);
+    L.control.scale({ metric: true, imperial: false, position: 'bottomleft' }).addTo(map);
 
-    map.on('error', (e) => {
-      console.error('[DeploymentMap] MapLibre error:', e.error?.message || e);
-    });
+    // Ctrl+drag box zoom
+    const adapter = new LeafletAdapter(map);
+    const cleanupBoxZoom = enableCtrlBoxZoom(adapter);
 
     const scheduleRedraw = () => {
       cancelAnimationFrame(rafRef.current);
@@ -164,7 +154,8 @@ function DeploymentMap() {
     map.on('move', scheduleRedraw);
     map.on('zoom', scheduleRedraw);
     map.on('resize', scheduleRedraw);
-    map.on('load', () => drawOverlays());
+    // Draw immediately once tiles are loaded
+    map.whenReady(() => drawOverlays());
 
     mapRef.current = map;
 
@@ -182,7 +173,7 @@ function DeploymentMap() {
 
   return (
     <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%' }}>
-      {/* MapLibre container (raster tiles only) */}
+      {/* Leaflet container (raster tiles only) */}
       <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
 
       {/* SVG overlay for polygons and coverage circles (z-index 14) */}
