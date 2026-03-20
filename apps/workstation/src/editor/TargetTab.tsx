@@ -1,7 +1,34 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useEditorStore } from '../stores/editor-store';
 import type { EditorTarget, EditorWaypoint } from '../stores/editor-store';
 import { WaypointRow } from './WaypointRow';
+
+interface TargetLibraryEntry {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  rcs: number;
+  irEmission: number;
+  speedMs: number;
+  altitudeM: number;
+  classification?: string;
+  symbol?: string;
+}
+
+const CLASSIFICATION_OPTIONS = [
+  'unknown',
+  'hostile',
+  'friendly',
+  'neutral',
+  'fighter_aircraft',
+  'civilian_aircraft',
+  'helicopter',
+  'predator',
+  'ballistic_missile',
+  'cruise_missile',
+  'uav',
+];
 
 const styles = {
   container: {
@@ -75,6 +102,16 @@ const styles = {
     width: '120px',
     fontFamily: '"Fira Code", "Consolas", monospace',
   } as React.CSSProperties,
+  select: {
+    background: '#222',
+    color: '#e0e0e0',
+    border: '1px solid #444',
+    borderRadius: '3px',
+    padding: '2px 6px',
+    fontSize: '11px',
+    width: '130px',
+    cursor: 'pointer',
+  } as React.CSSProperties,
   deleteBtn: {
     background: '#ff333322',
     color: '#ff3333',
@@ -114,7 +151,7 @@ const styles = {
   } as React.CSSProperties,
 };
 
-function TargetForm({ target }: { target: EditorTarget }) {
+function TargetForm({ target, targetLibrary }: { target: EditorTarget; targetLibrary: TargetLibraryEntry[] }) {
   const updateTarget = useEditorStore((s) => s.updateTarget);
   const removeTarget = useEditorStore((s) => s.removeTarget);
   const updateWaypoint = useEditorStore((s) => s.updateWaypoint);
@@ -137,9 +174,51 @@ function TargetForm({ target }: { target: EditorTarget }) {
     }
   }, [target.id, removeTarget]);
 
+  const handleLibrarySelect = useCallback(
+    (libraryId: string) => {
+      const entry = targetLibrary.find((e) => e.id === libraryId);
+      if (!entry) return;
+      updateTarget(target.id, {
+        libraryId,
+        rcs: entry.rcs,
+        irEmission: entry.irEmission,
+        classification: entry.classification || 'unknown',
+        nickname: target.nickname || entry.name,
+        label: target.label || entry.name,
+      });
+      // Also update waypoint defaults (altitude, speed) for existing waypoints
+      for (let i = 0; i < target.waypoints.length; i++) {
+        updateWaypoint(target.id, i, {
+          alt: entry.altitudeM,
+          speedMs: entry.speedMs,
+        });
+      }
+    },
+    [target.id, target.label, target.nickname, target.waypoints.length, targetLibrary, updateTarget, updateWaypoint]
+  );
+
   return (
     <div style={{ marginTop: '8px' }}>
       <div style={styles.sectionTitle}>Target Configuration</div>
+
+      {/* From Library (ED-6) */}
+      {targetLibrary.length > 0 && (
+        <div style={styles.formRow}>
+          <span style={styles.label}>From Library</span>
+          <select
+            value={target.libraryId || ''}
+            onChange={(e) => handleLibrarySelect(e.target.value)}
+            style={styles.select}
+          >
+            <option value="">-- Select --</option>
+            {targetLibrary.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Target ID */}
       <div style={styles.formRow}>
@@ -164,6 +243,18 @@ function TargetForm({ target }: { target: EditorTarget }) {
         />
       </div>
 
+      {/* Nickname */}
+      <div style={styles.formRow}>
+        <span style={styles.label}>Nickname</span>
+        <input
+          type="text"
+          value={target.nickname || ''}
+          onChange={(e) => updateTarget(target.id, { nickname: e.target.value })}
+          style={styles.input}
+          placeholder="Optional nickname"
+        />
+      </div>
+
       {/* RCS */}
       <div style={styles.formRow}>
         <span style={styles.label}>RCS (m2)</span>
@@ -176,6 +267,35 @@ function TargetForm({ target }: { target: EditorTarget }) {
           max={100}
           style={styles.input}
         />
+      </div>
+
+      {/* IR Emission */}
+      <div style={styles.formRow}>
+        <span style={styles.label}>IR (W/sr)</span>
+        <input
+          type="number"
+          value={target.irEmission ?? 0}
+          onChange={(e) => updateTarget(target.id, { irEmission: parseFloat(e.target.value) || 0 })}
+          step={100}
+          min={0}
+          style={styles.input}
+        />
+      </div>
+
+      {/* Classification */}
+      <div style={styles.formRow}>
+        <span style={styles.label}>Class</span>
+        <select
+          value={target.classification || 'unknown'}
+          onChange={(e) => updateTarget(target.id, { classification: e.target.value })}
+          style={styles.select}
+        >
+          {CLASSIFICATION_OPTIONS.map((c) => (
+            <option key={c} value={c}>
+              {c.replace(/_/g, ' ')}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Waypoints section */}
@@ -234,6 +354,17 @@ export function TargetTab() {
   const selectItem = useEditorStore((s) => s.selectItem);
   const addTarget = useEditorStore((s) => s.addTarget);
   const setActiveTargetId = useEditorStore((s) => s.setActiveTargetId);
+  const [targetLibrary, setTargetLibrary] = useState<TargetLibraryEntry[]>([]);
+
+  // Fetch target library on mount
+  useEffect(() => {
+    fetch('/api/targets/library')
+      .then((r) => r.json())
+      .then((data) => {
+        setTargetLibrary(data?.targets || []);
+      })
+      .catch(() => { /* ignore */ });
+  }, []);
 
   const selectedTarget =
     selectedItemType === 'target'
@@ -330,7 +461,7 @@ export function TargetTab() {
       </div>
 
       {/* Configuration form for selected target */}
-      {selectedTarget && <TargetForm target={selectedTarget} />}
+      {selectedTarget && <TargetForm target={selectedTarget} targetLibrary={targetLibrary} />}
     </div>
   );
 }

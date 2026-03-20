@@ -36,11 +36,16 @@ export function ScenarioEditor({ onBack }: ScenarioEditorProps) {
   const [activeTab, setActiveTab] = React.useState<TabId>('sensors');
   const setEditMode = useEditorStore((s) => s.setEditMode);
 
-  // ESC key to cancel placement mode
+  // ESC key to cancel placement mode or zone drawing
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setEditMode('select');
+        const state = useEditorStore.getState();
+        if (state.editMode === 'draw-zone') {
+          state.cancelZoneDraw();
+        } else {
+          setEditMode('select');
+        }
       }
     };
     window.addEventListener('keydown', handler);

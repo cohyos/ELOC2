@@ -1,5 +1,6 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { useEditorStore } from '../stores/editor-store';
+import type { EditorSensor } from '../stores/editor-store';
 
 const colors = {
   headerBg: '#1a1a2e',
@@ -32,13 +33,73 @@ export function EditorHeader({ onBack }: EditorHeaderProps) {
   const setValidationResult = useEditorStore((s) => s.setValidationResult);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [showDeployDropdown, setShowDeployDropdown] = useState(false);
+  const [deploymentList, setDeploymentList] = useState<Array<{ id: string; name: string; sensorCount: number }>>([]);
   const buildScenarioDefinition = useEditorStore((s) => s.buildScenarioDefinition);
   const loadFromScenarioDefinition = useEditorStore((s) => s.loadFromScenarioDefinition);
+  const addSensor = useEditorStore((s) => s.addSensor);
 
   const showToast = useCallback((message: string, type: 'success' | 'error') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   }, []);
+
+  const handleLoadDeploymentList = useCallback(async () => {
+    try {
+      const res = await fetch('/api/deployment/list');
+      if (res.ok) {
+        const list = await res.json();
+        setDeploymentList(list);
+        setShowDeployDropdown(true);
+      } else {
+        showToast('Failed to fetch deployments', 'error');
+      }
+    } catch (err) {
+      showToast('Error fetching deployments: ' + (err as Error).message, 'error');
+    }
+  }, [showToast]);
+
+  const handleSelectDeployment = useCallback(async (deploymentId: string) => {
+    setShowDeployDropdown(false);
+    try {
+      const res = await fetch(`/api/deployment/${deploymentId}`);
+      if (!res.ok) {
+        showToast('Failed to load deployment', 'error');
+        return;
+      }
+      const deployment = await res.json();
+      const placedSensors = deployment.result?.placedSensors || [];
+      for (const ps of placedSensors) {
+        const sensorType = (ps.spec?.type === 'eo' ? 'eo' : ps.spec?.type === 'radar' ? 'radar' : 'c4isr') as EditorSensor['type'];
+        const newSensor: EditorSensor = {
+          id: crypto.randomUUID(),
+          type: sensorType,
+          lat: ps.position?.lat ?? 0,
+          lon: ps.position?.lon ?? 0,
+          alt: 0,
+          azMin: ps.spec?.minAzDeg ?? 0,
+          azMax: ps.spec?.maxAzDeg ?? 360,
+          elMin: -5,
+          elMax: 85,
+          rangeMaxKm: (ps.spec?.maxRangeM ?? 100000) / 1000,
+          fovHalfAngleH: sensorType === 'eo' ? (ps.spec?.fovHalfAngleDeg ?? 2.5) : undefined,
+          fovHalfAngleV: sensorType === 'eo' ? (ps.spec?.fovHalfAngleDeg ?? 1.8) : undefined,
+        };
+        addSensor(newSensor);
+      }
+      showToast(`Loaded ${placedSensors.length} sensors from deployment`, 'success');
+    } catch (err) {
+      showToast('Error loading deployment: ' + (err as Error).message, 'error');
+    }
+  }, [addSensor, showToast]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!showDeployDropdown) return;
+    const handler = () => setShowDeployDropdown(false);
+    window.addEventListener('click', handler);
+    return () => window.removeEventListener('click', handler);
+  }, [showDeployDropdown]);
 
   const handleSave = useCallback(async () => {
     try {
@@ -205,6 +266,60 @@ export function EditorHeader({ onBack }: EditorHeaderProps) {
       <button style={btnStyle} onClick={handleImport}>
         Import JSON
       </button>
+      <div style={{ position: 'relative', display: 'inline-block' }}>
+        <button
+          style={btnStyle}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleLoadDeploymentList();
+          }}
+        >
+          Load Deployment
+        </button>
+        {showDeployDropdown && (
+          <div
+            style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              zIndex: 10001,
+              background: '#1a1a2e',
+              border: '1px solid #2a2a3e',
+              borderRadius: '4px',
+              minWidth: '220px',
+              maxHeight: '200px',
+              overflowY: 'auto',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.6)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {deploymentList.length === 0 ? (
+              <div style={{ padding: '8px 12px', color: '#666', fontSize: '11px' }}>
+                No saved deployments
+              </div>
+            ) : (
+              deploymentList.map((d) => (
+                <div
+                  key={d.id}
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: '11px',
+                    color: '#ddd',
+                    cursor: 'pointer',
+                    borderBottom: '1px solid #2a2a3e',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = '#2a2a4e')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  onClick={() => handleSelectDeployment(d.id)}
+                >
+                  <div style={{ fontWeight: 600 }}>{d.name}</div>
+                  <div style={{ color: '#888', fontSize: '10px' }}>{d.sensorCount} sensors</div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
       <button style={btnStyle} onClick={handleValidate}>
         Validate
       </button>

@@ -186,7 +186,7 @@ const DEFAULT_INVESTIGATION_PARAMETERS: InvestigationParameters = {
 // ---------------------------------------------------------------------------
 
 /** Run EO tasking every N simulation seconds. */
-const EO_TASKING_INTERVAL_SEC = 5;
+const EO_TASKING_INTERVAL_SEC = 3;
 
 // ---------------------------------------------------------------------------
 // Cover-zone helpers

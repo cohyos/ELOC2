@@ -31,6 +31,7 @@ import { ResizeHandle } from './components/ResizeHandle';
 import { QualityMetricsPanel } from './quality/QualityMetricsPanel';
 import { DeploymentView } from './deployment/DeploymentView';
 import { UserManagementView } from './admin/UserManagementView';
+import { LibrariesView } from './libraries/LibrariesView';
 import { FusionConfigPanel } from './components/FusionConfigPanel';
 import { useAuthStore } from './auth/auth-store';
 import { LoginPage } from './auth/LoginPage';
@@ -339,7 +340,7 @@ function InstructorButton({ children, onClick, style, title, disabled, isInstruc
 
 export function App() {
   const isMobile = useIsMobile();
-  const [view, setView] = useState<'workstation' | 'editor' | 'deployment' | 'users'>('workstation');
+  const [view, setView] = useState<'workstation' | 'editor' | 'deployment' | 'users' | 'libraries'>('workstation');
 
   // ── Auth ────────────────────────────────────────────────────────────────
   const authEnabled = useAuthStore(s => s.authEnabled);
@@ -519,7 +520,7 @@ export function App() {
 
   // Periodic refresh (every 10s)
   useEffect(() => {
-    const interval = setInterval(() => { fetchRap(); fetchSensors(); }, 10000);
+    const interval = setInterval(() => { fetchRap(); fetchSensors(); }, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -548,6 +549,16 @@ export function App() {
 
   if (view === 'users') {
     return <UserManagementView onBack={() => setView('workstation')} />;
+  }
+
+  if (view === 'libraries') {
+    return (
+      <LibrariesView
+        onBack={() => setView('workstation')}
+        onLoadScenario={(id) => { handleScenarioChange(id); setView('workstation'); }}
+        onEditScenario={() => setView('editor')}
+      />
+    );
   }
 
   if (isMobile) return <MobileLayout />;
@@ -667,6 +678,9 @@ export function App() {
 
           {/* Deploy */}
           <InstructorButton isInstructor={isInstructor} style={{ ...btn, background: '#2a2a4e', color: '#44ddaa', border: '1px solid #44ddaa44' }} onClick={() => setView('deployment')}>Deploy</InstructorButton>
+
+          {/* Libraries */}
+          <InstructorButton isInstructor={isInstructor} style={{ ...btn, background: '#2a2a4e', color: '#ffaa44', border: '1px solid #ffaa4444' }} onClick={() => setView('libraries')}>Libraries</InstructorButton>
 
           {/* Users */}
           <InstructorButton isInstructor={isInstructor} style={{ ...btn, background: '#2a2a4e', color: '#ff88cc', border: '1px solid #ff88cc44' }} onClick={() => setView('users')}>Users</InstructorButton>

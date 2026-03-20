@@ -1,0 +1,66 @@
+{
+  "id": "discovery-squadron",
+  "name": "Discovery Squadron",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "constraints": {
+    "scannedArea": [
+      { "lat": 31.2, "lon": 34.5 },
+      { "lat": 31.2, "lon": 35.1 },
+      { "lat": 31.8, "lon": 35.1 },
+      { "lat": 31.8, "lon": 34.5 }
+    ],
+    "inclusionZones": [],
+    "exclusionZones": [],
+    "threatCorridors": [],
+    "minCoveragePercent": 80,
+    "gridResolutionM": 2000
+  },
+  "sensors": [
+    { "id": "DS-RADAR-N", "type": "radar", "maxRangeM": 150000, "fovHalfAngleDeg": 180, "minAzDeg": 0, "maxAzDeg": 360 },
+    { "id": "DS-RADAR-SW", "type": "radar", "maxRangeM": 150000, "fovHalfAngleDeg": 180, "minAzDeg": 0, "maxAzDeg": 360 },
+    { "id": "DS-RADAR-SE", "type": "radar", "maxRangeM": 150000, "fovHalfAngleDeg": 180, "minAzDeg": 0, "maxAzDeg": 360 },
+    { "id": "DS-EO-1", "type": "eo", "maxRangeM": 40000, "fovHalfAngleDeg": 0.8, "minAzDeg": 0, "maxAzDeg": 360 },
+    { "id": "DS-EO-2", "type": "eo", "maxRangeM": 40000, "fovHalfAngleDeg": 0.8, "minAzDeg": 0, "maxAzDeg": 360 },
+    { "id": "DS-SURV-1", "type": "radar", "maxRangeM": 200000, "fovHalfAngleDeg": 180, "minAzDeg": 0, "maxAzDeg": 360 }
+  ],
+  "result": {
+    "placedSensors": [
+      {
+        "spec": { "id": "DS-RADAR-N", "type": "radar", "maxRangeM": 150000, "fovHalfAngleDeg": 180, "minAzDeg": 0, "maxAzDeg": 360 },
+        "position": { "lat": 31.7, "lon": 34.8 },
+        "scores": { "coverage": 0.85, "geometry": 0.7, "threat": 0.5, "total": 0.735 }
+      },
+      {
+        "spec": { "id": "DS-RADAR-SW", "type": "radar", "maxRangeM": 150000, "fovHalfAngleDeg": 180, "minAzDeg": 0, "maxAzDeg": 360 },
+        "position": { "lat": 31.35, "lon": 34.6 },
+        "scores": { "coverage": 0.82, "geometry": 0.75, "threat": 0.5, "total": 0.735 }
+      },
+      {
+        "spec": { "id": "DS-RADAR-SE", "type": "radar", "maxRangeM": 150000, "fovHalfAngleDeg": 180, "minAzDeg": 0, "maxAzDeg": 360 },
+        "position": { "lat": 31.35, "lon": 35.0 },
+        "scores": { "coverage": 0.8, "geometry": 0.72, "threat": 0.55, "total": 0.726 }
+      },
+      {
+        "spec": { "id": "DS-EO-1", "type": "eo", "maxRangeM": 40000, "fovHalfAngleDeg": 0.8, "minAzDeg": 0, "maxAzDeg": 360 },
+        "position": { "lat": 31.6, "lon": 34.65 },
+        "scores": { "coverage": 0.6, "geometry": 0.65, "threat": 0.4, "total": 0.575 }
+      },
+      {
+        "spec": { "id": "DS-EO-2", "type": "eo", "maxRangeM": 40000, "fovHalfAngleDeg": 0.8, "minAzDeg": 0, "maxAzDeg": 360 },
+        "position": { "lat": 31.4, "lon": 34.95 },
+        "scores": { "coverage": 0.58, "geometry": 0.63, "threat": 0.45, "total": 0.569 }
+      },
+      {
+        "spec": { "id": "DS-SURV-1", "type": "radar", "maxRangeM": 200000, "fovHalfAngleDeg": 180, "minAzDeg": 0, "maxAzDeg": 360 },
+        "position": { "lat": 31.5, "lon": 34.8 },
+        "scores": { "coverage": 0.9, "geometry": 0.6, "threat": 0.5, "total": 0.73 }
+      }
+    ],
+    "metrics": {
+      "coveragePercent": 92,
+      "triangulationCoveragePercent": 68,
+      "worstCaseGapM": 12000,
+      "geometryQuality": 0.72
+    }
+  }
+}

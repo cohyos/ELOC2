@@ -19,6 +19,7 @@ import { registerAuthRoutes } from './routes/auth-routes.js';
 import { registerAsterixRoutes } from './routes/asterix-routes.js';
 import { wsEventsRoute } from './routes/ws-events.js';
 import { engine } from './simulation/live-engine.js';
+import { getElevation, loadTile, isLoaded } from '@eloc2/terrain';
 
 const AUTH_ENABLED = process.env.AUTH_ENABLED === 'true';
 
@@ -92,6 +93,25 @@ server.get('/api/auth/status', async () => {
 if (AUTH_ENABLED) {
   registerAuthRoutes(server);
 }
+
+// GET /api/terrain/elevation — Query terrain elevation at lat/lon
+server.get<{ Querystring: { lat: string; lon: string } }>('/api/terrain/elevation', async (request, reply) => {
+  const lat = parseFloat(request.query.lat);
+  const lon = parseFloat(request.query.lon);
+  if (isNaN(lat) || isNaN(lon)) {
+    return reply.code(400).send({ error: 'lat and lon query parameters are required (numeric)' });
+  }
+  // Try to load the tile if not already loaded
+  if (!isLoaded()) {
+    const dataDir = path.resolve(__dirname, '../../../../data/srtm');
+    loadTile(lat, lon, dataDir);
+  } else {
+    const dataDir = path.resolve(__dirname, '../../../../data/srtm');
+    loadTile(lat, lon, dataDir);
+  }
+  const elevation = getElevation(lat, lon);
+  return { lat, lon, elevationM: elevation ?? null };
+});
 
 // Register route modules
 await server.register(rapRoutes);

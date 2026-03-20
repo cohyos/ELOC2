@@ -1,0 +1,85 @@
+{
+  "id": "border-line",
+  "name": "Border Line",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "constraints": {
+    "scannedArea": [
+      { "lat": 31.2, "lon": 34.6 },
+      { "lat": 31.2, "lon": 35.1 },
+      { "lat": 31.8, "lon": 35.1 },
+      { "lat": 31.8, "lon": 34.6 }
+    ],
+    "inclusionZones": [],
+    "exclusionZones": [],
+    "threatCorridors": [
+      [
+        { "lat": 31.3, "lon": 34.95 },
+        { "lat": 31.3, "lon": 35.05 },
+        { "lat": 31.7, "lon": 35.05 },
+        { "lat": 31.7, "lon": 34.95 }
+      ]
+    ],
+    "minCoveragePercent": 70,
+    "gridResolutionM": 2000
+  },
+  "sensors": [
+    { "id": "BL-SECTOR-1", "type": "radar", "maxRangeM": 100000, "fovHalfAngleDeg": 60, "minAzDeg": 30, "maxAzDeg": 150 },
+    { "id": "BL-SECTOR-2", "type": "radar", "maxRangeM": 100000, "fovHalfAngleDeg": 60, "minAzDeg": 30, "maxAzDeg": 150 },
+    { "id": "BL-SECTOR-3", "type": "radar", "maxRangeM": 100000, "fovHalfAngleDeg": 60, "minAzDeg": 30, "maxAzDeg": 150 },
+    { "id": "BL-SECTOR-4", "type": "radar", "maxRangeM": 100000, "fovHalfAngleDeg": 60, "minAzDeg": 30, "maxAzDeg": 150 },
+    { "id": "BL-SECTOR-5", "type": "radar", "maxRangeM": 100000, "fovHalfAngleDeg": 60, "minAzDeg": 30, "maxAzDeg": 150 },
+    { "id": "BL-EO-PROBE-1", "type": "eo", "maxRangeM": 20000, "fovHalfAngleDeg": 1.2, "minAzDeg": 30, "maxAzDeg": 150 },
+    { "id": "BL-EO-PROBE-2", "type": "eo", "maxRangeM": 20000, "fovHalfAngleDeg": 1.2, "minAzDeg": 30, "maxAzDeg": 150 },
+    { "id": "BL-REGIONAL-1", "type": "radar", "maxRangeM": 180000, "fovHalfAngleDeg": 90, "minAzDeg": 0, "maxAzDeg": 180 }
+  ],
+  "result": {
+    "placedSensors": [
+      {
+        "spec": { "id": "BL-SECTOR-1", "type": "radar", "maxRangeM": 100000, "fovHalfAngleDeg": 60, "minAzDeg": 30, "maxAzDeg": 150 },
+        "position": { "lat": 31.3, "lon": 34.8 },
+        "scores": { "coverage": 0.7, "geometry": 0.6, "threat": 0.65, "total": 0.66 }
+      },
+      {
+        "spec": { "id": "BL-SECTOR-2", "type": "radar", "maxRangeM": 100000, "fovHalfAngleDeg": 60, "minAzDeg": 30, "maxAzDeg": 150 },
+        "position": { "lat": 31.4, "lon": 34.8 },
+        "scores": { "coverage": 0.72, "geometry": 0.62, "threat": 0.68, "total": 0.682 }
+      },
+      {
+        "spec": { "id": "BL-SECTOR-3", "type": "radar", "maxRangeM": 100000, "fovHalfAngleDeg": 60, "minAzDeg": 30, "maxAzDeg": 150 },
+        "position": { "lat": 31.5, "lon": 34.8 },
+        "scores": { "coverage": 0.74, "geometry": 0.65, "threat": 0.7, "total": 0.705 }
+      },
+      {
+        "spec": { "id": "BL-SECTOR-4", "type": "radar", "maxRangeM": 100000, "fovHalfAngleDeg": 60, "minAzDeg": 30, "maxAzDeg": 150 },
+        "position": { "lat": 31.6, "lon": 34.8 },
+        "scores": { "coverage": 0.71, "geometry": 0.63, "threat": 0.66, "total": 0.681 }
+      },
+      {
+        "spec": { "id": "BL-SECTOR-5", "type": "radar", "maxRangeM": 100000, "fovHalfAngleDeg": 60, "minAzDeg": 30, "maxAzDeg": 150 },
+        "position": { "lat": 31.7, "lon": 34.8 },
+        "scores": { "coverage": 0.69, "geometry": 0.58, "threat": 0.6, "total": 0.639 }
+      },
+      {
+        "spec": { "id": "BL-EO-PROBE-1", "type": "eo", "maxRangeM": 20000, "fovHalfAngleDeg": 1.2, "minAzDeg": 30, "maxAzDeg": 150 },
+        "position": { "lat": 31.45, "lon": 34.8 },
+        "scores": { "coverage": 0.45, "geometry": 0.5, "threat": 0.55, "total": 0.485 }
+      },
+      {
+        "spec": { "id": "BL-EO-PROBE-2", "type": "eo", "maxRangeM": 20000, "fovHalfAngleDeg": 1.2, "minAzDeg": 30, "maxAzDeg": 150 },
+        "position": { "lat": 31.55, "lon": 34.8 },
+        "scores": { "coverage": 0.47, "geometry": 0.52, "threat": 0.53, "total": 0.497 }
+      },
+      {
+        "spec": { "id": "BL-REGIONAL-1", "type": "radar", "maxRangeM": 180000, "fovHalfAngleDeg": 90, "minAzDeg": 0, "maxAzDeg": 180 },
+        "position": { "lat": 31.5, "lon": 34.8 },
+        "scores": { "coverage": 0.88, "geometry": 0.55, "threat": 0.6, "total": 0.725 }
+      }
+    ],
+    "metrics": {
+      "coveragePercent": 85,
+      "triangulationCoveragePercent": 55,
+      "worstCaseGapM": 18000,
+      "geometryQuality": 0.61
+    }
+  }
+}

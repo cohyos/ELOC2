@@ -5,14 +5,20 @@
 
 import PdfPrinter from 'pdfmake';
 import type { TDocumentDefinitions, Content, ContentText } from 'pdfmake/interfaces';
+import { createRequire } from 'module';
+import path from 'path';
 
-// Use built-in Roboto fonts from pdfmake
+// Resolve actual Roboto TTF font paths from pdfmake package
+const require = createRequire(import.meta.url);
+const pdfmakePath = path.dirname(require.resolve('pdfmake/package.json'));
+const fontsDir = path.join(pdfmakePath, 'build', 'fonts', 'Roboto');
+
 const fonts = {
   Roboto: {
-    normal: 'node_modules/pdfmake/build/vfs_fonts.js',
-    bold: 'node_modules/pdfmake/build/vfs_fonts.js',
-    italics: 'node_modules/pdfmake/build/vfs_fonts.js',
-    bolditalics: 'node_modules/pdfmake/build/vfs_fonts.js',
+    normal: path.join(fontsDir, 'Roboto-Regular.ttf'),
+    bold: path.join(fontsDir, 'Roboto-Medium.ttf'),
+    italics: path.join(fontsDir, 'Roboto-Italic.ttf'),
+    bolditalics: path.join(fontsDir, 'Roboto-MediumItalic.ttf'),
   },
 };
 
