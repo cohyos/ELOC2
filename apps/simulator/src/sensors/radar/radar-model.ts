@@ -9,6 +9,7 @@ import type {
   Timestamp,
   SourceObservation,
   Covariance3x3,
+  DopplerQuality,
   WeatherCondition,
   ClutterZone,
 } from '@eloc2/domain';
@@ -40,6 +41,74 @@ function gaussianNoise(stddev: number, rng: () => number = Math.random): number 
   const u1 = rng();
   const u2 = rng();
   return stddev * Math.sqrt(-2 * Math.log(u1 || 1e-10)) * Math.cos(2 * Math.PI * u2);
+}
+
+// ---------------------------------------------------------------------------
+// Doppler / radial-velocity helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute the true radial velocity of a target relative to a sensor.
+ * Positive = receding (moving away), negative = approaching.
+ * Uses the line-of-sight unit vector from sensor to target projected onto target velocity.
+ */
+function computeRadialVelocity(
+  sensorPos: Position3D,
+  targetPos: Position3D,
+  targetVel: Velocity3D,
+): number {
+  // ENU unit vector from sensor to target
+  const enu = geodeticToENU(
+    targetPos.lat, targetPos.lon, targetPos.alt,
+    sensorPos.lat, sensorPos.lon, sensorPos.alt,
+  );
+  const dist = Math.sqrt(enu.east ** 2 + enu.north ** 2 + enu.up ** 2);
+  if (dist < 1) return 0; // co-located guard
+
+  const ux = enu.east / dist;
+  const uy = enu.north / dist;
+  const uz = enu.up / dist;
+
+  // Project target velocity (ENU: vx=East, vy=North, vz=Up) onto LOS
+  return targetVel.vx * ux + targetVel.vy * uy + (targetVel.vz ?? 0) * uz;
+}
+
+/** Default radar PRF for blind-speed calculation (Hz). */
+const DEFAULT_PRF_HZ = 3000;
+
+/** Default radar wavelength — S-band ~10 cm. */
+const DEFAULT_WAVELENGTH_M = 0.1;
+
+/**
+ * Compute the first blind speed for a pulsed-Doppler radar.
+ * blind_speed = (PRF × wavelength) / 2
+ */
+function computeBlindSpeed(prfHz: number, wavelengthM: number): number {
+  return (prfHz * wavelengthM) / 2;
+}
+
+/**
+ * Determine Doppler measurement quality based on radial velocity magnitude
+ * and proximity to blind speeds.
+ */
+function assessDopplerQuality(
+  radialVelMps: number,
+  blindSpeedMps: number,
+): DopplerQuality {
+  const absVr = Math.abs(radialVelMps);
+
+  // Near-zero radial velocity — mainlobe clutter region
+  if (absVr < 2) return 'low';
+
+  // Check proximity to blind speed multiples (within 5% of blind speed)
+  const blindMargin = blindSpeedMps * 0.05;
+  for (let n = 1; n <= 3; n++) {
+    if (Math.abs(absVr - n * blindSpeedMps) < blindMargin) return 'blind';
+  }
+
+  // Good Doppler return
+  if (absVr > 15) return 'high';
+  return 'medium';
 }
 
 /**
@@ -114,7 +183,18 @@ export function generateRadarObservation(
   faults: FaultDefinition[],
   targetId: string = 'unknown',
   rng?: () => number,
-  options?: { rcs?: number; classification?: string; terrainLos?: boolean; weather?: WeatherCondition },
+  options?: {
+    rcs?: number;
+    classification?: string;
+    terrainLos?: boolean;
+    weather?: WeatherCondition;
+    /** Enable MTI filtering — rejects targets with near-zero radial velocity. Default false. */
+    mtiEnabled?: boolean;
+    /** Pulse Repetition Frequency in Hz (for blind speed calc). Default 3000. */
+    prfHz?: number;
+    /** Radar wavelength in meters (for blind speed calc). Default 0.1 (S-band). */
+    wavelengthM?: number;
+  },
 ): RadarObservation | undefined {
   // Check outage
   if (isSensorInOutage(sensor.sensorId, faults)) {
@@ -183,6 +263,30 @@ export function generateRadarObservation(
     noisyPos.lat += shiftNorth / 111_320;
   }
 
+  // ---------------------------------------------------------------------------
+  // Doppler / radial velocity
+  // ---------------------------------------------------------------------------
+  const prfHz = options?.prfHz ?? DEFAULT_PRF_HZ;
+  const wavelengthM = options?.wavelengthM ?? DEFAULT_WAVELENGTH_M;
+  const blindSpeedMps = computeBlindSpeed(prfHz, wavelengthM);
+
+  let radialVelocity: number | undefined;
+  let dopplerQuality: DopplerQuality | undefined;
+
+  if (targetVel) {
+    const trueRadialVel = computeRadialVelocity(sensor.position, targetPos, targetVel);
+
+    // Doppler noise: stddev ~1 m/s (typical for pulsed-Doppler radar)
+    radialVelocity = trueRadialVel + gaussianNoise(1.0, r);
+
+    dopplerQuality = assessDopplerQuality(radialVelocity, blindSpeedMps);
+
+    // MTI filter: reject targets with near-zero radial velocity (clutter)
+    if (options?.mtiEnabled && Math.abs(radialVelocity) < 2) {
+      return undefined; // filtered as clutter by MTI
+    }
+  }
+
   // Timestamp in milliseconds
   let timestampMs = baseTimestamp + timeSec * 1000;
   timestampMs = applyClockDrift(timestampMs, sensorFaults);
@@ -204,6 +308,8 @@ export function generateRadarObservation(
     velocity: noisyVel,
     covariance: cov,
     sensorFrame: 'radar',
+    radialVelocity,
+    dopplerQuality,
   };
 
   return {

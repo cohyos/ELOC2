@@ -14,6 +14,9 @@ import type {
 /** The sensor frame / modality that produced the observation. */
 export type SensorFrame = 'radar' | 'eo' | 'c4isr';
 
+/** Doppler measurement quality indicator. */
+export type DopplerQuality = 'high' | 'medium' | 'low' | 'blind';
+
 /** A single positional observation reported by a sensor. */
 export interface SourceObservation {
   observationId: string;
@@ -23,6 +26,10 @@ export interface SourceObservation {
   velocity: Velocity3D | undefined;
   covariance: Covariance3x3;
   sensorFrame: SensorFrame;
+  /** Radial velocity (m/s) from Doppler measurement. Positive = receding, negative = approaching. Radar-only. */
+  radialVelocity?: number;
+  /** Doppler measurement quality. Radar-only. */
+  dopplerQuality?: DopplerQuality;
 }
 
 // ---------------------------------------------------------------------------
