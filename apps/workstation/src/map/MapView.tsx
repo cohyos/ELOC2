@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { useTrackStore } from '../stores/track-store';
 import { useSensorStore } from '../stores/sensor-store';
 import { useTaskStore } from '../stores/task-store';
@@ -73,23 +75,27 @@ export function MapView() {
       ? 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
       : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
-    let cleanup: () => void;
+    let cleanup: (() => void) | undefined;
+    let cancelled = false;
 
     if (RENDERER === 'leaflet') {
       cleanup = initLeaflet(mapContainer.current, tileUrl);
     } else {
-      cleanup = initMapLibre(mapContainer.current, tileUrl);
+      // MapLibre loaded async to avoid bundling when not needed
+      initMapLibreAsync(mapContainer.current, tileUrl).then((c) => {
+        if (cancelled) { c(); return; }
+        cleanup = c;
+      });
     }
 
-    return cleanup;
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
   }, []);
 
   /** Initialize Leaflet map */
   function initLeaflet(container: HTMLElement, tileUrl: string) {
-    // Dynamic import to avoid bundling Leaflet when using MapLibre
-    const L = require('leaflet') as typeof import('leaflet');
-    require('leaflet/dist/leaflet.css');
-
     const leafletMap = L.map(container, {
       center: [31.5, 34.8],
       zoom: 8,
@@ -129,12 +135,13 @@ export function MapView() {
     };
   }
 
-  /** Initialize MapLibre GL JS map (fallback) */
-  function initMapLibre(container: HTMLElement, tileUrl: string) {
-    const maplibregl = require('maplibre-gl') as typeof import('maplibre-gl');
-    require('maplibre-gl/dist/maplibre-gl.css');
+  /** Initialize MapLibre GL JS map (fallback) — async to allow dynamic import */
+  async function initMapLibreAsync(container: HTMLElement, tileUrl: string): Promise<() => void> {
+    const maplibregl = (await import('maplibre-gl')).default;
+    // Load CSS via side-effect import
+    await import('maplibre-gl/dist/maplibre-gl.css');
 
-    const mlMap = new maplibregl.default.Map({
+    const mlMap = new maplibregl.Map({
       container,
       style: {
         version: 8,
@@ -156,8 +163,8 @@ export function MapView() {
       console.error('[MapView] MapLibre error:', e.error?.message || e);
     });
 
-    mlMap.addControl(new maplibregl.default.NavigationControl(), 'top-right');
-    mlMap.addControl(new maplibregl.default.ScaleControl({ unit: 'metric' }), 'bottom-left');
+    mlMap.addControl(new maplibregl.NavigationControl(), 'top-right');
+    mlMap.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
     const adapter = new MapLibreAdapter(mlMap);
     adapterRef.current = adapter;
