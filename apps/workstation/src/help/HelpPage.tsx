@@ -7,6 +7,9 @@ const sections = [
   { id: 'eo-management', title: 'EO Management' },
   { id: 'fusion', title: 'Fusion & Correlation' },
   { id: 'demo-guide', title: 'Demo Guide' },
+  { id: 'roles', title: 'Roles & Permissions' },
+  { id: 'reports', title: 'Reports' },
+  { id: 'user-management', title: 'User Management' },
   { id: 'keyboard', title: 'Keyboard Shortcuts' },
   { id: 'glossary', title: 'Glossary' },
 ] as const;
@@ -220,24 +223,30 @@ Choose from the scenario dropdown in the header:
 - **Central Israel Defense Sector**: Full-complexity (6 sensors, 8 targets, faults)
 - **Fusion Demo**: Demonstrates all fusion types (radar-radar, radar-EO, EO-only, formation)
 
-### 2. Start Simulation
-- Click **Play** in the timeline panel or press **Space**
+### 2. Select Role
+- If authentication is disabled, select **Instructor** from the role dropdown in the header
+- Only Instructors can start, pause, and control the simulation
+- See the **Roles & Permissions** section for details
+
+### 3. Start Simulation
+- Click **Start** in the instructor toolbar zone or press **Space**
+- The simulation does NOT auto-start on connect -- it stays idle until an instructor clicks Start
 - Adjust speed: 1x (real-time), 2x, 5x, 10x
 
-### 3. Key Things to Watch
+### 4. Key Things to Watch
 - **Track creation**: Yellow (tentative) circles appear as sensors detect targets
 - **Track confirmation**: Circles turn green after 3 consistent updates
 - **EO tasking**: Orange lines show EO sensor gimbals pointing at targets
 - **Triangulation**: Green/yellow lines show bearing intersections
 - **Uncertainty ellipses**: Toggle in layer panel to see track accuracy
 
-### 4. Interactive Features
+### 5. Interactive Features
 - **Click a track**: See details, fusion lineage, action buttons in right panel
 - **Click a ground truth target**: See true position vs tracked position
 - **Inject a target**: Use injection toolbar (enable via Inject button in header)
-- **Generate report**: Click Report button for scenario analysis
+- **Generate report**: Click Report button to open the report modal, select type and time range, then download as PDF (see Reports section)
 
-### 5. Demo Mode (Ctrl+D)
+### 6. Demo Mode (Ctrl+D)
 - Enables narration panel and annotations
 - Guided tour through system capabilities
 - Audience presets: military, technical, mixed
@@ -259,6 +268,94 @@ account for sensor accuracy and registration quality."
 "When sensor registration degrades, the fusion engine automatically switches
 to conservative mode, reducing the weight of uncertain observations rather
 than corrupting the air picture."`,
+
+  roles: `# Roles & Permissions
+
+## Role Selection
+ELOC2 supports two roles: **Instructor** and **Operator**. Only one instructor may be active at a time.
+
+### When Authentication is Disabled (Demo/Dev Mode)
+- A role dropdown appears in the header bar
+- Select **Instructor** or **Operator** from the dropdown
+- If another user already holds the Instructor role, you will be automatically downgraded to Operator with a notification
+
+### When Authentication is Enabled (Production)
+- Roles are assigned via the login system and stored in the database
+- The role is determined by the user record, not by manual selection
+
+## Instructor Controls
+The following controls are available **only to Instructors**:
+- **Scenario Selection**: Choose which scenario to run from the dropdown
+- **Simulation Controls**: Start, Pause, Reset, and Speed adjustment (1x/2x/5x/10x)
+- **Scenario Editor**: Open the scenario editor view
+- **Deployment Planner**: Open the sensor deployment view
+- **Demo Mode**: Enable/disable guided demo narration
+- **Live Inject**: Toggle random target injection during simulation
+- **Ground Truth (GT)**: Toggle ground truth overlay on the map
+- **User Management**: Open the user management page
+
+## Operator Mode
+- Operators can view the full air picture, interact with tracks, generate operator reports, and use all panel views
+- Instructor-only buttons are **visible but greyed out** in Operator mode
+- Hovering over a greyed-out button shows a tooltip: "Instructor role required"
+- Operators cannot start, pause, reset, or change the simulation speed`,
+
+  reports: `# Reports
+
+## Generating Reports
+Click the **Report** button in the header to open the report modal.
+
+## Report Types
+
+### Operator Report
+A session review document covering a user-specified time range:
+- **Track Timeline**: Tracks detected, confirmed, and dropped over time
+- **Sensor Status**: Online/offline/degraded status of each sensor
+- **Alert History**: Timeline of system alerts and events
+- **Classification Activity**: Summary of target classifications made
+
+### Instructor Report
+Includes everything in the Operator Report, plus:
+- **Ground Truth Comparison**: How many GT targets were tracked vs. missed vs. misclassified
+- **Situational Awareness Assessment**: Measures the completeness and accuracy of the recognized air picture against ground truth
+- **EO Effectiveness**: Cue-to-investigation time, triangulation success rate, EO utilization metrics
+
+The Instructor Report option is only available when your role is Instructor. It appears greyed out for Operators.
+
+## Time Range Selection
+Both report types require you to specify a time range:
+- **From**: Start time for the report period
+- **To**: End time for the report period
+
+## Download
+- Click **Generate & Download** to create the report
+- The report downloads automatically as a PDF file
+- Filename format: ELOC2_Report_YYYY-MM-DD_HHmm.pdf
+- No lingering download links -- the file downloads directly to your browser`,
+
+  'user-management': `# User Management
+
+## Accessing User Management
+Click the **Users** button in the Instructor toolbar zone. This button is only available to Instructors.
+
+## Online Users
+The top section shows all currently connected users:
+- **User**: Username or anonymous identifier
+- **Role**: Instructor or Operator
+- **Status**: Online indicator
+- **Connected Since**: When the user connected
+
+This section is always visible regardless of authentication mode.
+
+## Registered Users (Auth Enabled Only)
+When authentication is enabled (AUTH_ENABLED=true), a second table shows all registered users from the database:
+- **Create User**: Add a new user with username, password, and role
+- **Edit User**: Change a user's role or enable/disable their account
+- **Delete User**: Remove a user from the system
+- **Enable/Disable**: Toggle whether a user can log in
+
+## No-Auth Mode
+When authentication is disabled (AUTH_ENABLED=false), only the Online Users table is shown. There is no database-backed user CRUD in this mode -- users simply select their role from the header dropdown.`,
 
   keyboard: `# Keyboard Shortcuts
 

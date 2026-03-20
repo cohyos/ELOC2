@@ -69,6 +69,8 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 - `apps/workstation/src/3d/DeckGlOverlay.tsx` — Deck.gl 3D altitude/trajectory overlay
 - `packages/geometry/src/ballistic-estimator.ts` — Ballistic launch/impact point estimation
 - `packages/domain/src/weather.ts` — Weather condition types and effects
+- `apps/workstation/src/reports/ReportModal.tsx` — Report type/time selection modal (REQ-19)
+- `apps/workstation/src/admin/UserManagementView.tsx` — User management page (REQ-23)
 
 ## Data Flow
 1. `ScenarioRunner.step()` generates `SimulationEvent[]` (observations, bearings, faults)
@@ -159,13 +161,13 @@ See `Knowledge_Base_and_Agents_instructions/Instructor_Operator_UX_Plan.md` for 
 
 | REQ | Title | Status |
 |-----|-------|--------|
-| REQ-17 | No Auto-Start (idle on connect, instructor clicks Start) | ⬜ Pending |
-| REQ-18 | No Auto-Inject (instructor-gated random target injection) | ⬜ Pending |
-| REQ-19 | PDF Reports (operator + instructor types, time range, direct download) | ⬜ Pending |
-| REQ-20 | Hybrid Role Selection (auth login OR no-auth role picker, max 1 instructor) | ⬜ Pending |
-| REQ-21 | Instructor Button Grouping (visual divider, separate toolbar zone) | ⬜ Pending |
-| REQ-22 | Operator Mode Restrictions (greyed buttons, tooltip, no sim control) | ⬜ Pending |
-| REQ-23 | User Management Page (CRUD, online users, instructor-only) | ⬜ Pending |
+| REQ-17 | No Auto-Start | ✅ Complete |
+| REQ-18 | No Auto-Inject | ✅ Complete |
+| REQ-19 | PDF Reports | ✅ Complete |
+| REQ-20 | Hybrid Role Selection | ✅ Complete |
+| REQ-21 | Instructor Button Grouping | ✅ Complete |
+| REQ-22 | Operator Mode Restrictions | ✅ Complete |
+| REQ-23 | User Management Page | ✅ Complete |
 
 ## Recent Fixes (Rounds 1-3, branch `claude/eloc2-development-U3sup`)
 

@@ -1,6 +1,6 @@
 # Instructor/Operator UX & Simulation Control Plan (REQ-17 — REQ-23)
 
-> **Status**: DRAFT — Awaiting approval
+> **Status**: IMPLEMENTED — All stages complete
 > **Created**: 2026-03-20
 > **Branch**: `claude/review-knowledge-base-FTTzx`
 > **Predecessor**: `ELOC2_Corrections_and_Upgrades_Plan.md` (phases 1–7 complete)
@@ -230,16 +230,16 @@ Every agent MUST perform these steps after completing their task:
 
 | Stage | Agent | REQ | Status | Commit | Date |
 |-------|-------|-----|--------|--------|------|
-| 1 | 1A: sim-control | REQ-17 | ⬜ Pending | — | — |
-| 1 | 1B: auto-inject-gate | REQ-18 | ⬜ Pending | — | — |
-| 1 | 1C: ws-role-protocol | REQ-20 | ⬜ Pending | — | — |
-| 2 | 2A: role-picker-ui | REQ-20 | ⬜ Pending | — | — |
-| 2 | 2B: header-layout | REQ-21, REQ-22 | ⬜ Pending | — | — |
-| 3 | 3A: report-backend | REQ-19 | ⬜ Pending | — | — |
-| 3 | 3B: report-frontend | REQ-19 | ⬜ Pending | — | — |
-| 4 | 4A: user-mgmt-page | REQ-23 | ⬜ Pending | — | — |
-| 5 | 5A: docs-update | All | ⬜ Pending | — | — |
-| 5 | 5B: integration-test | All | ⬜ Pending | — | — |
+| 1 | 1A: sim-control | REQ-17 | ✅ Complete | — | 2026-03-20 |
+| 1 | 1B: auto-inject-gate | REQ-18 | ✅ Complete | — | 2026-03-20 |
+| 1 | 1C: ws-role-protocol | REQ-20 | ✅ Complete | — | 2026-03-20 |
+| 2 | 2A: role-picker-ui | REQ-20 | ✅ Complete | — | 2026-03-20 |
+| 2 | 2B: header-layout | REQ-21, REQ-22 | ✅ Complete | — | 2026-03-20 |
+| 3 | 3A: report-backend | REQ-19 | ✅ Complete | — | 2026-03-20 |
+| 3 | 3B: report-frontend | REQ-19 | ✅ Complete | — | 2026-03-20 |
+| 4 | 4A: user-mgmt-page | REQ-23 | ✅ Complete | — | 2026-03-20 |
+| 5 | 5A: docs-update | All | ✅ Complete | — | 2026-03-20 |
+| 5 | 5B: integration-test | All | ✅ Complete | — | 2026-03-20 |
 
 ---
 
