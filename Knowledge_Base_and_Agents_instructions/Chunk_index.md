@@ -33,6 +33,13 @@ This folder contains tighter retrieval oriented files derived from the master re
 | Map Renderer Evaluation               | Rendering approach evaluation (5 options), dual architecture justification |
 | EO Processing Server Architecture     | EO processing microservice: RTSP ingestion, YOLO detection, gRPC output |
 | High Load Architecture                | Distributed architecture for 100+ targets, 10+ operators, Redis Streams |
+| EO C2 demo for air defense            | High-level concept, requirements, and system overview |
+| EO C2 build roadmap                   | Phase sequence, acceptance criteria, scenario specifications |
+| EO C2 demo build knowledge base       | Research-grounded design decisions and domain logic |
+| EO C2 repo scaffold spec              | Monorepo structure, package boundaries, directory layout |
+| EO C2 search outcome report           | Technology evaluation rationale and tool selection |
+| Claude code prompt templates          | Copy-paste agent prompts with shared prefix for build agents |
+| Claude agent build prompts            | Detailed agent prompts with scope and done criteria |
 
 These chunk files are written to improve retrieval precision for MCP or RAG while preserving the key research backed claims from the master report \[Joh05, Paw96, Kal04, San01, Cor11, Oke01, Pat09\].
 

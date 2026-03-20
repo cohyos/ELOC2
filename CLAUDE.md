@@ -17,6 +17,15 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 - **Terrain**: `packages/terrain` — SRTM DEM line-of-sight checker
 - **ASTERIX Adapter**: `packages/asterix-adapter` — Complete CAT-048/CAT-062 parsing + export
 - **Reports**: `apps/api/src/reports/report-generator.ts` — Scenario report generation (REQ-12)
+- **EO Investigation**: `packages/eo-investigation` — Cue handling, gimbal/FOV models, EO reporting, ambiguity, split/merge
+- **EO Tasking**: `packages/eo-tasking` — Candidate generation, scoring, policy engine, assignment, operator controls
+- **Registration**: `packages/registration` — Bias estimation, clock health, registration health service
+- **Events**: `packages/events` — Event types and event store for event-sourced state changes
+- **Projections**: `packages/projections` — RAP projection and state projection utilities
+- **Scenario Library**: `packages/scenario-library` — Predefined scenario definitions (central-israel, etc.)
+- **Schemas**: `packages/schemas` — Zod validation schemas for API payloads
+- **Shared Utils**: `packages/shared-utils` — Common utilities shared across packages
+- **Validation**: `packages/validation` — Input validation and assertion helpers
 
 ## Key Files
 - `apps/api/src/simulation/live-engine.ts` — Main simulation loop, WS broadcast, geometry & fusion integration
