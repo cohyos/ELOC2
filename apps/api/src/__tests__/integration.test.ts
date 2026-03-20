@@ -295,9 +295,9 @@ describe('Report generation (REQ-12)', () => {
     const engine = new LiveEngine('central-israel');
     advanceTo(engine, 60);
 
-    const report = generateReport(engine, { format: 'md' });
+    const report = generateReport(engine, { type: 'instructor' });
     expect(report).toBeDefined();
-    expect(report.format).toBe('md');
+    expect(report.type).toBe('instructor');
     expect(report.content.length).toBeGreaterThan(0);
     expect(report.id).toBeTruthy();
     expect(report.generatedAt).toBeGreaterThan(0);
@@ -314,7 +314,7 @@ describe('Report generation (REQ-12)', () => {
     const engine = new LiveEngine('central-israel');
     advanceTo(engine, 30);
 
-    const report = generateReport(engine, { format: 'md' });
+    const report = generateReport(engine, { type: 'operator' });
     expect(report.content).toContain('central-israel');
   });
 });

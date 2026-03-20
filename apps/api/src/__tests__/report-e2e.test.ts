@@ -187,13 +187,13 @@ describe('Scenario Report E2E', () => {
     advanceEngine(engine, 10);
 
     const report = generateReport(engine, {
-      format: 'md',
+      type: 'operator',
       sections: ['scenario', 'conclusions'],
     });
     const content = report.content;
 
     expect(content).toContain('## 1. Scenario Definition');
-    expect(content).toContain('## 6. Conclusions & Key Statistics');
+    expect(content).toContain('## Conclusions & Key Statistics');
     // Should NOT contain omitted sections
     expect(content).not.toContain('## 3. System Performance Timeline');
     expect(content).not.toContain('## 4. EO Investigation Summary');
