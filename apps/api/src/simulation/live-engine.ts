@@ -1439,6 +1439,19 @@ export class LiveEngine {
     };
   }
 
+  getConnectedUsersList(): Array<{ id: string; role: string; connectedAt: number }> {
+    const list: Array<{ id: string; role: string; connectedAt: number }> = [];
+    let idx = 0;
+    for (const info of this.wsClientInfos.values()) {
+      list.push({
+        id: `user-${idx++}`,
+        role: info.role,
+        connectedAt: info.connectedAt,
+      });
+    }
+    return list;
+  }
+
   // ── Auto-loop & idle shutdown ──────────────────────────────────────────
 
   private onUserConnected(): void {

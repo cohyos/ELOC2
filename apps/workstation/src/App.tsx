@@ -30,6 +30,7 @@ import { MetricsOverlay } from './demo/MetricsOverlay';
 import { ResizeHandle } from './components/ResizeHandle';
 import { QualityMetricsPanel } from './quality/QualityMetricsPanel';
 import { DeploymentView } from './deployment/DeploymentView';
+import { UserManagementView } from './admin/UserManagementView';
 import { FusionConfigPanel } from './components/FusionConfigPanel';
 import { useAuthStore } from './auth/auth-store';
 import { LoginPage } from './auth/LoginPage';
@@ -318,7 +319,7 @@ const btnBase = (isMobile: boolean): React.CSSProperties => ({
 
 export function App() {
   const isMobile = useIsMobile();
-  const [view, setView] = useState<'workstation' | 'editor' | 'deployment'>('workstation');
+  const [view, setView] = useState<'workstation' | 'editor' | 'deployment' | 'users'>('workstation');
 
   // ── Auth ────────────────────────────────────────────────────────────────
   const authEnabled = useAuthStore(s => s.authEnabled);
@@ -523,6 +524,10 @@ export function App() {
 
   if (view === 'deployment') {
     return <DeploymentView onBack={() => setView('workstation')} />;
+  }
+
+  if (view === 'users') {
+    return <UserManagementView onBack={() => setView('workstation')} />;
   }
 
   if (isMobile) return <MobileLayout />;
