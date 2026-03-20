@@ -35,7 +35,7 @@ export interface DeploymentMetrics {
   geometryQuality: number;
 }
 
-export type DeploymentDrawMode = 'select' | 'draw-area' | 'draw-exclusion' | 'draw-threat';
+export type DeploymentDrawMode = 'select' | 'draw-area' | 'draw-exclusion' | 'draw-threat' | 'place-sensor';
 
 interface DeploymentState {
   // Mode
@@ -43,6 +43,7 @@ interface DeploymentState {
   drawMode: DeploymentDrawMode;
   drawVertices: GeoPoint[];
   deploymentName: string;
+  pendingSensorSpec: SensorSpec | null;
 
   // Area & zones
   scannedArea: GeoPolygon;
@@ -86,8 +87,13 @@ interface DeploymentState {
   addDrawVertex: (vertex: GeoPoint) => void;
   finishDraw: () => void;
   cancelDraw: () => void;
+  // Place sensor on map
+  startPlaceSensor: (spec: SensorSpec) => void;
+  placeSensorAtPosition: (position: GeoPoint) => void;
   // Update sensor position (for dragging)
   updatePlacedSensorPosition: (index: number, position: GeoPoint) => void;
+  // Remove a placed sensor
+  removePlacedSensor: (index: number) => void;
 }
 
 // Default scanned area: Central Israel region
@@ -112,6 +118,7 @@ export const useDeploymentStore = create<DeploymentState>((set, get) => ({
   drawMode: 'select' as DeploymentDrawMode,
   drawVertices: [] as GeoPoint[],
   deploymentName: '',
+  pendingSensorSpec: null,
   scannedArea: DEFAULT_SCANNED_AREA,
   inclusionZones: [],
   exclusionZones: [],
@@ -240,7 +247,7 @@ export const useDeploymentStore = create<DeploymentState>((set, get) => ({
   },
 
   // Drawing mode
-  setDrawMode: (mode) => set({ drawMode: mode, drawVertices: [] }),
+  setDrawMode: (mode) => set({ drawMode: mode, drawVertices: [], pendingSensorSpec: null }),
   addDrawVertex: (vertex) => set((s) => ({ drawVertices: [...s.drawVertices, vertex] })),
   finishDraw: () => {
     const s = get();
@@ -259,10 +266,70 @@ export const useDeploymentStore = create<DeploymentState>((set, get) => ({
   },
   cancelDraw: () => set({ drawMode: 'select', drawVertices: [] }),
 
-  updatePlacedSensorPosition: (index, position) =>
+  startPlaceSensor: (spec) => set({ drawMode: 'place-sensor', pendingSensorSpec: spec }),
+
+  placeSensorAtPosition: (position) => {
+    const s = get();
+    if (!s.pendingSensorSpec) return;
+    const newPlaced: PlacedSensor = {
+      spec: s.pendingSensorSpec,
+      position,
+      scores: { coverage: 0, geometry: 0, threat: 0, total: 0 },
+    };
+    // Remove from inventory
+    set((prev) => ({
+      placedSensors: [...prev.placedSensors, newPlaced],
+      sensorInventory: prev.sensorInventory.filter(si => si.id !== prev.pendingSensorSpec?.id),
+      drawMode: 'select',
+      pendingSensorSpec: null,
+    }));
+    // Auto-fetch terrain elevation
+    fetch(`/api/terrain/elevation?lat=${position.lat}&lon=${position.lon}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.elevationM != null) {
+          const st = get();
+          const idx = st.placedSensors.length - 1;
+          if (idx >= 0) {
+            set((prev) => ({
+              placedSensors: prev.placedSensors.map((ps, i) =>
+                i === idx ? { ...ps, position: { ...ps.position, alt: Math.round(data.elevationM) } } : ps
+              ),
+            }));
+          }
+        }
+      })
+      .catch(() => {});
+  },
+
+  removePlacedSensor: (index) =>
+    set((s) => {
+      const removed = s.placedSensors[index];
+      return {
+        placedSensors: s.placedSensors.filter((_, i) => i !== index),
+        // Add back to inventory
+        sensorInventory: removed ? [...s.sensorInventory, removed.spec] : s.sensorInventory,
+      };
+    }),
+
+  updatePlacedSensorPosition: (index, position) => {
     set((s) => ({
       placedSensors: s.placedSensors.map((ps, i) =>
         i === index ? { ...ps, position } : ps
       ),
-    })),
+    }));
+    // Auto-fetch terrain elevation on drag
+    fetch(`/api/terrain/elevation?lat=${position.lat}&lon=${position.lon}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.elevationM != null) {
+          set((s) => ({
+            placedSensors: s.placedSensors.map((ps, i) =>
+              i === index ? { ...ps, position: { ...ps.position, alt: Math.round(data.elevationM) } } : ps
+            ),
+          }));
+        }
+      })
+      .catch(() => {});
+  },
 }));

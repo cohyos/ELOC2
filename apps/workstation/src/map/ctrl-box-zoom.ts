@@ -15,8 +15,10 @@ export function enableCtrlBoxZoom(map: maplibregl.Map): () => void {
     e.preventDefault();
     e.stopPropagation();
 
-    // Disable map drag while box-zooming
+    // Disable map drag and rotate while box-zooming
+    // (MapLibre's dragRotate also responds to ctrl+click)
     map.dragPan.disable();
+    map.dragRotate.disable();
 
     const rect = container.getBoundingClientRect();
     startPoint = { x: e.clientX - rect.left, y: e.clientY - rect.top };
@@ -66,8 +68,9 @@ export function enableCtrlBoxZoom(map: maplibregl.Map): () => void {
     }
     active = false;
 
-    // Re-enable drag
+    // Re-enable drag and rotate
     map.dragPan.enable();
+    map.dragRotate.enable();
 
     // Only zoom if box is at least 10px in each dimension
     const width = Math.abs(endX - startPoint.x);
@@ -101,6 +104,7 @@ export function enableCtrlBoxZoom(map: maplibregl.Map): () => void {
       active = false;
       startPoint = null;
       map.dragPan.enable();
+      map.dragRotate.enable();
     }
   };
 

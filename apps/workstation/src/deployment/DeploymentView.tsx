@@ -163,13 +163,20 @@ function DeploymentMap() {
     map.on('move', scheduleRedraw);
     map.on('zoom', scheduleRedraw);
     map.on('resize', scheduleRedraw);
-    map.on('load', () => drawOverlays());
+    map.on('load', () => {
+      // Force resize to ensure tiles render correctly in flex layouts
+      setTimeout(() => map.resize(), 100);
+      drawOverlays();
+    });
 
-    // Click handler for drawing modes
+    // Click handler for drawing modes and sensor placement
     map.on('click', (e) => {
-      const dm = useDeploymentStore.getState().drawMode;
-      if (dm !== 'select') {
-        useDeploymentStore.getState().addDrawVertex({ lat: e.lngLat.lat, lon: e.lngLat.lng });
+      const store = useDeploymentStore.getState();
+      const dm = store.drawMode;
+      if (dm === 'place-sensor') {
+        store.placeSensorAtPosition({ lat: e.lngLat.lat, lon: e.lngLat.lng });
+      } else if (dm !== 'select') {
+        store.addDrawVertex({ lat: e.lngLat.lat, lon: e.lngLat.lng });
       }
     });
 
@@ -192,6 +199,7 @@ function DeploymentMap() {
     const m = mapRef.current;
     if (!m) return;
     m.getCanvas().style.cursor = drawMode !== 'select' ? 'crosshair' : '';
+    m.getCanvas().style.userSelect = 'none';
   }, [drawMode]);
 
   // Draggable sensors
@@ -240,11 +248,12 @@ function DeploymentMap() {
     'draw-area': 'Click to define scanned area',
     'draw-exclusion': 'Click to define exclusion zone',
     'draw-threat': 'Click to define threat corridor',
+    'place-sensor': 'Click map to place sensor',
   };
   const modeLabel = drawMode !== 'select' ? modeLabels[drawMode] : null;
 
   return (
-    <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%' }}>
+    <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', userSelect: 'none' }}>
       <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
 
       <svg ref={svgRef} style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 14 }} />
@@ -259,7 +268,7 @@ function DeploymentMap() {
           display: 'flex', alignItems: 'center', gap: '8px', pointerEvents: 'auto',
         }}>
           {modeLabel}
-          {drawVertices.length >= 3 && (
+          {drawMode !== 'place-sensor' && drawVertices.length >= 3 && (
             <button
               onClick={() => useDeploymentStore.getState().finishDraw()}
               style={{ background: '#00cc44', color: '#fff', border: 'none', borderRadius: '3px', padding: '2px 10px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
@@ -268,7 +277,13 @@ function DeploymentMap() {
             </button>
           )}
           <button
-            onClick={() => useDeploymentStore.getState().cancelDraw()}
+            onClick={() => {
+              if (drawMode === 'place-sensor') {
+                useDeploymentStore.getState().setDrawMode('select');
+              } else {
+                useDeploymentStore.getState().cancelDraw();
+              }
+            }}
             style={{ background: '#ff333344', color: '#ff6666', border: 'none', borderRadius: '3px', padding: '2px 8px', fontSize: '10px', cursor: 'pointer' }}
           >
             Cancel

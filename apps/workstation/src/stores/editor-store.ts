@@ -567,7 +567,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       for (const s of def.sensors) {
         store.addSensor({
           id: s.sensorId || crypto.randomUUID(),
-          type: (s.type as EditorSensor['type']) || 'radar',
+          type: ((s.type || (s as any).sensorType) as EditorSensor['type']) || 'radar',
           lat: s.position?.lat ?? 0,
           lon: s.position?.lon ?? 0,
           alt: s.position?.alt ?? 0,

@@ -89,8 +89,11 @@ export function DeploymentPanel() {
   const threatCorridors = useDeploymentStore(s => s.threatCorridors);
   const drawMode = useDeploymentStore(s => s.drawMode);
   const deploymentName = useDeploymentStore(s => s.deploymentName);
+  const pendingSensorSpec = useDeploymentStore(s => s.pendingSensorSpec);
   const addSensor = useDeploymentStore(s => s.addSensorToInventory);
   const removeSensor = useDeploymentStore(s => s.removeSensorFromInventory);
+  const startPlaceSensor = useDeploymentStore(s => s.startPlaceSensor);
+  const removePlacedSensor = useDeploymentStore(s => s.removePlacedSensor);
   const removeExclusionZone = useDeploymentStore(s => s.removeExclusionZone);
   const removeThreatCorridor = useDeploymentStore(s => s.removeThreatCorridor);
   const runOptimization = useDeploymentStore(s => s.runOptimization);
@@ -281,23 +284,43 @@ export function DeploymentPanel() {
       {/* Sensor Inventory */}
       <div style={{ marginBottom: '16px' }}>
         <div style={sectionTitle}>Sensor Inventory ({inventory.length})</div>
-        {inventory.map((s) => (
-          <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 0', fontSize: '12px' }}>
-            <span>
-              <span style={{ color: s.type === 'eo' ? colors.eo : colors.radar, fontWeight: 600 }}>
-                {s.type.toUpperCase()}
+        {inventory.map((s) => {
+          const isPlacing = drawMode === 'place-sensor' && pendingSensorSpec?.id === s.id;
+          return (
+            <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 0', fontSize: '12px' }}>
+              <span>
+                <span style={{ color: s.type === 'eo' ? colors.eo : colors.radar, fontWeight: 600 }}>
+                  {s.type.toUpperCase()}
+                </span>
+                <span style={{ color: colors.textDim, marginLeft: '6px' }}>{s.id}</span>
+                <span style={{ color: colors.textDim, marginLeft: '6px', fontSize: '10px' }}>{(s.maxRangeM / 1000).toFixed(0)}km</span>
               </span>
-              <span style={{ color: colors.textDim, marginLeft: '6px' }}>{s.id}</span>
-              <span style={{ color: colors.textDim, marginLeft: '6px', fontSize: '10px' }}>{(s.maxRangeM / 1000).toFixed(0)}km</span>
-            </span>
-            <button
-              onClick={() => removeSensor(s.id)}
-              style={{ background: 'none', border: 'none', color: colors.danger, cursor: 'pointer', fontSize: '14px', padding: '0 4px' }}
-            >
-              x
-            </button>
-          </div>
-        ))}
+              <span style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                <button
+                  onClick={() => isPlacing ? setDrawMode('select') : startPlaceSensor(s)}
+                  style={{
+                    background: isPlacing ? '#ffcc0022' : 'none',
+                    border: isPlacing ? '1px solid #ffcc0066' : '1px solid #444',
+                    color: isPlacing ? '#ffcc00' : colors.accent,
+                    cursor: 'pointer',
+                    fontSize: '9px',
+                    padding: '1px 5px',
+                    borderRadius: '2px',
+                  }}
+                  title="Click to place this sensor on the map"
+                >
+                  {isPlacing ? 'Placing...' : '📍'}
+                </button>
+                <button
+                  onClick={() => removeSensor(s.id)}
+                  style={{ background: 'none', border: 'none', color: colors.danger, cursor: 'pointer', fontSize: '14px', padding: '0 4px' }}
+                >
+                  x
+                </button>
+              </span>
+            </div>
+          );
+        })}
 
         {/* Add from sensor library */}
         {sensorLibrary.length > 0 && (
@@ -397,16 +420,26 @@ export function DeploymentPanel() {
           <div style={sectionTitle}>Placed Sensors ({placedSensors.length})</div>
           {placedSensors.map((ps, i) => (
             <div key={i} style={{ padding: '3px 0', fontSize: '11px', borderBottom: '1px solid #222' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: ps.spec.type === 'eo' ? colors.eo : colors.radar, fontWeight: 600 }}>
                   {ps.spec.type.toUpperCase()} {ps.spec.id}
                 </span>
-                <span style={{ color: colors.success, fontFamily: 'monospace' }}>
-                  {(ps.scores.total * 100).toFixed(0)}%
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ color: colors.success, fontFamily: 'monospace' }}>
+                    {(ps.scores.total * 100).toFixed(0)}%
+                  </span>
+                  <button
+                    onClick={() => removePlacedSensor(i)}
+                    style={{ background: 'none', border: 'none', color: colors.danger, cursor: 'pointer', fontSize: '12px', padding: '0 2px' }}
+                    title="Remove from map (return to inventory)"
+                  >
+                    x
+                  </button>
                 </span>
               </div>
               <div style={{ color: colors.textDim, fontSize: '10px' }}>
                 {ps.position.lat.toFixed(4)}, {ps.position.lon.toFixed(4)}
+                {ps.position.alt ? ` | ${ps.position.alt}m` : ''}
               </div>
             </div>
           ))}

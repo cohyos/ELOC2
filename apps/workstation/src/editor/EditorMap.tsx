@@ -543,7 +543,7 @@ export function EditorMap() {
       : null;
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', userSelect: 'none' }}>
       <div ref={mapContainer} style={{ width: '100%', height: '100%' }} />
 
       {/* SVG overlay for geometry (z-index 14) */}

@@ -10,6 +10,7 @@ import type { SensorState, SensorId, SensorType } from '@eloc2/domain';
  */
 export function exportToSensorDefinitions(placed: PlacedSensor[]): Array<{
   sensorId: string;
+  type: SensorType;
   sensorType: SensorType;
   position: { lat: number; lon: number; alt: number };
   coverage: {
@@ -19,14 +20,17 @@ export function exportToSensorDefinitions(placed: PlacedSensor[]): Array<{
     maxElDeg: number;
     maxRangeM: number;
   };
+  fov?: { halfAngleHDeg: number; halfAngleVDeg: number };
+  slewRateDegPerSec?: number;
 }> {
   return placed.map((p, i) => ({
-    sensorId: `${p.spec.type}-deploy-${i + 1}`,
-    sensorType: p.spec.type as SensorType,
+    sensorId: p.spec.id || `${p.spec.type}-deploy-${i + 1}`,
+    type: p.spec.type as SensorType,
+    sensorType: p.spec.type as SensorType, // kept for backward compat
     position: {
       lat: p.position.lat,
       lon: p.position.lon,
-      alt: 0, // Ground level by default
+      alt: p.position.alt ?? 0,
     },
     coverage: {
       minAzDeg: p.spec.minAzDeg,
@@ -35,5 +39,13 @@ export function exportToSensorDefinitions(placed: PlacedSensor[]): Array<{
       maxElDeg: 90,
       maxRangeM: p.spec.maxRangeM,
     },
+    // Include EO-specific fields for proper scenario import
+    ...(p.spec.type === 'eo' ? {
+      fov: {
+        halfAngleHDeg: p.spec.fovHalfAngleDeg,
+        halfAngleVDeg: Math.max(1, p.spec.fovHalfAngleDeg * 0.75),
+      },
+      slewRateDegPerSec: 30,
+    } : {}),
   }));
 }
