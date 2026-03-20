@@ -14,8 +14,11 @@ import type { LiveEngine, LiveState } from '../simulation/live-engine.js';
 // ---------------------------------------------------------------------------
 
 export interface ReportOptions {
-  format: 'md';
+  type: 'operator' | 'instructor';
+  timeRange?: { from: number; to: number }; // simulation elapsed seconds
   sections?: string[];
+  /** @deprecated kept for backward compatibility — ignored, always produces PDF */
+  format?: string;
 }
 
 export interface MapSnapshot {
@@ -26,9 +29,11 @@ export interface MapSnapshot {
 
 export interface GeneratedReport {
   id: string;
-  format: 'md';
+  type: 'operator' | 'instructor';
   content: string;
   generatedAt: number;
+  /** @deprecated kept for backward compatibility */
+  format: 'md';
 }
 
 /** A single sample captured during simulation for time-series data. */
@@ -110,29 +115,67 @@ const ALL_SECTIONS = [
   'performance-timeline',
   'eo-investigation',
   'quality-metrics',
+  'situational-awareness',
   'conclusions',
 ] as const;
 
 type SectionName = (typeof ALL_SECTIONS)[number];
 
+/** Sections included in an operator report (no GT comparison). */
+const OPERATOR_SECTIONS: SectionName[] = [
+  'scenario',
+  'performance-timeline',
+  'eo-investigation',
+  'conclusions',
+];
+
+/** Sections included in an instructor report (all sections). */
+const INSTRUCTOR_SECTIONS: SectionName[] = [
+  'scenario',
+  'ground-truth',
+  'performance-timeline',
+  'eo-investigation',
+  'quality-metrics',
+  'situational-awareness',
+  'conclusions',
+];
+
 /**
  * Generate a scenario report from the current engine state and accumulated data.
  */
 export function generateReport(engine: LiveEngine, options: ReportOptions): GeneratedReport {
-  const sections = (options.sections ?? [...ALL_SECTIONS]) as SectionName[];
+  const reportType = options.type ?? 'operator';
+  const defaultSections = reportType === 'instructor' ? INSTRUCTOR_SECTIONS : OPERATOR_SECTIONS;
+  const sections = (options.sections ?? defaultSections) as SectionName[];
+  const isInstructor = reportType === 'instructor';
+
   const state = engine.getState();
   const scenarioInfo = engine.getScenarioInfo();
   const qualityMetrics = engine.getQualityMetrics();
   const beforeAfter = engine.getBeforeAfterComparison();
   const allocationQuality = engine.getEoAllocationQuality();
 
+  // Apply time-range filter to timeline samples if specified
+  let filteredSamples = timelineSamples;
+  if (options.timeRange) {
+    const { from, to } = options.timeRange;
+    filteredSamples = timelineSamples.filter(
+      s => s.simTimeSec >= from && s.simTimeSec <= to,
+    );
+  }
+
   const parts: string[] = [];
 
+  const typeLabel = reportType === 'instructor' ? 'Instructor Report' : 'Operator Report';
   parts.push(`# ELOC2 Scenario Report`);
   parts.push('');
+  parts.push(`**Report Type:** ${typeLabel}`);
   parts.push(`**Generated:** ${new Date().toISOString()}`);
   parts.push(`**Scenario:** ${scenarioInfo.name} (\`${scenarioInfo.id}\`)`);
   parts.push(`**Elapsed:** ${formatTime(state.elapsedSec)} / ${formatTime(scenarioInfo.durationSec)}`);
+  if (options.timeRange) {
+    parts.push(`**Time Range:** ${formatTime(options.timeRange.from)} – ${formatTime(options.timeRange.to)}`);
+  }
   parts.push('');
   parts.push('---');
   parts.push('');
@@ -144,16 +187,19 @@ export function generateReport(engine: LiveEngine, options: ReportOptions): Gene
     parts.push(buildGroundTruthSection(engine));
   }
   if (sections.includes('performance-timeline')) {
-    parts.push(buildPerformanceTimelineSection(state));
+    parts.push(buildPerformanceTimelineSection(state, filteredSamples));
   }
   if (sections.includes('eo-investigation')) {
-    parts.push(buildEoInvestigationSection(state, beforeAfter));
+    parts.push(buildEoInvestigationSection(state, beforeAfter, isInstructor));
   }
   if (sections.includes('quality-metrics')) {
     parts.push(buildQualitySection(qualityMetrics, allocationQuality));
   }
+  if (sections.includes('situational-awareness')) {
+    parts.push(buildSituationalAwarenessSection(engine, qualityMetrics, beforeAfter, allocationQuality));
+  }
   if (sections.includes('conclusions')) {
-    parts.push(buildConclusionsSection(state, qualityMetrics, beforeAfter));
+    parts.push(buildConclusionsSection(state, qualityMetrics, beforeAfter, isInstructor));
   }
 
   const content = parts.join('\n');
@@ -161,6 +207,7 @@ export function generateReport(engine: LiveEngine, options: ReportOptions): Gene
 
   const report: GeneratedReport = {
     id,
+    type: reportType,
     format: 'md',
     content,
     generatedAt: Date.now(),
@@ -254,7 +301,8 @@ function buildGroundTruthSection(engine: LiveEngine): string {
   return lines.join('\n');
 }
 
-function buildPerformanceTimelineSection(state: LiveState): string {
+function buildPerformanceTimelineSection(state: LiveState, samples?: TimelineSample[]): string {
+  const effectiveSamples = samples ?? timelineSamples;
   const lines: string[] = [];
   lines.push('## 3. System Performance Timeline');
   lines.push('');
@@ -279,21 +327,21 @@ function buildPerformanceTimelineSection(state: LiveState): string {
   lines.push('');
 
   // Timeline samples
-  if (timelineSamples.length > 0) {
+  if (effectiveSamples.length > 0) {
     lines.push('### Track Count Over Time');
     lines.push('');
     lines.push('| Time | Total | Confirmed | Tentative | Dropped | Tasks |');
     lines.push('|-----:|------:|----------:|----------:|--------:|------:|');
 
     // Show at most 20 evenly-spaced samples
-    const step = Math.max(1, Math.floor(timelineSamples.length / 20));
-    for (let i = 0; i < timelineSamples.length; i += step) {
-      const s = timelineSamples[i];
+    const step = Math.max(1, Math.floor(effectiveSamples.length / 20));
+    for (let i = 0; i < effectiveSamples.length; i += step) {
+      const s = effectiveSamples[i];
       lines.push(`| ${formatTime(s.simTimeSec)} | ${s.trackCount} | ${s.confirmedCount} | ${s.tentativeCount} | ${s.droppedCount} | ${s.activeTasks} |`);
     }
     // Always include last sample
-    const last = timelineSamples[timelineSamples.length - 1];
-    if (timelineSamples.length > 1) {
+    const last = effectiveSamples[effectiveSamples.length - 1];
+    if (effectiveSamples.length > 1) {
       lines.push(`| ${formatTime(last.simTimeSec)} | ${last.trackCount} | ${last.confirmedCount} | ${last.tentativeCount} | ${last.droppedCount} | ${last.activeTasks} |`);
     }
     lines.push('');
@@ -319,6 +367,7 @@ function buildPerformanceTimelineSection(state: LiveState): string {
 function buildEoInvestigationSection(
   state: LiveState,
   beforeAfter: ReturnType<LiveEngine['getBeforeAfterComparison']>,
+  includeGtComparison = true,
 ): string {
   const lines: string[] = [];
   lines.push('## 4. EO Investigation Summary');
@@ -366,8 +415,8 @@ function buildEoInvestigationSection(
     lines.push('');
   }
 
-  // Before/after comparison
-  if (beforeAfter.perTrack.length > 0) {
+  // Before/after comparison (only in instructor reports)
+  if (includeGtComparison && beforeAfter.perTrack.length > 0) {
     lines.push('### Before/After EO Comparison');
     lines.push('');
     const agg = beforeAfter.aggregate;
@@ -482,9 +531,10 @@ function buildConclusionsSection(
   state: LiveState,
   qualityMetrics: ReturnType<LiveEngine['getQualityMetrics']>,
   beforeAfter: ReturnType<LiveEngine['getBeforeAfterComparison']>,
+  includeGtComparison = true,
 ): string {
   const lines: string[] = [];
-  lines.push('## 6. Conclusions & Key Statistics');
+  lines.push('## Conclusions & Key Statistics');
   lines.push('');
 
   const tracks = state.tracks;
@@ -500,14 +550,14 @@ function buildConclusionsSection(
   lines.push(`- **EO bearing observations:** ${state.eoTracks.length}`);
   lines.push(`- **Targets investigated (before/after):** ${beforeAfter.aggregate.totalTracksInvestigated}`);
 
-  if (qualityMetrics) {
+  if (includeGtComparison && qualityMetrics) {
     lines.push(`- **Track-to-truth association:** ${(qualityMetrics.trackToTruthAssociation * 100).toFixed(1)}%`);
     lines.push(`- **Classification accuracy:** ${(qualityMetrics.classificationAccuracy * 100).toFixed(1)}%`);
     lines.push(`- **Avg position error:** ${qualityMetrics.positionErrorAvg.toFixed(2)}`);
   }
 
   const agg = beforeAfter.aggregate;
-  if (agg.totalTracksInvestigated > 0) {
+  if (includeGtComparison && agg.totalTracksInvestigated > 0) {
     lines.push(`- **Avg position improvement from EO:** ${agg.avgPositionImprovement.toFixed(2)}`);
     lines.push(`- **Geometry upgrades from EO:** ${agg.tracksWithGeometryUpgrade}`);
   }
