@@ -120,8 +120,10 @@ export function isTargetActive(
   if (timeSec < target.startTime) return false;
   if (target.waypoints.length === 0) return false;
 
+  // Waypoint times are relative to startTime, so compare against relative time
+  const relativeTime = timeSec - target.startTime;
   const firstWp = target.waypoints[0].time;
   const lastWp = target.waypoints[target.waypoints.length - 1].time;
 
-  return timeSec >= firstWp && timeSec <= lastWp;
+  return relativeTime >= firstWp && relativeTime <= lastWp;
 }
