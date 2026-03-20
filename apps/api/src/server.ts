@@ -63,6 +63,17 @@ server.get('/api/health', async () => {
   };
 });
 
+// Instructor availability check (for no-auth role selection)
+server.get('/api/simulation/instructor-available', async () => {
+  const users = engine.getConnectedUsers();
+  return { available: users.instructors === 0 };
+});
+
+// Connected users list (for user management view)
+server.get('/api/simulation/connected-users', async () => {
+  return { users: engine.getConnectedUsersList() };
+});
+
 // Initialize auth if enabled
 if (AUTH_ENABLED) {
   const { authPlugin } = await import('./auth/auth-plugin.js');

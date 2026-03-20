@@ -121,6 +121,11 @@ interface UiState {
   // Investigation mode
   investigationMode: InvestigationMode;
 
+  // Role selection (no-auth mode)
+  selectedRole: 'instructor' | 'operator';
+  effectiveRole: 'instructor' | 'operator';
+  instructorAvailable: boolean;
+
   // Actions
   selectTrack: (id: string | null) => void;
   selectSensor: (id: string | null) => void;
@@ -180,6 +185,11 @@ interface UiState {
 
   // Investigation mode actions
   setInvestigationMode: (mode: InvestigationMode) => void;
+
+  // Role selection actions (no-auth mode)
+  setSelectedRole: (role: 'instructor' | 'operator') => void;
+  setEffectiveRole: (role: 'instructor' | 'operator') => void;
+  setInstructorAvailable: (available: boolean) => void;
 }
 
 export interface SelectionBearingRay {
@@ -257,6 +267,10 @@ export const useUiStore = create<UiState>((set) => ({
   autoLoopEnabled: false,
 
   investigationMode: 'standard',
+
+  selectedRole: 'operator',
+  effectiveRole: 'operator',
+  instructorAvailable: true,
 
   selectTrack: (id) =>
     set({ selectedTrackId: id, selectedSensorId: null, selectedCueId: null, selectedGroupId: null, selectedGeometryTrackId: null, detailView: id ? 'track' : 'none', detailPanelOpen: !!id }),
@@ -356,4 +370,8 @@ export const useUiStore = create<UiState>((set) => ({
   setAutoLoopEnabled: (enabled) => set({ autoLoopEnabled: enabled }),
 
   setInvestigationMode: (mode) => set({ investigationMode: mode }),
+
+  setSelectedRole: (role) => set({ selectedRole: role }),
+  setEffectiveRole: (role) => set({ effectiveRole: role }),
+  setInstructorAvailable: (available) => set({ instructorAvailable: available }),
 }));

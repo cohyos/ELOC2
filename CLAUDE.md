@@ -69,6 +69,8 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 - `apps/workstation/src/3d/DeckGlOverlay.tsx` — Deck.gl 3D altitude/trajectory overlay
 - `packages/geometry/src/ballistic-estimator.ts` — Ballistic launch/impact point estimation
 - `packages/domain/src/weather.ts` — Weather condition types and effects
+- `apps/workstation/src/reports/ReportModal.tsx` — Report type/time selection modal (REQ-19)
+- `apps/workstation/src/admin/UserManagementView.tsx` — User management page (REQ-23)
 
 ## Data Flow
 1. `ScenarioRunner.step()` generates `SimulationEvent[]` (observations, bearings, faults)
@@ -110,6 +112,7 @@ The `Knowledge_Base_and_Agents_instructions/` folder contains **25 foundational 
 | `Map_Renderer_Evaluation.md` | **Rendering approach evaluation, dual architecture justification** | **Wave 5** |
 | `EO_Processing_Server_Architecture.md` | **EO processing microservice: RTSP ingestion, YOLO detection, gRPC output** | **Wave 5** |
 | `High_Load_Architecture.md` | **Distributed architecture for 100+ targets, 10+ operators, Redis Streams** | **Wave 5** |
+| `Instructor_Operator_UX_Plan.md` | **Instructor/Operator UX plan: REQ-17–23, role picker, header layout, PDF reports, user mgmt** | **Current** |
 | `Claude_code_prompt_templates.md` | Copy-paste agent prompts with shared prefix | Agent execution |
 | `Claude_agent_build_prompts.md` | Detailed agent prompts with scope + done criteria | Agent execution |
 | `Chunk_index.md` | Index of all knowledge base chunks for retrieval | Reference |
@@ -152,6 +155,19 @@ See `Knowledge_Base_and_Agents_instructions/ELOC2_Corrections_and_Upgrades_Plan.
 | 3: Detection | **Complete** | RCS-based radar, EO max range, auto-loop, user count, threat profiles, sensor library, system load |
 | 4: Terrain + ASTERIX | **Complete** | SRTM LOS, ASTERIX CAT-048/062, investigation modes, feasibility docs |
 | 5: Environment + 3D | **Complete** | Weather effects, clutter, Deck.gl 3D, ballistic display, architecture docs |
+
+### Instructor/Operator UX Plan (REQ-17 — REQ-23)
+See `Knowledge_Base_and_Agents_instructions/Instructor_Operator_UX_Plan.md` for full details.
+
+| REQ | Title | Status |
+|-----|-------|--------|
+| REQ-17 | No Auto-Start | ✅ Complete |
+| REQ-18 | No Auto-Inject | ✅ Complete |
+| REQ-19 | PDF Reports | ✅ Complete |
+| REQ-20 | Hybrid Role Selection | ✅ Complete |
+| REQ-21 | Instructor Button Grouping | ✅ Complete |
+| REQ-22 | Operator Mode Restrictions | ✅ Complete |
+| REQ-23 | User Management Page | ✅ Complete |
 
 ## Recent Fixes (Rounds 1-3, branch `claude/eloc2-development-U3sup`)
 

@@ -21,12 +21,17 @@ export class ReplayController {
   private pendingData: Record<string, any> | null = null;
   private rafId: number | null = null;
   private _firstFlush = false;
+  private _lastRole: 'instructor' | 'operator' | undefined = undefined;
 
-  connect() {
+  connect(role?: 'instructor' | 'operator') {
     if (this.ws) return;
+    if (role) this._lastRole = role;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = `${protocol}//${window.location.host}/ws/events`;
+    let url = `${protocol}//${window.location.host}/ws/events`;
+    if (this._lastRole) {
+      url += `?role=${this._lastRole}`;
+    }
 
     this.ws = new WebSocket(url);
 
@@ -55,6 +60,12 @@ export class ReplayController {
     };
   }
 
+  reconnectWithRole(role: 'instructor' | 'operator') {
+    this.disconnect();
+    // Small delay to ensure clean disconnect
+    setTimeout(() => this.connect(role), 100);
+  }
+
   disconnect() {
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
@@ -73,6 +84,26 @@ export class ReplayController {
   }
 
   private handleMessage(data: any) {
+    if (data.type === 'role.assigned') {
+      useUiStore.getState().setEffectiveRole(data.role);
+      if (data.reason === 'instructor_slot_taken') {
+        useUiStore.getState().setSelectedRole('operator');
+        console.log('[ReplayController] Instructor slot taken — downgraded to operator');
+      }
+      return;
+    }
+    if (data.type === 'instructor.availability') {
+      useUiStore.getState().setInstructorAvailable(data.available);
+      return;
+    }
+    if (data.type === 'user.count') {
+      useUiStore.getState().setConnectedUsers({
+        total: data.total,
+        instructors: data.instructors,
+        operators: data.operators,
+      });
+      return;
+    }
     if (data.type === 'rap.snapshot' || data.type === 'rap.update') {
       // Merge into pending buffer — later messages overwrite earlier ones
       if (!this.pendingData) {

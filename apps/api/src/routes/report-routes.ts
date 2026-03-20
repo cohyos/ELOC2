@@ -8,28 +8,35 @@ import {
 import { markdownToPdf } from '../reports/pdf-generator.js';
 
 /**
- * REQ-12: Report generation API routes.
+ * REQ-12 / REQ-19: Report generation API routes.
+ * Always generates PDF. Supports operator and instructor report types with optional time-range filtering.
  */
 export function registerReportRoutes(app: FastifyInstance, engine: LiveEngine) {
-  // POST /api/report/generate — Generate a scenario report
+  // POST /api/report/generate — Generate a scenario report as PDF download
   app.post<{
-    Body: { format?: 'md' | 'pdf'; sections?: string[] };
+    Body: {
+      type?: 'operator' | 'instructor';
+      timeRange?: { from: number; to: number };
+      sections?: string[];
+    };
   }>('/api/report/generate', async (request, reply) => {
-    const { format = 'md', sections } = request.body ?? {};
+    const { type = 'operator', timeRange, sections } = request.body ?? {};
 
-    if (format !== 'md' && format !== 'pdf') {
-      return reply.code(400).send({ error: 'Supported formats: "md", "pdf"' });
+    if (type !== 'operator' && type !== 'instructor') {
+      return reply.code(400).send({ error: 'Supported types: "operator", "instructor"' });
     }
 
     try {
-      const report = generateReport(engine, { format, sections });
-      return {
-        id: report.id,
-        format: report.format,
-        generatedAt: report.generatedAt,
-        contentLength: report.content.length,
-        downloadUrl: `/api/report/download/${report.id}`,
-      };
+      const report = generateReport(engine, { type, timeRange, sections });
+      const pdfBuffer = await markdownToPdf(report.content);
+
+      const now = new Date();
+      const ts = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+      const filename = `ELOC2_Report_${ts}.pdf`;
+
+      reply.header('Content-Type', 'application/pdf');
+      reply.header('Content-Disposition', `attachment; filename="${filename}"`);
+      return pdfBuffer;
     } catch (err: any) {
       return reply.code(500).send({ error: 'Report generation failed', details: err.message });
     }
@@ -57,7 +64,7 @@ export function registerReportRoutes(app: FastifyInstance, engine: LiveEngine) {
     return { ok: true };
   });
 
-  // GET /api/report/download/:id — Download a generated report
+  // GET /api/report/download/:id — Download a previously generated report as PDF (fallback)
   app.get<{
     Params: { id: string };
   }>('/api/report/download/:id', async (request, reply) => {
@@ -66,23 +73,14 @@ export function registerReportRoutes(app: FastifyInstance, engine: LiveEngine) {
       return reply.code(404).send({ error: 'Report not found' });
     }
 
-    const requestedFormat = (request.query as any)?.format ?? 'md';
-
-    if (requestedFormat === 'pdf') {
-      try {
-        const pdfBuffer = await markdownToPdf(report.content);
-        const filename = `eloc2-report-${new Date(report.generatedAt).toISOString().slice(0, 10)}.pdf`;
-        reply.header('Content-Type', 'application/pdf');
-        reply.header('Content-Disposition', `attachment; filename="${filename}"`);
-        return pdfBuffer;
-      } catch (err: any) {
-        return reply.code(500).send({ error: 'PDF generation failed', details: err.message });
-      }
+    try {
+      const pdfBuffer = await markdownToPdf(report.content);
+      const filename = `eloc2-report-${new Date(report.generatedAt).toISOString().slice(0, 10)}.pdf`;
+      reply.header('Content-Type', 'application/pdf');
+      reply.header('Content-Disposition', `attachment; filename="${filename}"`);
+      return pdfBuffer;
+    } catch (err: any) {
+      return reply.code(500).send({ error: 'PDF generation failed', details: err.message });
     }
-
-    const filename = `eloc2-report-${new Date(report.generatedAt).toISOString().slice(0, 10)}.md`;
-    reply.header('Content-Type', 'text/markdown; charset=utf-8');
-    reply.header('Content-Disposition', `attachment; filename="${filename}"`);
-    return report.content;
   });
 }

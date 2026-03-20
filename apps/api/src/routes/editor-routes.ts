@@ -203,6 +203,20 @@ export async function editorRoutes(app: FastifyInstance, engine: LiveEngine) {
   app.get('/api/scenario/injection-log', { preHandler: instructorGuard() }, async () => {
     return { log: engine.getInjectionLog() };
   });
+
+  // POST /api/simulation/auto-inject — Toggle random target auto-injection (Instructor only)
+  app.post<{ Body: { enabled: boolean } }>('/api/simulation/auto-inject', { preHandler: instructorGuard() }, async (request, reply) => {
+    const { enabled } = request.body;
+    if (typeof enabled !== 'boolean') {
+      return reply.code(400).send({ error: 'enabled (boolean) is required' });
+    }
+    if (enabled) {
+      engine.enableAutoInject();
+    } else {
+      engine.disableAutoInject();
+    }
+    return { ok: true, autoInjectEnabled: enabled };
+  });
 }
 
 // ---------------------------------------------------------------------------

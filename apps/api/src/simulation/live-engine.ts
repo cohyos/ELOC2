@@ -339,6 +339,7 @@ export class LiveEngine {
   private autoLoopEnabled = false;
   private autoLoopTimer: ReturnType<typeof setTimeout> | null = null;
   private autoInjectTimer: ReturnType<typeof setTimeout> | null = null;
+  private autoInjectEnabled = false;
 
   // Phase 5: EO orchestration internal state
   private eoTracksById = new Map<string, EoTrack>();
@@ -1354,6 +1355,11 @@ export class LiveEngine {
   }
 
   private resetInternalState(): void {
+    this.autoInjectEnabled = false;
+    if (this.autoInjectTimer) {
+      clearTimeout(this.autoInjectTimer);
+      this.autoInjectTimer = null;
+    }
     this.runner = new ScenarioRunner(this.scenario);
     this.trackManager = new TrackManager({ confirmAfter: 3, dropAfterMisses: 8 });
     this.registrationService = new RegistrationHealthService();
@@ -1433,29 +1439,51 @@ export class LiveEngine {
     };
   }
 
+  getConnectedUsersList(): Array<{ id: string; role: string; connectedAt: number }> {
+    const list: Array<{ id: string; role: string; connectedAt: number }> = [];
+    let idx = 0;
+    for (const info of this.wsClientInfos.values()) {
+      list.push({
+        id: `user-${idx++}`,
+        role: info.role,
+        connectedAt: info.connectedAt,
+      });
+    }
+    return list;
+  }
+
   // ── Auto-loop & idle shutdown ──────────────────────────────────────────
 
   private onUserConnected(): void {
-    const users = this.getConnectedUsers();
-    if (users.total === 1) {
-      // First user connected — check if we should auto-loop
-      if (users.instructors === 0) {
-        this.startAutoLoop();
-      }
-    } else if (users.instructors > 0 && this.autoLoopEnabled) {
-      // An instructor just connected — stop auto-loop and hand over control
-      this.stopAutoLoop();
-    }
+    // Broadcast updated user counts only — no auto-loop start on connect
+    this.broadcastUserCount();
   }
 
   private onUserDisconnected(): void {
+    // Notify remaining clients about instructor availability change
+    this.broadcastInstructorAvailability();
     const users = this.getConnectedUsers();
     if (users.total === 0) {
       // All users disconnected — idle shutdown
       this.onAllUsersDisconnected();
-    } else if (users.instructors === 0 && !this.autoLoopEnabled && !this.state.running) {
-      // Last instructor left, no one driving — start auto-loop
-      this.startAutoLoop();
+    }
+  }
+
+  /** Broadcast instructor slot availability to all connected clients */
+  broadcastInstructorAvailability(): void {
+    const users = this.getConnectedUsers();
+    const msg = JSON.stringify({ type: 'instructor.availability', available: users.instructors === 0 });
+    for (const client of this.wsClients) {
+      try { client.send(msg); } catch { /* ignore */ }
+    }
+  }
+
+  /** Broadcast updated user counts to all connected clients */
+  private broadcastUserCount(): void {
+    const users = this.getConnectedUsers();
+    const msg = JSON.stringify({ type: 'user.count', ...users });
+    for (const client of this.wsClients) {
+      try { client.send(msg); } catch { /* ignore */ }
     }
   }
 
@@ -1476,13 +1504,12 @@ export class LiveEngine {
       try { this.start(); } catch { /* already running */ }
     }
 
-    // Schedule random target injections every 30-60 seconds
-    this.scheduleAutoInject();
   }
 
   stopAutoLoop(): void {
     if (!this.autoLoopEnabled) return;
     this.autoLoopEnabled = false;
+    this.autoInjectEnabled = false;
     if (this.autoLoopTimer) {
       clearTimeout(this.autoLoopTimer);
       this.autoLoopTimer = null;
@@ -1494,12 +1521,33 @@ export class LiveEngine {
     this.pushEvent('autoloop.stopped', 'Auto-loop stopped (instructor connected)');
   }
 
+  enableAutoInject(): void {
+    this.autoInjectEnabled = true;
+    if (this.state.running) {
+      this.scheduleAutoInject();
+    }
+    this.pushEvent('autoinject.enabled', 'Instructor enabled random target injection');
+  }
+
+  disableAutoInject(): void {
+    this.autoInjectEnabled = false;
+    if (this.autoInjectTimer) {
+      clearTimeout(this.autoInjectTimer);
+      this.autoInjectTimer = null;
+    }
+    this.pushEvent('autoinject.disabled', 'Instructor disabled random target injection');
+  }
+
+  isAutoInjectEnabled(): boolean {
+    return this.autoInjectEnabled;
+  }
+
   private scheduleAutoInject(): void {
-    if (!this.autoLoopEnabled) return;
+    if (!this.autoInjectEnabled) return;
     // Random interval between 30-60 seconds real time
     const delaySec = 30 + Math.random() * 30;
     this.autoInjectTimer = setTimeout(() => {
-      if (!this.autoLoopEnabled || !this.state.running) return;
+      if (!this.autoInjectEnabled || !this.state.running) return;
       // Inject 1-2 random targets
       const count = Math.random() < 0.5 ? 1 : 2;
       for (let i = 0; i < count; i++) {
@@ -1681,7 +1729,6 @@ export class LiveEngine {
           try {
             this.reset('central-israel');
             this.start();
-            this.scheduleAutoInject();
           } catch {
             // State machine rejection — ignore
           }

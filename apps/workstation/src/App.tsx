@@ -30,9 +30,11 @@ import { MetricsOverlay } from './demo/MetricsOverlay';
 import { ResizeHandle } from './components/ResizeHandle';
 import { QualityMetricsPanel } from './quality/QualityMetricsPanel';
 import { DeploymentView } from './deployment/DeploymentView';
+import { UserManagementView } from './admin/UserManagementView';
 import { FusionConfigPanel } from './components/FusionConfigPanel';
 import { useAuthStore } from './auth/auth-store';
 import { LoginPage } from './auth/LoginPage';
+import { ReportModal } from './reports/ReportModal';
 
 // Panel size defaults (must match ui-store defaults)
 const DEFAULT_RIGHT_PANEL_WIDTH = 380;
@@ -317,7 +319,7 @@ const btnBase = (isMobile: boolean): React.CSSProperties => ({
 
 export function App() {
   const isMobile = useIsMobile();
-  const [view, setView] = useState<'workstation' | 'editor' | 'deployment'>('workstation');
+  const [view, setView] = useState<'workstation' | 'editor' | 'deployment' | 'users'>('workstation');
 
   // ── Auth ────────────────────────────────────────────────────────────────
   const authEnabled = useAuthStore(s => s.authEnabled);
@@ -368,13 +370,16 @@ export function App() {
   const systemLoad = useUiStore(s => s.systemLoad);
   const connectedUsers = useUiStore(s => s.connectedUsers);
 
+  const effectiveRole = useUiStore(s => s.effectiveRole);
+  const selectedRole = useUiStore(s => s.selectedRole);
+  const setSelectedRole = useUiStore(s => s.setSelectedRole);
+
   const [simRunning, setSimRunning] = useState(false);
   const [simSpeed, setSimSpeed] = useState(1);
   const [simElapsed, setSimElapsed] = useState(0);
   const [currentScenarioId, setCurrentScenarioId] = useState('');
   const [availableScenarios, setAvailableScenarios] = useState<Array<{ id: string; name: string; description: string }>>([]);
-  const [reportGenerating, setReportGenerating] = useState(false);
-  const [reportUrl, setReportUrl] = useState<string | null>(null);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
 
   // On mount: check if auth is enabled, then check session
   useEffect(() => {
@@ -389,23 +394,6 @@ export function App() {
 
   // Sync demo mode to ui-store for convenience
   useEffect(() => { setDemoMode(demoActive); }, [demoActive, setDemoMode]);
-
-  const handleGenerateReport = useCallback(async () => {
-    setReportGenerating(true);
-    setReportUrl(null);
-    try {
-      const res = await fetch('/api/report/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ format: 'md' }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setReportUrl(data.downloadUrl);
-      }
-    } catch { /* ignore */ }
-    setReportGenerating(false);
-  }, []);
 
   // Fetch available scenarios on mount
   useEffect(() => {
@@ -456,7 +444,7 @@ export function App() {
   useEffect(() => { fetchRap(); fetchSensors(); fetchTasks(); }, []);
 
   // WebSocket connection
-  useEffect(() => { replayController.connect(); return () => replayController.disconnect(); }, []);
+  useEffect(() => { replayController.connect(useUiStore.getState().selectedRole); return () => replayController.disconnect(); }, []);
 
   // Keyboard shortcuts for playback control
   useEffect(() => {
@@ -538,12 +526,38 @@ export function App() {
     return <DeploymentView onBack={() => setView('workstation')} />;
   }
 
+  if (view === 'users') {
+    return <UserManagementView onBack={() => setView('workstation')} />;
+  }
+
   if (isMobile) return <MobileLayout />;
 
   // ─── Desktop Layout ───────────────────────────────────────────────────
   const showDetail = detailPanelOpen;
   const showInjection = injectionMode && ['running', 'paused', 'seeking'].includes(simulationState);
   const btn = btnBase(false);
+
+  // ── Role gating ──────────────────────────────────────────────────────
+  const isInstructor = authEnabled ? authUser?.role === 'instructor' : effectiveRole === 'instructor';
+
+  const InstructorButton = ({ children, onClick, style, title, disabled, ...props }: any) => {
+    const effectiveDisabled = !isInstructor || disabled;
+    return (
+      <button
+        {...props}
+        style={{
+          ...style,
+          opacity: effectiveDisabled ? 0.35 : (style?.opacity ?? 1),
+          cursor: effectiveDisabled ? 'not-allowed' : (style?.cursor ?? 'pointer'),
+        }}
+        onClick={effectiveDisabled ? undefined : onClick}
+        disabled={effectiveDisabled}
+        title={!isInstructor ? 'Instructor role required' : title}
+      >
+        {children}
+      </button>
+    );
+  };
 
   return (
     <div style={{
@@ -574,64 +588,62 @@ export function App() {
             : `"header" "map" "timeline"`)),
     }}>
       {/* Header */}
-      <header style={{ gridArea: 'header', background: colors.headerBg, display: 'flex', alignItems: 'center', padding: '0 16px', gap: '12px', fontSize: '13px', borderBottom: `1px solid ${colors.border}`, zIndex: 10 }}>
+      <header style={{ gridArea: 'header', background: colors.headerBg, display: 'flex', alignItems: 'center', padding: '0 12px', gap: '6px', fontSize: '13px', borderBottom: `1px solid ${colors.border}`, zIndex: 10 }}>
+
+        {/* ── Left: Logo, version, revision ── */}
         <span style={{ fontSize: '15px', fontWeight: 700, color: '#fff', letterSpacing: '1px' }}>ELOC2</span>
         <span style={{ color: colors.textDim, fontSize: '12px' }}>EO C2 Air Defense Demonstrator</span>
         <span style={{ color: colors.accent, fontSize: '10px', fontFamily: 'monospace', cursor: 'help' }} title={`SHA: ${__APP_REVISION__}\nBranch: ${__BUILD_BRANCH__}\nBuilt: ${__BUILD_TIMESTAMP__}`}>rev:{__APP_REVISION__}</span>
 
-        {/* Scenario selector */}
-        {availableScenarios.length > 0 && (
-          <select value={currentScenarioId} onChange={(e) => handleScenarioChange(e.target.value)} title="Select scenario"
-            style={{ background: '#333', color: '#e0e0e0', border: '1px solid #555', borderRadius: '3px', padding: '2px 6px', fontSize: '11px', cursor: 'pointer', maxWidth: '180px' }}>
-            {availableScenarios.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-        )}
-        <button style={{ ...btn, background: '#2a2a4e', color: '#aa88ff', border: '1px solid #aa88ff44' }} onClick={() => setView('editor')}>Editor</button>
-        <button style={{ ...btn, background: '#2a2a4e', color: '#44ddaa', border: '1px solid #44ddaa44' }} onClick={() => setView('deployment')}>Deploy</button>
-        <button
-          style={{ ...btn, background: demoActive ? '#4a9eff' : '#2a2a4e', color: demoActive ? '#fff' : '#4a9eff', border: '1px solid #4a9eff44' }}
-          onClick={() => {
-            if (demoActive) {
-              setDemoActive(false);
-              setDashboardOpen(false);
-            } else {
-              setDemoActive(true);
-              setDashboardOpen(true);
-            }
-          }}
-          title="Presenter Dashboard (Ctrl+D)"
-        >Demo</button>
-        <button
-          style={{ ...btn, background: reportGenerating ? '#555' : '#2a4e2a', color: '#88ff88', border: '1px solid #88ff8844', opacity: reportGenerating ? 0.6 : 1 }}
-          onClick={reportGenerating ? undefined : handleGenerateReport}
-          disabled={reportGenerating}
-          title="Generate scenario report (Markdown)"
-        >{reportGenerating ? 'Generating...' : 'Report'}</button>
-        {reportUrl && (
-          <a href={reportUrl} download style={{ fontSize: '10px', color: '#88ff88', textDecoration: 'underline', cursor: 'pointer' }} title="Download generated report">Download</a>
-        )}
-        <button style={{ ...btn, background: '#333', color: '#aaa' }} onClick={() => setHelpOpen(true)} title="Open help & reference documentation">Help</button>
+        {/* ── Divider: Logo | Instructor Zone ── */}
+        <div style={{ width: '1px', height: '24px', background: '#4a4a6e', margin: '0 8px' }} />
 
-        {/* Track summary with filter toggles */}
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', fontSize: '11px' }}>
-          {[
-            { status: 'confirmed' as const, color: '#00cc44', count: confirmedCount, label: 'confirmed' },
-            { status: 'tentative' as const, color: '#ffcc00', count: tentativeCount, label: 'tentative' },
-            { status: 'dropped' as const, color: '#ff3333', count: undefined, label: 'dropped' },
-          ].map(f => (
-            <span key={f.status} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: f.color, fontWeight: 600, fontSize: '11px', cursor: 'pointer', opacity: trackStatusFilter[f.status] ? 1 : 0.35 }}
-              onClick={() => toggleTrackStatus(f.status)} title={`Toggle ${f.label} tracks`}>
-              {f.count !== undefined ? `${f.count} ` : ''}{f.label}
-            </span>
+        {/* ── Center: Instructor Zone ── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+
+          {/* Scenario selector */}
+          {availableScenarios.length > 0 && (
+            <select value={currentScenarioId} onChange={(e) => handleScenarioChange(e.target.value)}
+              disabled={!isInstructor}
+              title={!isInstructor ? 'Instructor role required' : 'Select scenario'}
+              style={{ background: '#333', color: '#e0e0e0', border: '1px solid #555', borderRadius: '3px', padding: '2px 6px', fontSize: '11px', maxWidth: '180px', opacity: !isInstructor ? 0.35 : 1, cursor: !isInstructor ? 'not-allowed' : 'pointer' }}>
+              {availableScenarios.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          )}
+
+          {/* Scenario controls: Start/Pause, Reset, Speed, elapsed */}
+          {(() => {
+            const canStart = allowedActions.includes('start') || allowedActions.includes('resume');
+            const canPause = allowedActions.includes('pause');
+            const startPauseBaseDisabled = simRunning ? !canPause : !canStart;
+            const startPauseDisabled = !isInstructor || startPauseBaseDisabled;
+            return (
+              <InstructorButton
+                style={{ ...btn, background: simRunning ? '#cc3300' : '#00aa44', color: '#fff', fontWeight: 600, padding: '3px 12px', opacity: startPauseBaseDisabled ? 0.4 : 1, cursor: startPauseBaseDisabled ? 'not-allowed' : 'pointer' }}
+                onClick={startPauseBaseDisabled ? undefined : handleStartPause}
+                disabled={startPauseBaseDisabled}
+              >
+                {simRunning ? 'Pause' : (simulationState === 'paused' ? 'Resume' : 'Start')}
+              </InstructorButton>
+            );
+          })()}
+          {(() => {
+            const canReset = allowedActions.includes('reset');
+            return (
+              <InstructorButton
+                style={{ ...btn, opacity: canReset ? 1 : 0.4, cursor: canReset ? 'pointer' : 'not-allowed' }}
+                onClick={canReset ? handleReset : undefined}
+                disabled={!canReset}
+              >
+                Reset
+              </InstructorButton>
+            );
+          })()}
+          {[1, 2, 5, 10].map(s => (
+            <InstructorButton key={s} style={{ ...btn, background: simSpeed === s ? '#4a9eff' : '#333', color: simSpeed === s ? '#fff' : '#aaa' }} onClick={() => handleSpeed(s)}>{s}x</InstructorButton>
           ))}
-          <span style={{ color: colors.textDim }}>{trackCount} total</span>
-        </div>
+          <span style={{ fontSize: '11px', color: '#aaa', fontFamily: 'monospace', minWidth: '50px' }}>T+{formatTime(simElapsed)}</span>
 
-        {/* EO Module badge (REQ-16) */}
-        <EoModuleBadge />
-
-        {/* Scenario controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '8px' }}>
           {/* State badge */}
           <span style={{
             fontSize: '9px',
@@ -646,49 +658,73 @@ export function App() {
           }}>
             {simulationState}
           </span>
-          {(() => {
-            const canStart = allowedActions.includes('start') || allowedActions.includes('resume');
-            const canPause = allowedActions.includes('pause');
-            const startPauseDisabled = simRunning ? !canPause : !canStart;
-            return (
-              <button
-                style={{ ...btn, background: simRunning ? '#cc3300' : '#00aa44', color: '#fff', fontWeight: 600, padding: '3px 12px', opacity: startPauseDisabled ? 0.4 : 1, cursor: startPauseDisabled ? 'not-allowed' : 'pointer' }}
-                onClick={startPauseDisabled ? undefined : handleStartPause}
-                disabled={startPauseDisabled}
-              >
-                {simRunning ? 'Pause' : (simulationState === 'paused' ? 'Resume' : 'Start')}
-              </button>
-            );
-          })()}
-          {(() => {
-            const canReset = allowedActions.includes('reset');
-            return (
-              <button
-                style={{ ...btn, opacity: canReset ? 1 : 0.4, cursor: canReset ? 'pointer' : 'not-allowed' }}
-                onClick={canReset ? handleReset : undefined}
-                disabled={!canReset}
-              >
-                Reset
-              </button>
-            );
-          })()}
-          {[1, 2, 5, 10].map(s => (
-            <button key={s} style={{ ...btn, background: simSpeed === s ? '#4a9eff' : '#333', color: simSpeed === s ? '#fff' : '#aaa' }} onClick={() => handleSpeed(s)}>{s}x</button>
-          ))}
-          <span style={{ fontSize: '11px', color: '#aaa', fontFamily: 'monospace', minWidth: '50px' }}>T+{formatTime(simElapsed)}</span>
+
+          {/* Editor */}
+          <InstructorButton style={{ ...btn, background: '#2a2a4e', color: '#aa88ff', border: '1px solid #aa88ff44' }} onClick={() => setView('editor')}>Editor</InstructorButton>
+
+          {/* Deploy */}
+          <InstructorButton style={{ ...btn, background: '#2a2a4e', color: '#44ddaa', border: '1px solid #44ddaa44' }} onClick={() => setView('deployment')}>Deploy</InstructorButton>
+
+          {/* Users */}
+          <InstructorButton style={{ ...btn, background: '#2a2a4e', color: '#ff88cc', border: '1px solid #ff88cc44' }} onClick={() => setView('users')}>Users</InstructorButton>
+
+          {/* Demo */}
+          <InstructorButton
+            style={{ ...btn, background: demoActive ? '#4a9eff' : '#2a2a4e', color: demoActive ? '#fff' : '#4a9eff', border: '1px solid #4a9eff44' }}
+            onClick={() => {
+              if (demoActive) {
+                setDemoActive(false);
+                setDashboardOpen(false);
+              } else {
+                setDemoActive(true);
+                setDashboardOpen(true);
+              }
+            }}
+            title="Presenter Dashboard (Ctrl+D)"
+          >Demo</InstructorButton>
+
+          {/* Live Inject */}
+          {simulationState !== 'idle' && (
+            <InstructorButton
+              style={{ ...btn, background: injectionMode ? '#ff8800' : '#333', color: injectionMode ? '#fff' : '#aaa', border: injectionMode ? '1px solid #ff880066' : 'none', fontWeight: injectionMode ? 600 : 400 }}
+              onClick={toggleInjectionMode}
+              title="Toggle live injection toolbar (Ctrl+I)"
+            >
+              Live Inject
+            </InstructorButton>
+          )}
+
+          {/* GT (Ground Truth) toggle */}
+          <InstructorButton style={{ ...btn, background: showGroundTruth ? '#0a2a2a' : '#333', color: showGroundTruth ? '#00ffff' : '#aaa', border: showGroundTruth ? '1px solid #00ffff' : '1px solid transparent' }} onClick={toggleGroundTruth} title="Toggle ground truth overlay">
+            GT
+          </InstructorButton>
         </div>
 
-        {simulationState !== 'idle' && (
-          <button
-            style={{ ...btn, background: injectionMode ? '#ff8800' : '#333', color: injectionMode ? '#fff' : '#aaa', border: injectionMode ? '1px solid #ff880066' : 'none', fontWeight: injectionMode ? 600 : 400 }}
-            onClick={toggleInjectionMode}
-            title="Toggle live injection toolbar (Ctrl+I)"
-          >
-            Live Inject
-          </button>
-        )}
+        {/* ── Divider: Instructor Zone | Common Zone ── */}
+        <div style={{ width: '1px', height: '24px', background: '#4a4a6e', margin: '0 8px' }} />
 
+        {/* ── Right: Common Zone ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginLeft: 'auto', fontSize: '11px', color: colors.textDim }}>
+
+          {/* Track summary with filter toggles */}
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', fontSize: '11px' }}>
+            {[
+              { status: 'confirmed' as const, color: '#00cc44', count: confirmedCount, label: 'confirmed' },
+              { status: 'tentative' as const, color: '#ffcc00', count: tentativeCount, label: 'tentative' },
+              { status: 'dropped' as const, color: '#ff3333', count: undefined, label: 'dropped' },
+            ].map(f => (
+              <span key={f.status} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: f.color, fontWeight: 600, fontSize: '11px', cursor: 'pointer', opacity: trackStatusFilter[f.status] ? 1 : 0.35 }}
+                onClick={() => toggleTrackStatus(f.status)} title={`Toggle ${f.label} tracks`}>
+                {f.count !== undefined ? `${f.count} ` : ''}{f.label}
+              </span>
+            ))}
+            <span style={{ color: colors.textDim }}>{trackCount} total</span>
+          </div>
+
+          {/* EO Module badge (REQ-16) */}
+          <EoModuleBadge />
+
+          {/* Panel toggle buttons */}
           <button style={{ ...btn, background: detailView === 'tasks' && detailPanelOpen ? '#4a9eff' : '#333', color: detailView === 'tasks' && detailPanelOpen ? '#fff' : '#aaa' }}
             onClick={() => {
               const store = useUiStore.getState();
@@ -716,16 +752,32 @@ export function App() {
                 store.setDetailView('quality');
               }
             }}>Quality</button>
-          <button style={{ ...btn, background: showGroundTruth ? '#0a2a2a' : '#333', color: showGroundTruth ? '#00ffff' : '#aaa', border: showGroundTruth ? '1px solid #00ffff' : '1px solid transparent' }} onClick={toggleGroundTruth} title="Toggle ground truth overlay">
-            GT
-          </button>
+
+          {/* Dark/Light toggle */}
           <button style={{ ...btn, background: darkMode ? '#4a9eff' : '#333', color: darkMode ? '#fff' : '#aaa' }} onClick={toggleDarkMode} title="Toggle dark/light map">
             {darkMode ? 'Dark' : 'Light'}
           </button>
+
+          {/* Show/Hide Panel */}
           <button style={btn} onClick={toggleDetailPanel}>{showDetail ? 'Hide Panel' : 'Show Panel'}</button>
+
+          {/* Show/Hide Timeline */}
           <button style={btn} onClick={toggleTimelinePanel}>{timelinePanelOpen ? 'Hide Timeline' : 'Show Timeline'}</button>
+
+          {/* Report */}
+          <button
+            style={{ ...btn, background: '#2a4e2a', color: '#88ff88', border: '1px solid #88ff8844' }}
+            onClick={() => setReportModalOpen(true)}
+            title="Generate scenario report (PDF)"
+          >Report</button>
+
+          {/* Help */}
+          <button style={{ ...btn, background: '#333', color: '#aaa' }} onClick={() => setHelpOpen(true)} title="Open help & reference documentation">Help</button>
+
+          {/* Connection status */}
           <span><span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: wsConnected ? '#00cc44' : '#ff3333', marginRight: '4px' }} />{wsConnected ? 'Connected' : 'Disconnected'}</span>
-          <span style={{ fontSize: '10px', opacity: 0.5 }} title="ELOC2 Air Defense Demonstrator">v0.3.0</span>
+
+          {/* Role display */}
           {authEnabled && authUser && (
             <>
               <span style={{ fontSize: '10px', color: '#aaa' }} title={`Role: ${authUser.role}`}>
@@ -737,6 +789,24 @@ export function App() {
               <button style={{ ...btn, color: '#ff6666', fontSize: '10px' }} onClick={authLogout} title="Sign out">Logout</button>
             </>
           )}
+          {!authEnabled && (
+            <select
+              value={selectedRole}
+              onChange={(e) => {
+                const role = e.target.value as 'instructor' | 'operator';
+                setSelectedRole(role);
+                replayController.reconnectWithRole(role);
+              }}
+              style={{ background: '#333', color: '#e0e0e0', border: '1px solid #555', borderRadius: '3px', padding: '2px 6px', fontSize: '11px' }}
+              title="Select your role"
+            >
+              <option value="operator">Operator</option>
+              <option value="instructor">Instructor</option>
+            </select>
+          )}
+
+          {/* Version label */}
+          <span style={{ fontSize: '10px', opacity: 0.5 }} title="ELOC2 Air Defense Demonstrator">v0.3.0</span>
         </div>
       </header>
 
@@ -806,6 +876,12 @@ export function App() {
       {demoActive && <MetricsOverlay />}
       {dashboardOpen && <PresenterDashboard onClose={() => setDashboardOpen(false)} />}
       {helpOpen && <HelpPage onClose={() => setHelpOpen(false)} />}
+      <ReportModal
+        open={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+        isInstructor={!!isInstructor}
+        simElapsed={simElapsed}
+      />
     </div>
   );
 }
