@@ -3,6 +3,7 @@ import { useUiStore } from '../stores/ui-store';
 import { useGroundTruthStore } from '../stores/ground-truth-store';
 import { useTrackStore } from '../stores/track-store';
 import { useSensorStore } from '../stores/sensor-store';
+import { useQualityStore } from '../stores/quality-store';
 
 const styles = {
   container: {
@@ -10,6 +11,8 @@ const styles = {
     color: '#e0e0e0',
     fontSize: '13px',
     fontFamily: 'system-ui, sans-serif',
+    overflowY: 'auto' as const,
+    maxHeight: '100%',
   } as React.CSSProperties,
   header: {
     display: 'flex',
@@ -121,6 +124,13 @@ const styles = {
     fontSize: '11px',
     padding: '4px 0',
   } as React.CSSProperties,
+  timelineBar: (pct: number, color: string) => ({
+    height: '4px',
+    width: `${Math.min(100, pct)}%`,
+    background: color,
+    borderRadius: '2px',
+    marginTop: '2px',
+  } as React.CSSProperties),
 };
 
 const SENSOR_COLORS: Record<string, string> = {
@@ -133,6 +143,14 @@ const STATUS_COLORS: Record<string, string> = {
   confirmed: '#00cc44',
   tentative: '#ffcc00',
   dropped: '#ff3333',
+};
+
+const EO_STATUS_COLORS: Record<string, string> = {
+  none: '#555',
+  pending: '#ffcc00',
+  investigating: '#ff8800',
+  completed: '#00cc44',
+  failed: '#ff3333',
 };
 
 function haversineDistanceM(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -148,12 +166,21 @@ function formatDist(m: number): string {
   return m < 1000 ? `${m.toFixed(0)} m` : `${(m / 1000).toFixed(2)} km`;
 }
 
+function formatTime(sec: number): string {
+  if (sec < 60) return `${sec.toFixed(0)}s`;
+  const m = Math.floor(sec / 60);
+  const s = Math.round(sec % 60);
+  return `${m}m ${s}s`;
+}
+
 export function GroundTruthDetailPanel() {
   const selectedId = useUiStore(s => s.selectedGroundTruthId);
   const selectGroundTruth = useUiStore(s => s.selectGroundTruth);
   const targets = useGroundTruthStore(s => s.targets);
   const tracks = useTrackStore(s => s.tracks);
   const sensors = useSensorStore(s => s.sensors);
+  const metrics = useQualityStore(s => s.metrics);
+  const convergenceStates = useQualityStore(s => s.convergenceStates);
 
   const target = targets.find(t => (t.targetId ?? t.name) === selectedId);
 
@@ -208,6 +235,19 @@ export function GroundTruthDetailPanel() {
   const sysClass = matchedTrack?.classification ?? 'unknown';
   const classMatch = gtClass === sysClass;
 
+  // Quality metrics for this target
+  const targetId = target.targetId ?? target.name;
+  const ttd = metrics?.timeToFirstDetection?.[targetId];
+  const ttc3d = metrics?.timeToConfirmed3D?.[targetId];
+
+  // Convergence state for matched track
+  const convergence = matchedTrack
+    ? convergenceStates.find(c => c.trackId === (matchedTrack!.systemTrackId as string))
+    : null;
+
+  // EO investigation status
+  const eoStatus = matchedTrack?.eoInvestigationStatus ?? 'none';
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
@@ -235,6 +275,55 @@ export function GroundTruthDetailPanel() {
             {target.active ? 'Active' : 'Inactive'}
           </span>
         </div>
+      </div>
+
+      {/* Detection Timeline */}
+      <div style={styles.section}>
+        <div style={styles.sectionTitle}>Detection Timeline</div>
+        <div style={styles.row}>
+          <span style={styles.label}>Time to First Detection</span>
+          <span style={{
+            ...styles.value,
+            color: ttd != null ? (ttd < 10 ? '#00cc44' : ttd < 60 ? '#ffcc00' : '#ff3333') : '#555',
+          }}>
+            {ttd != null ? formatTime(ttd) : 'Not detected'}
+          </span>
+        </div>
+        <div style={styles.row}>
+          <span style={styles.label}>Time to Confirmed 3D</span>
+          <span style={{
+            ...styles.value,
+            color: ttc3d != null ? (ttc3d < 30 ? '#00cc44' : ttc3d < 120 ? '#ffcc00' : '#ff3333') : '#555',
+          }}>
+            {ttc3d != null ? formatTime(ttc3d) : 'Not achieved'}
+          </span>
+        </div>
+        <div style={styles.row}>
+          <span style={styles.label}>EO Investigation</span>
+          <span style={{ ...styles.value, color: EO_STATUS_COLORS[eoStatus] ?? '#555' }}>
+            {eoStatus}
+          </span>
+        </div>
+        {convergence && (
+          <>
+            <div style={styles.row}>
+              <span style={styles.label}>Convergence</span>
+              <span style={{ ...styles.value, color: convergence.converged ? '#00cc44' : '#ffcc00' }}>
+                {convergence.converged ? 'Converged' : 'Converging'}
+              </span>
+            </div>
+            <div style={styles.row}>
+              <span style={styles.label}>Position Error Est.</span>
+              <span style={styles.errorCell(convergence.positionErrorEstimate, 1000)}>
+                {formatDist(convergence.positionErrorEstimate)}
+              </span>
+            </div>
+            <div style={styles.row}>
+              <span style={styles.label}>Measurements</span>
+              <span style={styles.value}>{convergence.measurementCount}</span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* GT vs System Comparison */}
@@ -269,18 +358,18 @@ export function GroundTruthDetailPanel() {
               <div style={{ ...styles.gridCell, color: '#888' }}>Class</div>
               <div style={styles.gridCell}>{gtClass}</div>
               <div style={{ ...styles.gridCell, color: classMatch ? '#00cc44' : '#ff3333' }}>
-                {sysClass}{classMatch ? '' : ' ✗'}
+                {sysClass}{classMatch ? '' : ' \u2717'}
               </div>
 
               {/* Latitude */}
               <div style={{ ...styles.gridCell, color: '#888' }}>Lat</div>
-              <div style={styles.gridCell}>{target.position.lat.toFixed(5)}°</div>
-              <div style={styles.gridCell}>{matchedTrack.state.lat.toFixed(5)}°</div>
+              <div style={styles.gridCell}>{target.position.lat.toFixed(5)}\u00b0</div>
+              <div style={styles.gridCell}>{matchedTrack.state.lat.toFixed(5)}\u00b0</div>
 
               {/* Longitude */}
               <div style={{ ...styles.gridCell, color: '#888' }}>Lon</div>
-              <div style={styles.gridCell}>{target.position.lon.toFixed(5)}°</div>
-              <div style={styles.gridCell}>{matchedTrack.state.lon.toFixed(5)}°</div>
+              <div style={styles.gridCell}>{target.position.lon.toFixed(5)}\u00b0</div>
+              <div style={styles.gridCell}>{matchedTrack.state.lon.toFixed(5)}\u00b0</div>
 
               {/* Altitude */}
               <div style={{ ...styles.gridCell, color: '#888' }}>Alt</div>
@@ -340,6 +429,7 @@ export function GroundTruthDetailPanel() {
         <div style={styles.sectionTitle}>Sensor Awareness</div>
         {sensorsInRange.map(({ sensor, dist, inRange, contributing }) => {
           const color = SENSOR_COLORS[sensor.sensorType] ?? '#888';
+          const utilization = metrics?.sensorUtilization?.[sensor.sensorId as string];
           return (
             <div key={sensor.sensorId as string} style={styles.sensorRow}>
               <div>
@@ -352,6 +442,9 @@ export function GroundTruthDetailPanel() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span style={styles.sensorDetail}>{formatDist(dist)}</span>
+                {utilization != null && (
+                  <span style={styles.sensorDetail}>{(utilization * 100).toFixed(0)}%</span>
+                )}
                 {contributing ? (
                   <span style={styles.badge('#00cc44')}>Contributing</span>
                 ) : inRange ? (
@@ -382,10 +475,6 @@ export function GroundTruthDetailPanel() {
                 </span>
               );
             })}
-          </div>
-          <div style={{ ...styles.row, marginTop: '4px' }}>
-            <span style={styles.label}>EO Investigation</span>
-            <span style={styles.value}>{matchedTrack.eoInvestigationStatus ?? 'none'}</span>
           </div>
         </div>
       )}

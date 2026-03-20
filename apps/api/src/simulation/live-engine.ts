@@ -3816,46 +3816,68 @@ export class LiveEngine {
       return;
     }
 
-    // Associate each system track to its nearest ground truth target (within 2km)
-    const MATCH_THRESHOLD_M = 2000;
+    // Associate each system track to its nearest ground truth target (within 5km)
+    // Use greedy optimal assignment: for each GT target, pick the closest track.
+    // Remaining unmatched tracks are "false" tracks (no real target nearby).
+    const MATCH_THRESHOLD_M = 5000;
     const trackToTarget = new Map<string, string>(); // trackId → targetId
-    const targetToTrack = new Map<string, string>(); // targetId → trackId
+    const targetToTrack = new Map<string, string>(); // targetId → best trackId
     const positionErrors: number[] = [];
 
-    for (const track of tracks) {
-      let bestTargetId: string | null = null;
-      let bestDist = Infinity;
+    // Build distance matrix: for each track, find nearest GT target
+    const trackDistances: Array<{ trackId: string; targetId: string; dist: number }> = [];
 
+    for (const track of tracks) {
       for (const gt of groundTruth) {
         const dist = LiveEngine.haversineMeters(
           track.state.lat, track.state.lon,
           gt.position.lat, gt.position.lon,
         );
-        if (dist < bestDist) {
-          bestDist = dist;
-          bestTargetId = gt.targetId;
+        if (dist < MATCH_THRESHOLD_M) {
+          trackDistances.push({
+            trackId: track.systemTrackId as string,
+            targetId: gt.targetId,
+            dist,
+          });
         }
       }
+    }
 
-      if (bestTargetId && bestDist < MATCH_THRESHOLD_M) {
-        trackToTarget.set(track.systemTrackId as string, bestTargetId);
-        // Only keep closest track per target
-        const existingTrackId = targetToTrack.get(bestTargetId);
-        if (!existingTrackId) {
-          targetToTrack.set(bestTargetId, track.systemTrackId as string);
-        }
-        positionErrors.push(bestDist);
+    // Sort by distance ascending for greedy assignment
+    trackDistances.sort((a, b) => a.dist - b.dist);
 
-        // Record first detection time
-        if (!this.firstDetectionTime.has(bestTargetId)) {
-          this.firstDetectionTime.set(bestTargetId, timeSec);
-        }
+    // Greedy assignment: each GT target gets its closest track first,
+    // then remaining tracks can also match (as duplicates, still "associated")
+    const assignedTargets = new Set<string>();
+    const assignedTracks = new Set<string>();
 
-        // Record confirmed_3d time
-        const geoEst = this.state.geometryEstimates.get(track.systemTrackId as string);
-        if (geoEst && geoEst.classification === 'confirmed_3d' && !this.confirmedGeometryTime.has(bestTargetId)) {
-          this.confirmedGeometryTime.set(bestTargetId, timeSec);
-        }
+    // Pass 1: optimal 1-to-1 assignment (best track per target)
+    for (const entry of trackDistances) {
+      if (assignedTargets.has(entry.targetId) || assignedTracks.has(entry.trackId)) continue;
+      targetToTrack.set(entry.targetId, entry.trackId);
+      trackToTarget.set(entry.trackId, entry.targetId);
+      positionErrors.push(entry.dist);
+      assignedTargets.add(entry.targetId);
+      assignedTracks.add(entry.trackId);
+    }
+
+    // Pass 2: remaining tracks that are near a GT target are still "associated"
+    // (duplicate tracks for same target — not false, just redundant)
+    for (const entry of trackDistances) {
+      if (assignedTracks.has(entry.trackId)) continue;
+      trackToTarget.set(entry.trackId, entry.targetId);
+      positionErrors.push(entry.dist);
+      assignedTracks.add(entry.trackId);
+    }
+
+    // Record first detection and confirmed_3d times
+    for (const [trackId, targetId] of trackToTarget) {
+      if (!this.firstDetectionTime.has(targetId)) {
+        this.firstDetectionTime.set(targetId, timeSec);
+      }
+      const geoEst = this.state.geometryEstimates.get(trackId);
+      if (geoEst && geoEst.classification === 'confirmed_3d' && !this.confirmedGeometryTime.has(targetId)) {
+        this.confirmedGeometryTime.set(targetId, timeSec);
       }
     }
 
