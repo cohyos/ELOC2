@@ -103,6 +103,59 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
   const svgRef = useRef<SVGSVGElement>(null);
   const frameRef = useRef<number>(0);
 
+  // --- Event delegation: single persistent handler instead of per-element listeners ---
+  // This avoids lost clicks when the DOM is rebuilt during frequent re-renders.
+  const callbacksRef = useRef({ onSelectTrack, onSelectSensor, onSelectGroundTruth });
+  callbacksRef.current = { onSelectTrack, onSelectSensor, onSelectGroundTruth };
+
+  useEffect(() => {
+    const container = overlayRef.current;
+    if (!container) return;
+
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Walk up to find data attribute
+      const trackEl = target.closest('[data-track-id]') as HTMLElement | null;
+      if (trackEl) {
+        e.stopPropagation();
+        const id = trackEl.dataset.trackId!;
+        callbacksRef.current.onSelectTrack?.(id);
+        return;
+      }
+      const sensorEl = target.closest('[data-sensor-id]') as HTMLElement | null;
+      if (sensorEl) {
+        e.stopPropagation();
+        const id = sensorEl.dataset.sensorId!;
+        callbacksRef.current.onSelectSensor?.(id);
+        return;
+      }
+      const gtEl = target.closest('[data-gt-id]') as HTMLElement | null;
+      if (gtEl) {
+        e.stopPropagation();
+        const id = gtEl.dataset.gtId!;
+        callbacksRef.current.onSelectGroundTruth?.(id);
+        return;
+      }
+    };
+
+    const handleDblClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const trackEl = target.closest('[data-track-id]') as HTMLElement | null;
+      if (trackEl) {
+        e.stopPropagation();
+        const id = trackEl.dataset.trackId!;
+        useUiStore.getState().setEoVideoPopupTrackId(id);
+      }
+    };
+
+    container.addEventListener('click', handleClick);
+    container.addEventListener('dblclick', handleDblClick);
+    return () => {
+      container.removeEventListener('click', handleClick);
+      container.removeEventListener('dblclick', handleDblClick);
+    };
+  }, []);
+
   const render = useCallback(() => {
     if (!map || !overlayRef.current || !svgRef.current) return;
 
@@ -498,10 +551,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
             `;
             el.innerHTML = sym.svgHtml;
             el.title = `${shortSensorLabel(sensor)} — ${sensor.sensorId}`;
-            if (onSelectSensor) {
-              const sId = sensor.sensorId as string;
-              el.addEventListener('click', (e) => { e.stopPropagation(); onSelectSensor(sId); });
-            }
+            el.dataset.sensorId = sensor.sensorId as string;
             container.appendChild(el);
           } else {
             const el = document.createElement('div');
@@ -512,10 +562,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
               pointer-events:auto;
             `;
             el.title = `${shortSensorLabel(sensor)} — ${sensor.sensorId}`;
-            if (onSelectSensor) {
-              const sId = sensor.sensorId as string;
-              el.addEventListener('click', (e) => { e.stopPropagation(); onSelectSensor(sId); });
-            }
+            el.dataset.sensorId = sensor.sensorId as string;
             container.appendChild(el);
           }
         }
@@ -558,9 +605,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
           ${isSelected ? 'box-shadow:0 0 12px #00ffff, 0 0 24px #00ffff66;' : ''}
         `;
         el.title = `GT: ${target.name} — ${target.classification ?? 'unclassified'}`;
-        if (onSelectGroundTruth) {
-          el.addEventListener('click', (e) => { e.stopPropagation(); onSelectGroundTruth(gtId); });
-        }
+        el.dataset.gtId = gtId;
         container.appendChild(el);
 
         // Selection ring for selected GT target
@@ -823,6 +868,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
             // NATO APP-6D symbol
             const sym = resolveTrackSymbol(track, false, 24);
             const el = document.createElement('div');
+            el.dataset.trackId = track.systemTrackId as string;
             el.style.cssText = `
               position:absolute; left:${px.x - 12}px; top:${px.y - 12}px;
               width:24px; height:24px; z-index:22; cursor:pointer;
@@ -830,18 +876,11 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
             `;
             el.innerHTML = sym.svgHtml;
             el.title = `${shortTrackLabel(track)} — ${track.status}${isMultiSensor ? ' (multi-sensor)' : ''}\nDouble-click for EO feed`;
-            if (onSelectTrack) {
-              const tId = track.systemTrackId as string;
-              el.addEventListener('click', (e) => { e.stopPropagation(); onSelectTrack(tId); });
-              el.addEventListener('dblclick', (e) => {
-                e.stopPropagation();
-                useUiStore.getState().setEoVideoPopupTrackId(tId);
-              });
-            }
             container.appendChild(el);
           } else {
             // Legacy circle/diamond rendering
             const el = document.createElement('div');
+            el.dataset.trackId = track.systemTrackId as string;
             if (isMultiSensor) {
               el.style.cssText = `
                 position:absolute; left:${px.x - 7}px; top:${px.y - 7}px;
@@ -858,14 +897,6 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
               `;
             }
             el.title = `${shortTrackLabel(track)} — ${track.status}${isMultiSensor ? ' (multi-sensor)' : ''}\nDouble-click for EO feed`;
-            if (onSelectTrack) {
-              const tId = track.systemTrackId as string;
-              el.addEventListener('click', (e) => { e.stopPropagation(); onSelectTrack(tId); });
-              el.addEventListener('dblclick', (e) => {
-                e.stopPropagation();
-                useUiStore.getState().setEoVideoPopupTrackId(tId);
-              });
-            }
             container.appendChild(el);
           }
 
@@ -898,7 +929,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
         }
       }
     }
-  }, [map, tracks, sensors, trailHistory, layerVisibility, onSelectTrack, onSelectSensor, onSelectGroundTruth, selectedGroundTruthId, groundTruthTargets, showGroundTruth, coverZones, operationalZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds]);
+  }, [map, tracks, sensors, trailHistory, layerVisibility, selectedGroundTruthId, groundTruthTargets, showGroundTruth, coverZones, operationalZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds]);
 
   // Re-render on map move/zoom
   useEffect(() => {

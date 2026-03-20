@@ -149,7 +149,16 @@ export function TrackDetailPanel() {
   const [dossierLoading, setDossierLoading] = useState(false);
   const dossierFetchRef = useRef<string | null>(null);
 
-  const track = selectedTrackId ? tracksById.get(selectedTrackId) : null;
+  // Cache the last known track to prevent panel flickering during rapid WS updates
+  const lastTrackRef = useRef<import('@eloc2/domain').SystemTrack | null>(null);
+  const liveTrack = selectedTrackId ? tracksById.get(selectedTrackId) ?? null : null;
+  if (liveTrack) {
+    lastTrackRef.current = liveTrack;
+  } else if (!selectedTrackId) {
+    lastTrackRef.current = null;
+  }
+  // Use live data when available, fall back to cached data
+  const track = liveTrack ?? lastTrackRef.current;
 
   // Use WS geometry data if available, fall back to REST
   const wsGeometry = selectedTrackId
