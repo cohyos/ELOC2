@@ -15,18 +15,25 @@ import { authMiddleware, requireRole } from './auth-middleware.js';
  * - Decorates the app with auth helpers
  */
 export async function authPlugin(app: FastifyInstance): Promise<void> {
-  const pool = getPool();
+  try {
+    const pool = getPool();
 
-  // Initialize database schema
-  await initializeDatabase(pool);
-  app.log.info('Database schema initialized');
+    // Initialize database schema
+    await initializeDatabase(pool);
+    app.log.info('Database schema initialized');
 
-  // Seed default instructor account if no users exist
-  await seedDefaultInstructor(pool, app);
+    // Seed default instructor account if no users exist
+    await seedDefaultInstructor(pool, app);
 
-  // Decorate fastify with auth helpers
-  app.decorate('authMiddleware', authMiddleware);
-  app.decorate('requireRole', requireRole);
+    // Decorate fastify with auth helpers
+    app.decorate('authMiddleware', authMiddleware);
+    app.decorate('requireRole', requireRole);
+  } catch (err) {
+    app.log.error(err, 'Auth plugin failed to initialize — server will start without auth. Check DATABASE_URL and database connectivity.');
+    // Decorate with no-op helpers so the server can still start
+    app.decorate('authMiddleware', authMiddleware);
+    app.decorate('requireRole', requireRole);
+  }
 }
 
 async function seedDefaultInstructor(

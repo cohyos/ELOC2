@@ -17,6 +17,15 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 - **Terrain**: `packages/terrain` — SRTM DEM line-of-sight checker
 - **ASTERIX Adapter**: `packages/asterix-adapter` — Complete CAT-048/CAT-062 parsing + export
 - **Reports**: `apps/api/src/reports/report-generator.ts` — Scenario report generation (REQ-12)
+- **EO Investigation**: `packages/eo-investigation` — Cue handling, gimbal/FOV models, EO reporting, ambiguity, split/merge
+- **EO Tasking**: `packages/eo-tasking` — Candidate generation, scoring, policy engine, assignment, operator controls
+- **Registration**: `packages/registration` — Bias estimation, clock health, registration health service
+- **Events**: `packages/events` — Event types and event store for event-sourced state changes
+- **Projections**: `packages/projections` — RAP projection and state projection utilities
+- **Scenario Library**: `packages/scenario-library` — Predefined scenario definitions (central-israel, etc.)
+- **Schemas**: `packages/schemas` — Zod validation schemas for API payloads
+- **Shared Utils**: `packages/shared-utils` — Common utilities shared across packages
+- **Validation**: `packages/validation` — Input validation and assertion helpers
 
 ## Key Files
 - `apps/api/src/simulation/live-engine.ts` — Main simulation loop, WS broadcast, geometry & fusion integration
@@ -214,6 +223,24 @@ See `Knowledge_Base_and_Agents_instructions/ELOC2_Corrections_and_Upgrades_Plan.
     --substitutions=SHORT_SHA=$(git rev-parse --short HEAD) \
     --project=eloc2demo
   ```
+
+### Deployment Guardrails (GCP Cloud Run + Cloud SQL)
+- **GCP Edition**: Project uses **Enterprise Plus** Cloud SQL edition — NEVER suggest `db-f1-micro` or `db-g1-small` tiers (incompatible). Use `db-custom-*` or `db-n1-*` tiers only
+- **Required GCP APIs** — verify these are enabled before any deployment:
+  - `sqladmin.googleapis.com` (Cloud SQL Admin)
+  - `run.googleapis.com` (Cloud Run)
+  - `cloudbuild.googleapis.com` (Cloud Build)
+  - `artifactregistry.googleapis.com` (Artifact Registry)
+- **Auth startup safety**: Auth plugin (`auth-plugin.ts`) connects to PostgreSQL synchronously at startup. If `AUTH_ENABLED=true` but `DATABASE_URL` is missing/wrong, the container will hang and fail Cloud Run health check. Always set `AUTH_ENABLED=false` in CI unless DB credentials are configured in the build trigger
+- **DB password**: Never hardcode in `cloudbuild.yaml`. Pass via `--substitutions=_DB_PASSWORD=xxx` or use Secret Manager
+- **Cloud SQL proxy**: The `--add-cloudsql-instances` flag is only needed when `AUTH_ENABLED=true`
+- **Health check**: Cloud Run expects HTTP 200 on `/api/health` within startup timeout. If server hangs on DB connection, increase `--startup-cpu-boost` or fix the root cause
+
+### Docker / CI Build Checklist
+- After adding new source files or directories, always verify the Dockerfile includes the necessary COPY steps for `package.json` (line ~10-29) and source dirs
+- Test container startup locally before pushing to Cloud Build: `docker build -t eloc2-test . && docker run -p 3001:3001 -e NODE_ENV=production eloc2-test`
+- Ensure all route endpoints (especially `/api/auth/status`) are registered before deploying
+- When fixing a blank page or UI issue in production, check BOTH the backend (missing routes/endpoints) AND the frontend build output (static files copied correctly) before declaring the fix complete
 
 ## Development
 - Package manager: pnpm (v9.15.0) with workspaces

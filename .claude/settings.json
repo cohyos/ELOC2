@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "postToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "command": "bash -c 'FILE=\"$CLAUDE_TOOL_ARG_FILE_PATH\"; if echo \"$FILE\" | grep -qE \"^(/home/user/ELOC2/)?(packages|apps)/[^/]+/package\\.json$\"; then echo \"REMINDER: A package.json was added/modified. Verify the Dockerfile has a COPY step for this package.\"; fi'"
+      }
+    ]
+  }
+}
