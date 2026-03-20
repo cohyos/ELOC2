@@ -22,6 +22,7 @@ export interface EditorSensor {
   template?: string;
   nickname?: string;
   libraryId?: string;
+  symbol?: string; // NATO symbol code or display symbol
 }
 
 export interface EditorTarget {
@@ -33,6 +34,20 @@ export interface EditorTarget {
   irEmission?: number;
   classification?: string;
   libraryId?: string;
+  symbol?: string; // NATO symbol code
+
+  // Ballistic missile fields (used when classification === 'ballistic_missile')
+  launchLat?: number;
+  launchLon?: number;
+  launchAlt?: number; // derived from terrain
+  launchBearingDeg?: number;
+  ballisticRangeKm?: number;
+  ballisticApogeeM?: number;
+  ballisticBurnTimeSec?: number;
+  ballisticReentrySpeedMs?: number;
+  // Impact point — computed from launch + bearing + range
+  impactLat?: number;
+  impactLon?: number;
 }
 
 export interface EditorWaypoint {
@@ -73,6 +88,37 @@ export interface GeoVertex {
 export type ZoneDrawMode = 'operational-area' | 'exclusion-zone' | 'threat-zone';
 
 // ---------------------------------------------------------------------------
+// Ballistic helpers
+// ---------------------------------------------------------------------------
+
+/** Compute impact lat/lon from launch point + bearing (deg) + range (km). */
+export function computeImpactPoint(
+  launchLat: number,
+  launchLon: number,
+  bearingDeg: number,
+  rangeKm: number,
+): { lat: number; lon: number } {
+  const R = 6371; // Earth radius km
+  const toRad = Math.PI / 180;
+  const toDeg = 180 / Math.PI;
+  const lat1 = launchLat * toRad;
+  const lon1 = launchLon * toRad;
+  const brng = bearingDeg * toRad;
+  const d = rangeKm / R;
+
+  const lat2 = Math.asin(
+    Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(brng),
+  );
+  const lon2 =
+    lon1 +
+    Math.atan2(
+      Math.sin(brng) * Math.sin(d) * Math.cos(lat1),
+      Math.cos(d) - Math.sin(lat1) * Math.sin(lat2),
+    );
+  return { lat: lat2 * toDeg, lon: lon2 * toDeg };
+}
+
+// ---------------------------------------------------------------------------
 // Store interface
 // ---------------------------------------------------------------------------
 
@@ -87,7 +133,7 @@ export interface EditorState {
   actions: EditorAction[];
   selectedItemType: 'sensor' | 'target' | null;
   selectedItemId: string | null;
-  editMode: 'select' | 'place-sensor' | 'place-waypoint' | 'draw-zone';
+  editMode: 'select' | 'place-sensor' | 'place-waypoint' | 'place-launch-point' | 'draw-zone';
   validationResult: { errors: string[]; warnings: string[] } | null;
   activeTargetId: string | null;
 
@@ -160,16 +206,36 @@ export interface ScenarioExport {
     };
     fov?: { halfAngleHDeg: number; halfAngleVDeg: number };
     slewRateDegPerSec?: number;
+    nickname?: string;
+    symbol?: string;
   }>;
   targets: Array<{
     targetId: string;
     name: string;
     description: string;
     startTime: number;
+    rcs?: number;
+    irEmission?: number;
+    classification?: string;
+    symbol?: string;
     waypoints: Array<{
       time: number;
       position: { lat: number; lon: number; alt: number };
+      speedMs?: number;
     }>;
+    // Ballistic missile export
+    ballistic?: {
+      launchLat: number;
+      launchLon: number;
+      launchAlt: number;
+      bearingDeg: number;
+      rangeKm: number;
+      apogeeM: number;
+      burnTimeSec: number;
+      reentrySpeedMs: number;
+      impactLat: number;
+      impactLon: number;
+    };
   }>;
   faults: Array<{
     type: string;
@@ -274,9 +340,29 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   updateTarget: (id, updates) =>
     set((s) => ({
-      targets: s.targets.map((t) =>
-        t.id === id ? { ...t, ...updates } : t
-      ),
+      targets: s.targets.map((t) => {
+        if (t.id !== id) return t;
+        const merged = { ...t, ...updates };
+        // Auto-compute impact point when ballistic params change
+        if (
+          merged.classification === 'ballistic_missile' &&
+          merged.launchLat != null &&
+          merged.launchLon != null &&
+          merged.launchBearingDeg != null &&
+          merged.ballisticRangeKm != null &&
+          merged.ballisticRangeKm > 0
+        ) {
+          const impact = computeImpactPoint(
+            merged.launchLat,
+            merged.launchLon,
+            merged.launchBearingDeg,
+            merged.ballisticRangeKm,
+          );
+          merged.impactLat = impact.lat;
+          merged.impactLon = impact.lon;
+        }
+        return merged;
+      }),
     })),
 
   addWaypoint: (targetId, waypoint) =>
@@ -361,7 +447,6 @@ export const useEditorStore = create<EditorState>((set) => ({
   finishZoneDraw: () => {
     const s = useEditorStore.getState();
     if (s.zoneDrawVertices.length < 3) {
-      // Need at least 3 points for a polygon
       set({ editMode: 'select', zoneDrawMode: null, zoneDrawVertices: [] });
       return;
     }
@@ -416,17 +501,43 @@ export const useEditorStore = create<EditorState>((set) => ({
               slewRateDegPerSec: sen.slewRateDegSec ?? 30,
             }
           : {}),
+        nickname: sen.nickname,
+        symbol: sen.symbol,
       })),
-      targets: s.targets.map((t) => ({
-        targetId: t.id,
-        name: t.label,
-        description: '',
-        startTime: t.waypoints.length > 0 ? t.waypoints[0].arrivalTimeSec : 0,
-        waypoints: t.waypoints.map((wp) => ({
-          time: wp.arrivalTimeSec,
-          position: { lat: wp.lat, lon: wp.lon, alt: wp.alt },
-        })),
-      })),
+      targets: s.targets.map((t) => {
+        const isBallistic = t.classification === 'ballistic_missile';
+        return {
+          targetId: t.id,
+          name: t.label || t.nickname || t.id,
+          description: '',
+          startTime: isBallistic ? 0 : (t.waypoints.length > 0 ? t.waypoints[0].arrivalTimeSec : 0),
+          rcs: t.rcs,
+          irEmission: t.irEmission,
+          classification: t.classification,
+          symbol: t.symbol,
+          waypoints: isBallistic ? [] : t.waypoints.map((wp) => ({
+            time: wp.arrivalTimeSec,
+            position: { lat: wp.lat, lon: wp.lon, alt: wp.alt },
+            speedMs: wp.speedMs,
+          })),
+          ...(isBallistic && t.launchLat != null && t.launchLon != null
+            ? {
+                ballistic: {
+                  launchLat: t.launchLat,
+                  launchLon: t.launchLon,
+                  launchAlt: t.launchAlt ?? 0,
+                  bearingDeg: t.launchBearingDeg ?? 0,
+                  rangeKm: t.ballisticRangeKm ?? 0,
+                  apogeeM: t.ballisticApogeeM ?? 0,
+                  burnTimeSec: t.ballisticBurnTimeSec ?? 0,
+                  reentrySpeedMs: t.ballisticReentrySpeedMs ?? 0,
+                  impactLat: t.impactLat ?? 0,
+                  impactLon: t.impactLon ?? 0,
+                },
+              }
+            : {}),
+        };
+      }),
       faults: s.faults.map((f) => ({
         type: f.type,
         sensorId: f.sensorId,
@@ -468,23 +579,44 @@ export const useEditorStore = create<EditorState>((set) => ({
           fovHalfAngleH: s.fov?.halfAngleHDeg,
           fovHalfAngleV: s.fov?.halfAngleVDeg,
           slewRateDegSec: s.slewRateDegPerSec,
+          nickname: s.nickname,
+          symbol: s.symbol,
         });
       }
     }
 
     if (Array.isArray(def.targets)) {
       for (const t of def.targets) {
+        const isBallistic = !!(t as any).ballistic;
+        const bData = (t as any).ballistic;
         store.addTarget({
           id: t.targetId || crypto.randomUUID(),
           label: t.name || 'Target',
-          rcs: 1,
-          waypoints: (t.waypoints || []).map((wp: any) => ({
+          rcs: t.rcs ?? 1,
+          irEmission: t.irEmission,
+          classification: t.classification,
+          symbol: t.symbol,
+          waypoints: isBallistic ? [] : (t.waypoints || []).map((wp: any) => ({
             lat: wp.position?.lat ?? 0,
             lon: wp.position?.lon ?? 0,
             alt: wp.position?.alt ?? 0,
-            speedMs: 0,
+            speedMs: wp.speedMs ?? 0,
             arrivalTimeSec: wp.time ?? 0,
           })),
+          ...(isBallistic && bData
+            ? {
+                launchLat: bData.launchLat,
+                launchLon: bData.launchLon,
+                launchAlt: bData.launchAlt,
+                launchBearingDeg: bData.bearingDeg,
+                ballisticRangeKm: bData.rangeKm,
+                ballisticApogeeM: bData.apogeeM,
+                ballisticBurnTimeSec: bData.burnTimeSec,
+                ballisticReentrySpeedMs: bData.reentrySpeedMs,
+                impactLat: bData.impactLat,
+                impactLon: bData.impactLon,
+              }
+            : {}),
         });
       }
     }

@@ -1,4 +1,3 @@
-import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
 import type { FastifyInstance } from 'fastify';
@@ -22,8 +21,7 @@ interface SensorLibrary {
   sensors: SensorLibraryEntry[];
 }
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const configsDir = path.resolve(__dirname, '../../../../configs');
+const configsDir = path.resolve(process.cwd(), 'configs');
 
 function loadSensorLibrary(): SensorLibrary {
   const libPath = path.join(configsDir, 'sensor-library.json');

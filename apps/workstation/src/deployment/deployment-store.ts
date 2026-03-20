@@ -35,9 +35,14 @@ export interface DeploymentMetrics {
   geometryQuality: number;
 }
 
+export type DeploymentDrawMode = 'select' | 'draw-area' | 'draw-exclusion' | 'draw-threat';
+
 interface DeploymentState {
   // Mode
   active: boolean;
+  drawMode: DeploymentDrawMode;
+  drawVertices: GeoPoint[];
+  deploymentName: string;
 
   // Area & zones
   scannedArea: GeoPolygon;
@@ -74,6 +79,15 @@ interface DeploymentState {
   clearAll: () => void;
   runOptimization: () => Promise<void>;
   exportScenario: () => Promise<void>;
+  setDeploymentName: (name: string) => void;
+  saveDeployment: (name?: string) => Promise<void>;
+  // Drawing mode
+  setDrawMode: (mode: DeploymentDrawMode) => void;
+  addDrawVertex: (vertex: GeoPoint) => void;
+  finishDraw: () => void;
+  cancelDraw: () => void;
+  // Update sensor position (for dragging)
+  updatePlacedSensorPosition: (index: number, position: GeoPoint) => void;
 }
 
 // Default scanned area: Central Israel region
@@ -95,6 +109,9 @@ const DEFAULT_INVENTORY: SensorSpec[] = [
 
 export const useDeploymentStore = create<DeploymentState>((set, get) => ({
   active: false,
+  drawMode: 'select' as DeploymentDrawMode,
+  drawVertices: [] as GeoPoint[],
+  deploymentName: '',
   scannedArea: DEFAULT_SCANNED_AREA,
   inclusionZones: [],
   exclusionZones: [],
@@ -175,7 +192,6 @@ export const useDeploymentStore = create<DeploymentState>((set, get) => ({
       });
       if (!res.ok) throw new Error('Export failed');
       const data = await res.json();
-      // Download as JSON
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -187,4 +203,66 @@ export const useDeploymentStore = create<DeploymentState>((set, get) => ({
       set({ error: err.message || 'Export failed' });
     }
   },
+
+  setDeploymentName: (name) => set({ deploymentName: name }),
+
+  saveDeployment: async (name?: string) => {
+    const state = get();
+    const saveName = name || state.deploymentName || `deployment-${Date.now()}`;
+    const id = saveName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    try {
+      const res = await fetch('/api/deployment/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          name: saveName,
+          constraints: {
+            scannedArea: state.scannedArea,
+            inclusionZones: state.inclusionZones,
+            exclusionZones: state.exclusionZones,
+            threatCorridors: state.threatCorridors,
+            minCoveragePercent: 70,
+            gridResolutionM: 2000,
+          },
+          sensors: state.sensorInventory,
+          result: state.placedSensors.length > 0 ? {
+            placedSensors: state.placedSensors,
+            metrics: state.metrics,
+          } : undefined,
+        }),
+      });
+      if (!res.ok) throw new Error('Save failed');
+      set({ deploymentName: saveName, error: null });
+    } catch (err: any) {
+      set({ error: err.message || 'Save failed' });
+    }
+  },
+
+  // Drawing mode
+  setDrawMode: (mode) => set({ drawMode: mode, drawVertices: [] }),
+  addDrawVertex: (vertex) => set((s) => ({ drawVertices: [...s.drawVertices, vertex] })),
+  finishDraw: () => {
+    const s = get();
+    if (s.drawVertices.length < 3) {
+      set({ drawMode: 'select', drawVertices: [] });
+      return;
+    }
+    const verts = [...s.drawVertices];
+    if (s.drawMode === 'draw-area') {
+      set({ scannedArea: verts, drawMode: 'select', drawVertices: [] });
+    } else if (s.drawMode === 'draw-exclusion') {
+      set((prev) => ({ exclusionZones: [...prev.exclusionZones, verts], drawMode: 'select', drawVertices: [] }));
+    } else if (s.drawMode === 'draw-threat') {
+      set((prev) => ({ threatCorridors: [...prev.threatCorridors, verts], drawMode: 'select', drawVertices: [] }));
+    }
+  },
+  cancelDraw: () => set({ drawMode: 'select', drawVertices: [] }),
+
+  updatePlacedSensorPosition: (index, position) =>
+    set((s) => ({
+      placedSensors: s.placedSensors.map((ps, i) =>
+        i === index ? { ...ps, position } : ps
+      ),
+    })),
 }));

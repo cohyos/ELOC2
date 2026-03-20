@@ -257,6 +257,22 @@ function SensorForm({ sensor, sensorLibrary }: { sensor: EditorSensor; sensorLib
         </div>
       )}
 
+      {/* Symbol */}
+      <div style={styles.formRow}>
+        <span style={styles.label}>Symbol</span>
+        <select
+          value={sensor.symbol || ''}
+          onChange={(e) => update({ symbol: e.target.value })}
+          style={styles.select}
+        >
+          <option value="">(default)</option>
+          <option value="radar-dish">Radar Dish</option>
+          <option value="eo-camera">EO Camera</option>
+          <option value="eo-staring">EO Staring</option>
+          <option value="c4isr-antenna">C4ISR Antenna</option>
+        </select>
+      </div>
+
       {/* Template */}
       <div style={styles.formRow}>
         <span style={styles.label}>Template</span>

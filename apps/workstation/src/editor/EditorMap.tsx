@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useEditorStore } from '../stores/editor-store';
@@ -14,35 +14,6 @@ const SENSOR_COLORS: Record<string, string> = {
   radar: '#4488ff',
   eo: '#ff8800',
   c4isr: '#aa44ff',
-};
-
-const SENSOR_SOURCE = 'editor-sensors';
-const SENSOR_LAYER = 'editor-sensors-layer';
-const SENSOR_LABEL_LAYER = 'editor-sensors-labels';
-const COVERAGE_SOURCE = 'editor-coverage';
-const COVERAGE_LAYER = 'editor-coverage-layer';
-
-const TARGET_PATH_SOURCE = 'editor-targets-source';
-const TARGET_PATH_LAYER = 'editor-target-paths';
-const WAYPOINT_MARKER_SOURCE = 'editor-waypoint-markers-source';
-const WAYPOINT_MARKER_LAYER = 'editor-waypoint-markers';
-
-const ZONE_SOURCE = 'editor-zones';
-const ZONE_FILL_LAYER = 'editor-zones-fill';
-const ZONE_OUTLINE_LAYER = 'editor-zones-outline';
-const ZONE_DRAW_SOURCE = 'editor-zone-draw';
-const ZONE_DRAW_LINE_LAYER = 'editor-zone-draw-line';
-const ZONE_DRAW_POINT_LAYER = 'editor-zone-draw-points';
-
-const ZONE_COLORS: Record<string, string> = {
-  operational: '#00cc4466',
-  exclusion: '#ff333366',
-  threat: '#ff880066',
-};
-const ZONE_OUTLINE_COLORS: Record<string, string> = {
-  operational: '#00cc44',
-  exclusion: '#ff3333',
-  threat: '#ff8800',
 };
 
 // ---------------------------------------------------------------------------
@@ -64,184 +35,160 @@ function haversineDistanceKm(
 }
 
 // ---------------------------------------------------------------------------
-// GeoJSON builders — sensors
+// SVG/HTML overlay builders (no WebGL data layers)
 // ---------------------------------------------------------------------------
 
-function buildSensorGeoJSON(sensors: EditorSensor[]): GeoJSON.FeatureCollection {
-  return {
-    type: 'FeatureCollection',
-    features: sensors.map((s) => ({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
-      properties: {
-        id: s.id,
-        type: s.type,
-        color: SENSOR_COLORS[s.type] || '#888',
-        label: `${s.type.toUpperCase()}-${s.id.slice(0, 6)}`,
-      },
-    })),
-  };
-}
-
-function buildCoverageGeoJSON(sensors: EditorSensor[]): GeoJSON.FeatureCollection {
-  const features: GeoJSON.Feature[] = [];
-  for (const s of sensors) {
-    const steps = 32;
-    const km = s.rangeMaxKm;
-    const coords: [number, number][] = [];
-    for (let i = 0; i <= steps; i++) {
-      const angle = (i / steps) * 2 * Math.PI;
-      const dLat = (km / 111.32) * Math.cos(angle);
-      const dLon =
-        (km / (111.32 * Math.cos((s.lat * Math.PI) / 180))) * Math.sin(angle);
-      coords.push([s.lon + dLon, s.lat + dLat]);
-    }
-    features.push({
-      type: 'Feature',
-      geometry: { type: 'Polygon', coordinates: [coords] },
-      properties: { id: s.id, color: SENSOR_COLORS[s.type] || '#888' },
-    });
-  }
-  return { type: 'FeatureCollection', features };
-}
-
-// ---------------------------------------------------------------------------
-// GeoJSON builders — targets
-// ---------------------------------------------------------------------------
-
-function speedToColor(speedMs: number): string {
-  if (speedMs < 100) return '#00cc44';
-  if (speedMs > 300) return '#ff3333';
-  return '#ffcc00';
-}
-
-function buildTargetPathGeoJSON(
+function buildSvgOverlay(
+  map: maplibregl.Map,
+  sensors: EditorSensor[],
   targets: EditorTarget[],
   activeTargetId: string | null,
-): GeoJSON.FeatureCollection {
-  const features: GeoJSON.Feature[] = [];
-  for (const t of targets) {
-    if (t.waypoints.length < 2) continue;
-    const isActive = t.id === activeTargetId;
-    // Build individual line segments so each can be colored by speed
-    for (let i = 0; i < t.waypoints.length - 1; i++) {
-      const wp1 = t.waypoints[i];
-      const wp2 = t.waypoints[i + 1];
-      const avgSpeed = (wp1.speedMs + wp2.speedMs) / 2;
-      features.push({
-        type: 'Feature',
-        geometry: {
-          type: 'LineString',
-          coordinates: [
-            [wp1.lon, wp1.lat],
-            [wp2.lon, wp2.lat],
-          ],
-        },
-        properties: {
-          targetId: t.id,
-          color: isActive ? speedToColor(avgSpeed) : '#555',
-          width: isActive ? 3 : 1.5,
-          opacity: isActive ? 0.9 : 0.4,
-        },
-      });
-    }
-  }
-  return { type: 'FeatureCollection', features };
-}
-
-function buildWaypointMarkersGeoJSON(
-  targets: EditorTarget[],
-  activeTargetId: string | null,
-): GeoJSON.FeatureCollection {
-  const features: GeoJSON.Feature[] = [];
-  for (const t of targets) {
-    const isActive = t.id === activeTargetId;
-    for (let i = 0; i < t.waypoints.length; i++) {
-      const wp = t.waypoints[i];
-      features.push({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: [wp.lon, wp.lat] },
-        properties: {
-          targetId: t.id,
-          waypointIndex: i,
-          color: isActive ? '#ffffff' : '#888',
-          strokeColor: isActive ? speedToColor(wp.speedMs) : '#555',
-          radius: isActive ? 6 : 4,
-        },
-      });
-    }
-  }
-  return { type: 'FeatureCollection', features };
-}
-
-// ---------------------------------------------------------------------------
-// GeoJSON builders — zones
-// ---------------------------------------------------------------------------
-
-function buildZoneGeoJSON(
   operationalArea: GeoVertex[],
   exclusionZones: GeoVertex[][],
   threatZones: GeoVertex[][],
-): GeoJSON.FeatureCollection {
-  const features: GeoJSON.Feature[] = [];
-  if (operationalArea.length >= 3) {
-    const coords: [number, number][] = operationalArea.map((v) => [v.lon, v.lat]);
-    coords.push([operationalArea[0].lon, operationalArea[0].lat]); // close ring
-    features.push({
-      type: 'Feature',
-      geometry: { type: 'Polygon', coordinates: [coords] },
-      properties: { zoneType: 'operational', fillColor: ZONE_COLORS.operational, outlineColor: ZONE_OUTLINE_COLORS.operational },
-    });
+  zoneDrawVertices: GeoVertex[],
+  zoneDrawMode: string | null,
+): string {
+  let svg = '';
+
+  // --- Zones ---
+  const drawPoly = (verts: GeoVertex[], fill: string, stroke: string) => {
+    if (verts.length < 3) return;
+    const d = verts.map((v, i) => {
+      const p = map.project([v.lon, v.lat]);
+      return `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`;
+    }).join(' ') + ' Z';
+    svg += `<path d="${d}" fill="${fill}" stroke="${stroke}" stroke-width="2" stroke-dasharray="6 3" />`;
+  };
+
+  if (operationalArea.length >= 3) drawPoly(operationalArea, 'rgba(0,204,68,0.12)', '#00cc44');
+  for (const z of exclusionZones) drawPoly(z, 'rgba(255,51,51,0.15)', '#ff3333');
+  for (const z of threatZones) drawPoly(z, 'rgba(255,136,0,0.15)', '#ff8800');
+
+  // Zone draw preview
+  if (zoneDrawVertices.length >= 2) {
+    const coords = zoneDrawVertices.map(v => map.project([v.lon, v.lat]));
+    let d = coords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x},${c.y}`).join(' ');
+    if (zoneDrawVertices.length >= 3) d += ' Z';
+    svg += `<path d="${d}" fill="rgba(255,204,0,0.1)" stroke="#ffcc00" stroke-width="2" stroke-dasharray="4 2" />`;
+    for (const c of coords) {
+      svg += `<circle cx="${c.x}" cy="${c.y}" r="4" fill="#ffcc00" stroke="#fff" stroke-width="1.5" />`;
+    }
   }
-  for (const zone of exclusionZones) {
-    if (zone.length < 3) continue;
-    const coords: [number, number][] = zone.map((v) => [v.lon, v.lat]);
-    coords.push([zone[0].lon, zone[0].lat]);
-    features.push({
-      type: 'Feature',
-      geometry: { type: 'Polygon', coordinates: [coords] },
-      properties: { zoneType: 'exclusion', fillColor: ZONE_COLORS.exclusion, outlineColor: ZONE_OUTLINE_COLORS.exclusion },
-    });
+
+  // --- Sensor coverage circles ---
+  for (const s of sensors) {
+    const center = map.project([s.lon, s.lat]);
+    const color = SENSOR_COLORS[s.type] || '#888';
+    const degOffset = (s.rangeMaxKm * 1000) / 111320;
+    const edge = map.project([s.lon, s.lat + degOffset]);
+    const rPx = Math.abs(center.y - edge.y);
+    svg += `<circle cx="${center.x}" cy="${center.y}" r="${rPx}" fill="none" stroke="${color}80" stroke-width="1.5" stroke-dasharray="4 4" />`;
   }
-  for (const zone of threatZones) {
-    if (zone.length < 3) continue;
-    const coords: [number, number][] = zone.map((v) => [v.lon, v.lat]);
-    coords.push([zone[0].lon, zone[0].lat]);
-    features.push({
-      type: 'Feature',
-      geometry: { type: 'Polygon', coordinates: [coords] },
-      properties: { zoneType: 'threat', fillColor: ZONE_COLORS.threat, outlineColor: ZONE_OUTLINE_COLORS.threat },
-    });
+
+  // --- Target paths ---
+  for (const t of targets) {
+    const isBallistic = t.classification === 'ballistic_missile';
+    const isActive = t.id === activeTargetId;
+
+    if (isBallistic && t.launchLat != null && t.launchLon != null && t.impactLat != null && t.impactLon != null) {
+      // Draw ballistic arc: launch → impact with arc indicator
+      const lp = map.project([t.launchLon, t.launchLat]);
+      const ip = map.project([t.impactLon, t.impactLat]);
+      const mx = (lp.x + ip.x) / 2;
+      const my = (lp.y + ip.y) / 2 - 40; // arc upward
+      const color = isActive ? '#ff3333' : '#ff333388';
+      const width = isActive ? 2.5 : 1.5;
+      svg += `<path d="M${lp.x},${lp.y} Q${mx},${my} ${ip.x},${ip.y}" fill="none" stroke="${color}" stroke-width="${width}" stroke-dasharray="6 3" />`;
+      // Impact circle
+      svg += `<circle cx="${ip.x}" cy="${ip.y}" r="8" fill="none" stroke="${color}" stroke-width="2" />`;
+      svg += `<line x1="${ip.x - 5}" y1="${ip.y - 5}" x2="${ip.x + 5}" y2="${ip.y + 5}" stroke="${color}" stroke-width="1.5" />`;
+      svg += `<line x1="${ip.x + 5}" y1="${ip.y - 5}" x2="${ip.x - 5}" y2="${ip.y + 5}" stroke="${color}" stroke-width="1.5" />`;
+    } else if (!isBallistic && t.waypoints.length >= 2) {
+      // Draw waypoint path segments
+      for (let i = 0; i < t.waypoints.length - 1; i++) {
+        const wp1 = t.waypoints[i];
+        const wp2 = t.waypoints[i + 1];
+        const p1 = map.project([wp1.lon, wp1.lat]);
+        const p2 = map.project([wp2.lon, wp2.lat]);
+        const avgSpeed = (wp1.speedMs + wp2.speedMs) / 2;
+        const color = isActive
+          ? (avgSpeed < 100 ? '#00cc44' : avgSpeed > 300 ? '#ff3333' : '#ffcc00')
+          : '#555';
+        const width = isActive ? 3 : 1.5;
+        svg += `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="${color}" stroke-width="${width}" opacity="${isActive ? 0.9 : 0.4}" />`;
+      }
+    }
   }
-  return { type: 'FeatureCollection', features };
+
+  return svg;
 }
 
-function buildZoneDrawGeoJSON(vertices: GeoVertex[]): {
-  line: GeoJSON.FeatureCollection;
-  points: GeoJSON.FeatureCollection;
-} {
-  const pointFeatures: GeoJSON.Feature[] = vertices.map((v, i) => ({
-    type: 'Feature',
-    geometry: { type: 'Point', coordinates: [v.lon, v.lat] },
-    properties: { index: i },
-  }));
-  const lineFeatures: GeoJSON.Feature[] = [];
-  if (vertices.length >= 2) {
-    const coords: [number, number][] = vertices.map((v) => [v.lon, v.lat]);
-    // Close the polygon preview if 3+ vertices
-    if (vertices.length >= 3) {
-      coords.push([vertices[0].lon, vertices[0].lat]);
-    }
-    lineFeatures.push({
-      type: 'Feature',
-      geometry: { type: 'LineString', coordinates: coords },
-      properties: {},
-    });
+function buildHtmlOverlay(
+  map: maplibregl.Map,
+  sensors: EditorSensor[],
+  targets: EditorTarget[],
+  activeTargetId: string | null,
+  selectedItemId: string | null,
+): string {
+  let html = '';
+
+  // --- Sensor markers ---
+  for (const s of sensors) {
+    const px = map.project([s.lon, s.lat]);
+    const color = SENSOR_COLORS[s.type] || '#888';
+    const isSelected = s.id === selectedItemId;
+    const label = s.nickname || `${s.type.toUpperCase()}-${s.id.slice(0, 6)}`;
+    const border = isSelected ? `3px solid #fff` : `2px solid #fff`;
+    html += `<div style="position:absolute;left:${px.x}px;top:${px.y}px;transform:translate(-50%,-50%);cursor:grab;pointer-events:auto;" data-sensor-id="${s.id}">
+      <div style="width:14px;height:14px;border-radius:50%;background:${color};border:${border};box-shadow:0 0 6px ${color}88;${isSelected ? 'box-shadow:0 0 10px #fff88;' : ''}"></div>
+    </div>`;
+    html += `<div style="position:absolute;left:${px.x + 12}px;top:${px.y - 14}px;pointer-events:none;font:bold 10px monospace;color:${color};text-shadow:0 0 3px #000,0 0 6px #000;">
+      ${label}
+    </div>`;
   }
-  return {
-    line: { type: 'FeatureCollection', features: lineFeatures },
-    points: { type: 'FeatureCollection', features: pointFeatures },
-  };
+
+  // --- Target markers (waypoints + ballistic launch/impact) ---
+  for (const t of targets) {
+    const isBallistic = t.classification === 'ballistic_missile';
+    const isActive = t.id === activeTargetId;
+
+    if (isBallistic) {
+      // Launch point marker
+      if (t.launchLat != null && t.launchLon != null) {
+        const lp = map.project([t.launchLon, t.launchLat]);
+        const label = t.nickname || t.label || t.id;
+        html += `<div style="position:absolute;left:${lp.x}px;top:${lp.y}px;transform:translate(-50%,-50%);cursor:grab;pointer-events:auto;" data-launch-id="${t.id}">
+          <div style="width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:14px solid ${isActive ? '#ff3333' : '#ff333388'};filter:drop-shadow(0 0 4px #ff3333);"></div>
+        </div>`;
+        html += `<div style="position:absolute;left:${lp.x + 12}px;top:${lp.y - 8}px;pointer-events:none;font:bold 10px monospace;color:#ff3333;text-shadow:0 0 3px #000;">
+          ${label} (launch)
+        </div>`;
+      }
+    } else {
+      // Waypoint markers
+      for (let i = 0; i < t.waypoints.length; i++) {
+        const wp = t.waypoints[i];
+        const px = map.project([wp.lon, wp.lat]);
+        const color = isActive ? '#ffffff' : '#888';
+        const stroke = isActive
+          ? (wp.speedMs < 100 ? '#00cc44' : wp.speedMs > 300 ? '#ff3333' : '#ffcc00')
+          : '#555';
+        const r = isActive ? 6 : 4;
+        html += `<div style="position:absolute;left:${px.x}px;top:${px.y}px;transform:translate(-50%,-50%);cursor:grab;pointer-events:auto;" data-waypoint-target="${t.id}" data-waypoint-index="${i}">
+          <div style="width:${r * 2}px;height:${r * 2}px;border-radius:50%;background:${color};border:2px solid ${stroke};"></div>
+        </div>`;
+        if (i === 0 && isActive) {
+          const label = t.nickname || t.label || t.id;
+          html += `<div style="position:absolute;left:${px.x + 10}px;top:${px.y - 14}px;pointer-events:none;font:bold 10px monospace;color:#ff8800;text-shadow:0 0 3px #000;">
+            ${label}
+          </div>`;
+        }
+      }
+    }
+  }
+
+  return html;
 }
 
 // ---------------------------------------------------------------------------
@@ -251,7 +198,9 @@ function buildZoneDrawGeoJSON(vertices: GeoVertex[]): {
 export function EditorMap() {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
-  const [layersReady, setLayersReady] = useState(false);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const markersRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number>(0);
   const dragState = useRef<{
     type: 'waypoint';
     targetId: string;
@@ -259,6 +208,9 @@ export function EditorMap() {
   } | {
     type: 'sensor';
     sensorId: string;
+  } | {
+    type: 'launch';
+    targetId: string;
   } | null>(null);
 
   const sensors = useEditorStore((s) => s.sensors);
@@ -272,11 +224,36 @@ export function EditorMap() {
   const zoneDrawVertices = useEditorStore((s) => s.zoneDrawVertices);
   const zoneDrawMode = useEditorStore((s) => s.zoneDrawMode);
 
+  // Draw overlays
+  const drawOverlays = useCallback(() => {
+    const map = mapRef.current;
+    const svg = svgRef.current;
+    const markerContainer = markersRef.current;
+    if (!map || !svg || !markerContainer) return;
+
+    const canvas = map.getCanvas();
+    const w = canvas.width / (window.devicePixelRatio || 1);
+    const h = canvas.height / (window.devicePixelRatio || 1);
+    svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    svg.style.width = `${w}px`;
+    svg.style.height = `${h}px`;
+
+    svg.innerHTML = buildSvgOverlay(
+      map, sensors, targets, activeTargetId,
+      operationalArea, exclusionZones, threatZones,
+      zoneDrawVertices, zoneDrawMode,
+    );
+
+    markerContainer.innerHTML = buildHtmlOverlay(
+      map, sensors, targets, activeTargetId, selectedItemId,
+    );
+  }, [sensors, targets, activeTargetId, selectedItemId, operationalArea, exclusionZones, threatZones, zoneDrawVertices, zoneDrawMode]);
+
   // Initialize map
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
 
-    mapRef.current = new maplibregl.Map({
+    const map = new maplibregl.Map({
       container: mapContainer.current,
       style: {
         version: 8,
@@ -294,306 +271,40 @@ export function EditorMap() {
       zoom: 8,
     });
 
-    mapRef.current.on('error', (e) => {
+    map.on('error', (e) => {
       console.error('[EditorMap] MapLibre error:', e.error?.message || e);
     });
 
-    mapRef.current.addControl(new maplibregl.NavigationControl(), 'top-right');
-    mapRef.current.addControl(
-      new maplibregl.ScaleControl({ unit: 'metric' }),
-      'bottom-left'
-    );
+    map.addControl(new maplibregl.NavigationControl(), 'top-right');
+    map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
-    // Ctrl+left-click+drag rectangle zoom
-    const cleanupBoxZoom = enableCtrlBoxZoom(mapRef.current);
+    const cleanupBoxZoom = enableCtrlBoxZoom(map);
 
-    mapRef.current.on('load', () => {
-      const m = mapRef.current;
-      if (!m) return;
+    const scheduleRedraw = () => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => drawOverlays());
+    };
 
-      // --- Coverage layer ---
-      m.addSource(COVERAGE_SOURCE, {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-      m.addLayer({
-        id: COVERAGE_LAYER,
-        type: 'line',
-        source: COVERAGE_SOURCE,
-        paint: {
-          'line-color': ['get', 'color'],
-          'line-width': 1.5,
-          'line-dasharray': [4, 4],
-          'line-opacity': 0.5,
-        },
-      });
+    map.on('move', scheduleRedraw);
+    map.on('zoom', scheduleRedraw);
+    map.on('resize', scheduleRedraw);
+    map.on('load', () => drawOverlays());
 
-      // --- Target paths layer ---
-      m.addSource(TARGET_PATH_SOURCE, {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-      m.addLayer({
-        id: TARGET_PATH_LAYER,
-        type: 'line',
-        source: TARGET_PATH_SOURCE,
-        layout: {
-          'line-cap': 'round',
-          'line-join': 'round',
-        },
-        paint: {
-          'line-color': ['get', 'color'],
-          'line-width': ['get', 'width'],
-          'line-opacity': ['get', 'opacity'],
-        },
-      });
-
-      // --- Waypoint markers layer ---
-      m.addSource(WAYPOINT_MARKER_SOURCE, {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-      m.addLayer({
-        id: WAYPOINT_MARKER_LAYER,
-        type: 'circle',
-        source: WAYPOINT_MARKER_SOURCE,
-        paint: {
-          'circle-radius': ['get', 'radius'],
-          'circle-color': ['get', 'color'],
-          'circle-stroke-width': 2,
-          'circle-stroke-color': ['get', 'strokeColor'],
-          'circle-opacity': 0.95,
-        },
-      });
-
-      // --- Sensor circles ---
-      m.addSource(SENSOR_SOURCE, {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-      m.addLayer({
-        id: SENSOR_LAYER,
-        type: 'circle',
-        source: SENSOR_SOURCE,
-        paint: {
-          'circle-radius': 8,
-          'circle-color': ['get', 'color'],
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#fff',
-          'circle-opacity': 0.9,
-        },
-      });
-
-      // --- Sensor labels ---
-      try {
-        m.addLayer({
-          id: SENSOR_LABEL_LAYER,
-          type: 'symbol',
-          source: SENSOR_SOURCE,
-          layout: {
-            'text-field': ['get', 'label'],
-            'text-size': 10,
-            'text-offset': [0, 1.8],
-            'text-anchor': 'top',
-            'text-font': ['Open Sans Bold'],
-          },
-          paint: {
-            'text-color': '#ccc',
-            'text-halo-color': '#000',
-            'text-halo-width': 1,
-          },
-        });
-      } catch (e) {
-        console.warn('Editor sensor labels init failed:', e);
-      }
-
-      // --- Zone layers ---
-      m.addSource(ZONE_SOURCE, {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-      m.addLayer({
-        id: ZONE_FILL_LAYER,
-        type: 'fill',
-        source: ZONE_SOURCE,
-        paint: {
-          'fill-color': ['get', 'fillColor'],
-          'fill-opacity': 0.3,
-        },
-      });
-      m.addLayer({
-        id: ZONE_OUTLINE_LAYER,
-        type: 'line',
-        source: ZONE_SOURCE,
-        paint: {
-          'line-color': ['get', 'outlineColor'],
-          'line-width': 2,
-          'line-dasharray': [4, 2],
-        },
-      });
-
-      // --- Zone draw layers ---
-      m.addSource(ZONE_DRAW_SOURCE, {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-      m.addLayer({
-        id: ZONE_DRAW_LINE_LAYER,
-        type: 'line',
-        source: ZONE_DRAW_SOURCE,
-        paint: {
-          'line-color': '#ffcc00',
-          'line-width': 2,
-          'line-dasharray': [4, 2],
-        },
-      });
-      // Use a separate source for draw points
-      m.addSource(ZONE_DRAW_SOURCE + '-pts', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-      m.addLayer({
-        id: ZONE_DRAW_POINT_LAYER,
-        type: 'circle',
-        source: ZONE_DRAW_SOURCE + '-pts',
-        paint: {
-          'circle-radius': 5,
-          'circle-color': '#ffcc00',
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#fff',
-        },
-      });
-
-      // --- Click on sensor to select ---
-      m.on('click', SENSOR_LAYER, (e) => {
-        if (useEditorStore.getState().editMode !== 'select') return;
-        if (e.features && e.features.length > 0) {
-          const id = e.features[0].properties?.id;
-          if (id) {
-            useEditorStore.getState().selectItem('sensor', id);
-            e.originalEvent.stopPropagation();
-          }
-        }
-      });
-
-      m.on('mouseenter', SENSOR_LAYER, () => {
-        const mode = useEditorStore.getState().editMode;
-        if (mapRef.current && mode === 'select') mapRef.current.getCanvas().style.cursor = 'pointer';
-      });
-      m.on('mouseleave', SENSOR_LAYER, () => {
-        if (mapRef.current && !dragState.current) mapRef.current.getCanvas().style.cursor = '';
-      });
-
-      // --- Sensor drag (ED-5) ---
-      m.on('mousedown', SENSOR_LAYER, (e) => {
-        if (useEditorStore.getState().editMode !== 'select') return;
-        if (!e.features || e.features.length === 0) return;
-        const sensorId = e.features[0].properties?.id as string;
-        if (!sensorId) return;
-
-        dragState.current = { type: 'sensor', sensorId };
-        m.getCanvas().style.cursor = 'grabbing';
-        e.preventDefault();
-
-        const onMove = (moveEvt: maplibregl.MapMouseEvent) => {
-          if (!dragState.current || dragState.current.type !== 'sensor') return;
-          useEditorStore.getState().updateSensor(dragState.current.sensorId, {
-            lat: moveEvt.lngLat.lat,
-            lon: moveEvt.lngLat.lng,
-          });
-        };
-
-        const onUp = () => {
-          dragState.current = null;
-          m.getCanvas().style.cursor = '';
-          m.off('mousemove', onMove);
-          m.off('mouseup', onUp);
-        };
-
-        m.on('mousemove', onMove);
-        m.on('mouseup', onUp);
-      });
-
-      // --- Waypoint marker interactions ---
-      m.on('mouseenter', WAYPOINT_MARKER_LAYER, () => {
-        if (mapRef.current && useEditorStore.getState().editMode === 'select') {
-          mapRef.current.getCanvas().style.cursor = 'grab';
-        }
-      });
-      m.on('mouseleave', WAYPOINT_MARKER_LAYER, () => {
-        if (mapRef.current && !dragState.current) {
-          mapRef.current.getCanvas().style.cursor = '';
-        }
-      });
-
-      // Drag waypoint: mousedown on marker
-      m.on('mousedown', WAYPOINT_MARKER_LAYER, (e) => {
-        if (useEditorStore.getState().editMode !== 'select') return;
-        if (!e.features || e.features.length === 0) return;
-        const props = e.features[0].properties;
-        if (!props) return;
-
-        dragState.current = {
-          type: 'waypoint',
-          targetId: props.targetId as string,
-          waypointIndex: props.waypointIndex as number,
-        };
-
-        m.getCanvas().style.cursor = 'grabbing';
-        e.preventDefault(); // Prevent map pan
-
-        const onMove = (moveEvt: maplibregl.MapMouseEvent) => {
-          if (!dragState.current || dragState.current.type !== 'waypoint') return;
-          const { targetId, waypointIndex } = dragState.current;
-          const store = useEditorStore.getState();
-          const target = store.targets.find((t) => t.id === targetId);
-          if (!target) return;
-
-          store.updateWaypoint(targetId, waypointIndex, {
-            lat: moveEvt.lngLat.lat,
-            lon: moveEvt.lngLat.lng,
-          });
-
-          // Recalculate arrival times after drag
-          recalcArrivalTimes(targetId);
-        };
-
-        const onUp = () => {
-          dragState.current = null;
-          m.getCanvas().style.cursor = '';
-          m.off('mousemove', onMove);
-          m.off('mouseup', onUp);
-        };
-
-        m.on('mousemove', onMove);
-        m.on('mouseup', onUp);
-      });
-
-      // Right-click waypoint to delete
-      m.on('contextmenu', WAYPOINT_MARKER_LAYER, (e) => {
-        e.preventDefault();
-        if (!e.features || e.features.length === 0) return;
-        const props = e.features[0].properties;
-        if (!props) return;
-        const targetId = props.targetId as string;
-        const waypointIndex = props.waypointIndex as number;
-        useEditorStore.getState().removeWaypoint(targetId, waypointIndex);
-        // Recalculate arrival times
-        recalcArrivalTimes(targetId);
-      });
-
-      setLayersReady(true);
-    });
+    mapRef.current = map;
 
     return () => {
       cleanupBoxZoom();
-      mapRef.current?.remove();
+      map.remove();
       mapRef.current = null;
-      setLayersReady(false);
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Map click handler for placing sensors/waypoints
+  // Redraw when data changes
+  useEffect(() => {
+    if (mapRef.current) drawOverlays();
+  }, [drawOverlays]);
+
+  // Click handler for placing sensors/waypoints/launch points and zone drawing
   useEffect(() => {
     const m = mapRef.current;
     if (!m) return;
@@ -620,13 +331,41 @@ export function EditorMap() {
           rangeMaxKm: defaults.rangeMaxKm,
           template: 'long-range-radar',
         };
+        // Auto-fetch terrain height
+        fetch(`/api/terrain/elevation?lat=${e.lngLat.lat}&lon=${e.lngLat.lng}`)
+          .then(r => r.json())
+          .then(data => {
+            if (data.elevationM != null) {
+              state.updateSensor(newSensor.id, { alt: Math.round(data.elevationM) });
+            }
+          })
+          .catch(() => {});
         state.addSensor(newSensor);
         state.selectItem('sensor', newSensor.id);
+        state.setEditMode('select');
+      } else if (currentMode === 'place-launch-point') {
+        const targetId = state.activeTargetId;
+        if (!targetId) return;
+        const lat = e.lngLat.lat;
+        const lon = e.lngLat.lng;
+        // Auto-fetch terrain height for launch
+        fetch(`/api/terrain/elevation?lat=${lat}&lon=${lon}`)
+          .then(r => r.json())
+          .then(data => {
+            state.updateTarget(targetId, {
+              launchAlt: data.elevationM != null ? Math.round(data.elevationM) : 0,
+            });
+          })
+          .catch(() => {});
+        state.updateTarget(targetId, {
+          launchLat: lat,
+          launchLon: lon,
+          launchAlt: 0,
+        });
         state.setEditMode('select');
       } else if (currentMode === 'place-waypoint') {
         const targetId = state.activeTargetId;
         if (!targetId) return;
-
         const target = state.targets.find((t) => t.id === targetId);
         if (!target) return;
 
@@ -643,22 +382,134 @@ export function EditorMap() {
           arrivalTimeSec = prev.arrivalTimeSec + timeSec;
         }
 
-        const newWaypoint: EditorWaypoint = {
-          lat,
-          lon,
-          alt,
-          speedMs,
-          arrivalTimeSec,
-        };
-
-        state.addWaypoint(targetId, newWaypoint);
-        // Stay in place-waypoint mode for chaining
+        state.addWaypoint(targetId, { lat, lon, alt, speedMs, arrivalTimeSec });
       }
     };
 
     m.on('click', handler);
+    return () => { m.off('click', handler); };
+  }, []);
+
+  // Drag handler via mousedown on marker container
+  useEffect(() => {
+    const markerDiv = markersRef.current;
+    const m = mapRef.current;
+    if (!markerDiv || !m) return;
+
+    const onMouseDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const sensorEl = target.closest('[data-sensor-id]') as HTMLElement | null;
+      const wpEl = target.closest('[data-waypoint-target]') as HTMLElement | null;
+      const launchEl = target.closest('[data-launch-id]') as HTMLElement | null;
+
+      if (sensorEl) {
+        const sensorId = sensorEl.dataset.sensorId!;
+        dragState.current = { type: 'sensor', sensorId };
+        useEditorStore.getState().selectItem('sensor', sensorId);
+        e.preventDefault();
+        e.stopPropagation();
+      } else if (wpEl) {
+        const targetId = wpEl.dataset.waypointTarget!;
+        const waypointIndex = parseInt(wpEl.dataset.waypointIndex!, 10);
+        dragState.current = { type: 'waypoint', targetId, waypointIndex };
+        e.preventDefault();
+        e.stopPropagation();
+      } else if (launchEl) {
+        const targetId = launchEl.dataset.launchId!;
+        dragState.current = { type: 'launch', targetId };
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!dragState.current) return;
+      const rect = m.getCanvas().getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const lngLat = m.unproject([x, y]);
+      const store = useEditorStore.getState();
+
+      if (dragState.current.type === 'sensor') {
+        store.updateSensor(dragState.current.sensorId, {
+          lat: lngLat.lat,
+          lon: lngLat.lng,
+        });
+      } else if (dragState.current.type === 'waypoint') {
+        store.updateWaypoint(dragState.current.targetId, dragState.current.waypointIndex, {
+          lat: lngLat.lat,
+          lon: lngLat.lng,
+        });
+      } else if (dragState.current.type === 'launch') {
+        store.updateTarget(dragState.current.targetId, {
+          launchLat: lngLat.lat,
+          launchLon: lngLat.lng,
+        });
+      }
+      m.getCanvas().style.cursor = 'grabbing';
+    };
+
+    const onMouseUp = () => {
+      if (!dragState.current) return;
+      if (dragState.current.type === 'waypoint') {
+        recalcArrivalTimes(dragState.current.targetId);
+      }
+      if (dragState.current.type === 'sensor') {
+        // Auto-fetch terrain height after drag
+        const store = useEditorStore.getState();
+        const sensor = store.sensors.find(s => s.id === (dragState.current as any).sensorId);
+        if (sensor) {
+          fetch(`/api/terrain/elevation?lat=${sensor.lat}&lon=${sensor.lon}`)
+            .then(r => r.json())
+            .then(data => {
+              if (data.elevationM != null) {
+                store.updateSensor(sensor.id, { alt: Math.round(data.elevationM) });
+              }
+            })
+            .catch(() => {});
+        }
+      }
+      if (dragState.current.type === 'launch') {
+        // Auto-fetch terrain height after drag
+        const store = useEditorStore.getState();
+        const target = store.targets.find(t => t.id === (dragState.current as any).targetId);
+        if (target && target.launchLat != null && target.launchLon != null) {
+          fetch(`/api/terrain/elevation?lat=${target.launchLat}&lon=${target.launchLon}`)
+            .then(r => r.json())
+            .then(data => {
+              if (data.elevationM != null) {
+                store.updateTarget(target.id, { launchAlt: Math.round(data.elevationM) });
+              }
+            })
+            .catch(() => {});
+        }
+      }
+      dragState.current = null;
+      if (m) m.getCanvas().style.cursor = '';
+    };
+
+    const onContextMenu = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const wpEl = target.closest('[data-waypoint-target]') as HTMLElement | null;
+      if (wpEl) {
+        e.preventDefault();
+        const targetId = wpEl.dataset.waypointTarget!;
+        const waypointIndex = parseInt(wpEl.dataset.waypointIndex!, 10);
+        useEditorStore.getState().removeWaypoint(targetId, waypointIndex);
+        recalcArrivalTimes(targetId);
+      }
+    };
+
+    markerDiv.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    markerDiv.addEventListener('contextmenu', onContextMenu);
+
     return () => {
-      m.off('click', handler);
+      markerDiv.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      markerDiv.removeEventListener('contextmenu', onContextMenu);
     };
   }, []);
 
@@ -666,57 +517,12 @@ export function EditorMap() {
   useEffect(() => {
     const m = mapRef.current;
     if (!m) return;
-    if (editMode === 'place-sensor' || editMode === 'place-waypoint' || editMode === 'draw-zone') {
+    if (editMode === 'place-sensor' || editMode === 'place-waypoint' || editMode === 'place-launch-point' || editMode === 'draw-zone') {
       m.getCanvas().style.cursor = 'crosshair';
     } else {
       m.getCanvas().style.cursor = '';
     }
   }, [editMode]);
-
-  // Update sensor data on map
-  useEffect(() => {
-    const m = mapRef.current;
-    if (!m || !layersReady) return;
-
-    const src = m.getSource(SENSOR_SOURCE) as maplibregl.GeoJSONSource;
-    if (src) src.setData(buildSensorGeoJSON(sensors));
-
-    const covSrc = m.getSource(COVERAGE_SOURCE) as maplibregl.GeoJSONSource;
-    if (covSrc) covSrc.setData(buildCoverageGeoJSON(sensors));
-  }, [sensors, layersReady]);
-
-  // Update target paths and waypoint markers on map
-  useEffect(() => {
-    const m = mapRef.current;
-    if (!m || !layersReady) return;
-
-    const pathSrc = m.getSource(TARGET_PATH_SOURCE) as maplibregl.GeoJSONSource;
-    if (pathSrc) pathSrc.setData(buildTargetPathGeoJSON(targets, activeTargetId));
-
-    const wpSrc = m.getSource(WAYPOINT_MARKER_SOURCE) as maplibregl.GeoJSONSource;
-    if (wpSrc) wpSrc.setData(buildWaypointMarkersGeoJSON(targets, activeTargetId));
-  }, [targets, activeTargetId, layersReady]);
-
-  // Update zone layers
-  useEffect(() => {
-    const m = mapRef.current;
-    if (!m || !layersReady) return;
-
-    const zoneSrc = m.getSource(ZONE_SOURCE) as maplibregl.GeoJSONSource;
-    if (zoneSrc) zoneSrc.setData(buildZoneGeoJSON(operationalArea, exclusionZones, threatZones));
-  }, [operationalArea, exclusionZones, threatZones, layersReady]);
-
-  // Update zone draw preview
-  useEffect(() => {
-    const m = mapRef.current;
-    if (!m || !layersReady) return;
-
-    const { line, points } = buildZoneDrawGeoJSON(zoneDrawVertices);
-    const lineSrc = m.getSource(ZONE_DRAW_SOURCE) as maplibregl.GeoJSONSource;
-    if (lineSrc) lineSrc.setData(line);
-    const ptsSrc = m.getSource(ZONE_DRAW_SOURCE + '-pts') as maplibregl.GeoJSONSource;
-    if (ptsSrc) ptsSrc.setData(points);
-  }, [zoneDrawVertices, layersReady]);
 
   // Mode indicator overlay
   const zoneModeLabels: Record<string, string> = {
@@ -730,20 +536,42 @@ export function EditorMap() {
       ? 'Click map to place sensor'
       : editMode === 'place-waypoint'
       ? 'Click map to add waypoint'
+      : editMode === 'place-launch-point'
+      ? 'Click map to set launch point'
       : editMode === 'draw-zone' && zoneDrawMode
       ? zoneModeLabels[zoneDrawMode] || 'Click to define zone'
       : null;
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <div
-        ref={mapContainer}
+      <div ref={mapContainer} style={{ width: '100%', height: '100%' }} />
+
+      {/* SVG overlay for geometry (z-index 14) */}
+      <svg
+        ref={svgRef}
         style={{
-          width: '100%',
-          height: '100%',
-          filter: 'brightness(0.85) saturate(0.7)',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          pointerEvents: 'none',
+          zIndex: 14,
         }}
       />
+
+      {/* HTML overlay for markers (z-index 15) */}
+      <div
+        ref={markersRef}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          zIndex: 15,
+        }}
+      />
+
       {modeLabel && (
         <div
           style={{
@@ -759,7 +587,7 @@ export function EditorMap() {
             fontWeight: 600,
             border: '1px solid #ffcc0044',
             pointerEvents: editMode === 'draw-zone' ? 'auto' : 'none',
-            zIndex: 10,
+            zIndex: 20,
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
@@ -783,13 +611,10 @@ export function EditorMap() {
               Finish ({zoneDrawVertices.length} pts)
             </button>
           )}
-          <span
-            style={{ color: '#888', fontSize: '10px' }}
-          >
-            ESC to cancel
-          </span>
+          <span style={{ color: '#888', fontSize: '10px' }}>ESC to cancel</span>
         </div>
       )}
+
       {/* Zone control buttons */}
       {editMode === 'select' && (
         <div
@@ -799,70 +624,26 @@ export function EditorMap() {
             left: '10px',
             display: 'flex',
             gap: '4px',
-            zIndex: 10,
+            zIndex: 20,
           }}
         >
           <button
             onClick={() => useEditorStore.getState().startZoneDraw('operational-area')}
-            style={{
-              background: '#1a1a2ecc',
-              color: '#00cc44',
-              border: '1px solid #00cc4466',
-              borderRadius: '3px',
-              padding: '4px 8px',
-              fontSize: '10px',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            + Op Area
-          </button>
+            style={{ background: '#1a1a2ecc', color: '#00cc44', border: '1px solid #00cc4466', borderRadius: '3px', padding: '4px 8px', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}
+          >+ Op Area</button>
           <button
             onClick={() => useEditorStore.getState().startZoneDraw('exclusion-zone')}
-            style={{
-              background: '#1a1a2ecc',
-              color: '#ff3333',
-              border: '1px solid #ff333366',
-              borderRadius: '3px',
-              padding: '4px 8px',
-              fontSize: '10px',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            + Exclusion
-          </button>
+            style={{ background: '#1a1a2ecc', color: '#ff3333', border: '1px solid #ff333366', borderRadius: '3px', padding: '4px 8px', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}
+          >+ Exclusion</button>
           <button
             onClick={() => useEditorStore.getState().startZoneDraw('threat-zone')}
-            style={{
-              background: '#1a1a2ecc',
-              color: '#ff8800',
-              border: '1px solid #ff880066',
-              borderRadius: '3px',
-              padding: '4px 8px',
-              fontSize: '10px',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            + Threat
-          </button>
+            style={{ background: '#1a1a2ecc', color: '#ff8800', border: '1px solid #ff880066', borderRadius: '3px', padding: '4px 8px', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}
+          >+ Threat</button>
           {(operationalArea.length > 0 || exclusionZones.length > 0 || threatZones.length > 0) && (
             <button
               onClick={() => useEditorStore.getState().clearZones()}
-              style={{
-                background: '#1a1a2ecc',
-                color: '#888',
-                border: '1px solid #44444466',
-                borderRadius: '3px',
-                padding: '4px 8px',
-                fontSize: '10px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Clear Zones
-            </button>
+              style={{ background: '#1a1a2ecc', color: '#888', border: '1px solid #44444466', borderRadius: '3px', padding: '4px 8px', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}
+            >Clear Zones</button>
           )}
         </div>
       )}
@@ -871,7 +652,7 @@ export function EditorMap() {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: recalculate arrival times for a target's waypoints
+// Helper: recalculate arrival times
 // ---------------------------------------------------------------------------
 
 function recalcArrivalTimes(targetId: string) {
@@ -883,12 +664,11 @@ function recalcArrivalTimes(targetId: string) {
     if (i === 0) {
       store.updateWaypoint(targetId, 0, { arrivalTimeSec: 0 });
     } else {
-      const prev = store.targets.find((t) => t.id === targetId)!.waypoints[i - 1];
+      const prev = useEditorStore.getState().targets.find((t) => t.id === targetId)!.waypoints[i - 1];
       const curr = target.waypoints[i];
       const distKm = haversineDistanceKm(prev.lat, prev.lon, curr.lat, curr.lon);
       const speed = curr.speedMs > 0 ? curr.speedMs : 1;
       const timeSec = (distKm * 1000) / speed;
-      // Re-read prev arrival after possible update
       const updatedPrev = useEditorStore.getState().targets.find((t) => t.id === targetId)!.waypoints[i - 1];
       store.updateWaypoint(targetId, i, {
         arrivalTimeSec: updatedPrev.arrivalTimeSec + timeSec,

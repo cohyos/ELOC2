@@ -557,6 +557,7 @@ export function App() {
         onBack={() => setView('workstation')}
         onLoadScenario={(id) => { handleScenarioChange(id); setView('workstation'); }}
         onEditScenario={() => setView('editor')}
+        onLoadDeployment={() => setView('deployment')}
       />
     );
   }

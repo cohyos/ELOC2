@@ -14,6 +14,14 @@ interface TargetLibraryEntry {
   altitudeM: number;
   classification?: string;
   symbol?: string;
+  ballisticProperties?: {
+    rangeKm: number;
+    apogeeM: number;
+    burnTimeSec: number;
+    reentrySpeedMs: number;
+    defaultLaunchBearingDeg: number;
+    defaultImpactBearingDeg: number;
+  };
 }
 
 const CLASSIFICATION_OPTIONS = [
@@ -28,6 +36,17 @@ const CLASSIFICATION_OPTIONS = [
   'ballistic_missile',
   'cruise_missile',
   'uav',
+];
+
+const SYMBOL_OPTIONS = [
+  { value: '', label: '(default)' },
+  { value: 'SHAPMFM---', label: 'Missile' },
+  { value: 'SHAPMFF---', label: 'Fighter' },
+  { value: 'SHAPMFH---', label: 'Helicopter' },
+  { value: 'SHAPMFU---', label: 'UAV' },
+  { value: 'SHAPMC----', label: 'Civilian' },
+  { value: 'SNAPMF----', label: 'Unknown Aircraft' },
+  { value: 'SFAPMF----', label: 'Friendly Aircraft' },
 ];
 
 const styles = {
@@ -151,6 +170,141 @@ const styles = {
   } as React.CSSProperties,
 };
 
+function BallisticForm({ target }: { target: EditorTarget }) {
+  const updateTarget = useEditorStore((s) => s.updateTarget);
+  const editMode = useEditorStore((s) => s.editMode);
+  const setEditMode = useEditorStore((s) => s.setEditMode);
+  const setActiveTargetId = useEditorStore((s) => s.setActiveTargetId);
+
+  const isPlacing = editMode === 'place-launch-point';
+
+  const handlePlaceLaunch = useCallback(() => {
+    setActiveTargetId(target.id);
+    setEditMode('place-launch-point');
+  }, [target.id, setActiveTargetId, setEditMode]);
+
+  return (
+    <div style={{ marginTop: '6px' }}>
+      <div style={styles.sectionTitle}>Launch Point</div>
+
+      <button
+        style={styles.waypointAddBtn(isPlacing)}
+        onClick={handlePlaceLaunch}
+      >
+        {isPlacing ? 'Click map to set launch point...' : 'Set Launch Point on Map'}
+      </button>
+
+      {target.launchLat != null && (
+        <>
+          <div style={styles.formRow}>
+            <span style={styles.label}>Lat</span>
+            <input
+              type="number"
+              value={target.launchLat ?? 0}
+              onChange={(e) => updateTarget(target.id, { launchLat: parseFloat(e.target.value) || 0 })}
+              step={0.001}
+              style={styles.input}
+            />
+          </div>
+          <div style={styles.formRow}>
+            <span style={styles.label}>Lon</span>
+            <input
+              type="number"
+              value={target.launchLon ?? 0}
+              onChange={(e) => updateTarget(target.id, { launchLon: parseFloat(e.target.value) || 0 })}
+              step={0.001}
+              style={styles.input}
+            />
+          </div>
+          <div style={styles.formRow}>
+            <span style={styles.label}>Elev (m)</span>
+            <span style={{ ...styles.input, border: 'none', background: 'none', color: '#aaa' }}>
+              {target.launchAlt ?? 0}
+            </span>
+          </div>
+        </>
+      )}
+
+      <div style={{ ...styles.sectionTitle, marginTop: '8px' }}>Trajectory</div>
+      <div style={styles.formRow}>
+        <span style={styles.label}>Bearing (°)</span>
+        <input
+          type="number"
+          value={target.launchBearingDeg ?? 0}
+          onChange={(e) => updateTarget(target.id, { launchBearingDeg: parseFloat(e.target.value) || 0 })}
+          step={1}
+          min={0}
+          max={360}
+          style={styles.input}
+        />
+      </div>
+      <div style={styles.formRow}>
+        <span style={styles.label}>Range (km)</span>
+        <input
+          type="number"
+          value={target.ballisticRangeKm ?? 0}
+          onChange={(e) => updateTarget(target.id, { ballisticRangeKm: parseFloat(e.target.value) || 0 })}
+          step={10}
+          min={0}
+          style={styles.input}
+        />
+      </div>
+      <div style={styles.formRow}>
+        <span style={styles.label}>Apogee (m)</span>
+        <input
+          type="number"
+          value={target.ballisticApogeeM ?? 0}
+          onChange={(e) => updateTarget(target.id, { ballisticApogeeM: parseFloat(e.target.value) || 0 })}
+          step={1000}
+          min={0}
+          style={styles.input}
+        />
+      </div>
+      <div style={styles.formRow}>
+        <span style={styles.label}>Burn (s)</span>
+        <input
+          type="number"
+          value={target.ballisticBurnTimeSec ?? 0}
+          onChange={(e) => updateTarget(target.id, { ballisticBurnTimeSec: parseFloat(e.target.value) || 0 })}
+          step={1}
+          min={0}
+          style={styles.input}
+        />
+      </div>
+      <div style={styles.formRow}>
+        <span style={styles.label}>Re-entry (m/s)</span>
+        <input
+          type="number"
+          value={target.ballisticReentrySpeedMs ?? 0}
+          onChange={(e) => updateTarget(target.id, { ballisticReentrySpeedMs: parseFloat(e.target.value) || 0 })}
+          step={100}
+          min={0}
+          style={styles.input}
+        />
+      </div>
+
+      {/* Computed impact point */}
+      {target.impactLat != null && target.impactLon != null && (
+        <>
+          <div style={{ ...styles.sectionTitle, marginTop: '8px' }}>Impact Point (computed)</div>
+          <div style={styles.formRow}>
+            <span style={styles.label}>Lat</span>
+            <span style={{ fontSize: '11px', color: '#ff6666', fontFamily: 'monospace' }}>
+              {target.impactLat.toFixed(4)}
+            </span>
+          </div>
+          <div style={styles.formRow}>
+            <span style={styles.label}>Lon</span>
+            <span style={{ fontSize: '11px', color: '#ff6666', fontFamily: 'monospace' }}>
+              {target.impactLon.toFixed(4)}
+            </span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function TargetForm({ target, targetLibrary }: { target: EditorTarget; targetLibrary: TargetLibraryEntry[] }) {
   const updateTarget = useEditorStore((s) => s.updateTarget);
   const removeTarget = useEditorStore((s) => s.removeTarget);
@@ -161,6 +315,7 @@ function TargetForm({ target, targetLibrary }: { target: EditorTarget; targetLib
   const setEditMode = useEditorStore((s) => s.setEditMode);
   const setActiveTargetId = useEditorStore((s) => s.setActiveTargetId);
 
+  const isBallistic = target.classification === 'ballistic_missile';
   const isPlacing = editMode === 'place-waypoint' && activeTargetId === target.id;
 
   const handleAddWaypoint = useCallback(() => {
@@ -178,20 +333,32 @@ function TargetForm({ target, targetLibrary }: { target: EditorTarget; targetLib
     (libraryId: string) => {
       const entry = targetLibrary.find((e) => e.id === libraryId);
       if (!entry) return;
-      updateTarget(target.id, {
+      const updates: Partial<EditorTarget> = {
         libraryId,
         rcs: entry.rcs,
         irEmission: entry.irEmission,
         classification: entry.classification || 'unknown',
         nickname: target.nickname || entry.name,
         label: target.label || entry.name,
-      });
-      // Also update waypoint defaults (altitude, speed) for existing waypoints
-      for (let i = 0; i < target.waypoints.length; i++) {
-        updateWaypoint(target.id, i, {
-          alt: entry.altitudeM,
-          speedMs: entry.speedMs,
-        });
+        symbol: entry.symbol || '',
+      };
+      // Auto-fill ballistic properties if available
+      if (entry.ballisticProperties) {
+        updates.ballisticRangeKm = entry.ballisticProperties.rangeKm;
+        updates.ballisticApogeeM = entry.ballisticProperties.apogeeM;
+        updates.ballisticBurnTimeSec = entry.ballisticProperties.burnTimeSec;
+        updates.ballisticReentrySpeedMs = entry.ballisticProperties.reentrySpeedMs;
+        updates.launchBearingDeg = entry.ballisticProperties.defaultLaunchBearingDeg;
+      }
+      updateTarget(target.id, updates);
+      // For non-ballistic: update existing waypoints with altitude/speed
+      if (!entry.ballisticProperties) {
+        for (let i = 0; i < target.waypoints.length; i++) {
+          updateWaypoint(target.id, i, {
+            alt: entry.altitudeM,
+            speedMs: entry.speedMs,
+          });
+        }
       }
     },
     [target.id, target.label, target.nickname, target.waypoints.length, targetLibrary, updateTarget, updateWaypoint]
@@ -201,7 +368,7 @@ function TargetForm({ target, targetLibrary }: { target: EditorTarget; targetLib
     <div style={{ marginTop: '8px' }}>
       <div style={styles.sectionTitle}>Target Configuration</div>
 
-      {/* From Library (ED-6) */}
+      {/* From Library */}
       {targetLibrary.length > 0 && (
         <div style={styles.formRow}>
           <span style={styles.label}>From Library</span>
@@ -255,6 +422,22 @@ function TargetForm({ target, targetLibrary }: { target: EditorTarget; targetLib
         />
       </div>
 
+      {/* Symbol */}
+      <div style={styles.formRow}>
+        <span style={styles.label}>Symbol</span>
+        <select
+          value={target.symbol || ''}
+          onChange={(e) => updateTarget(target.id, { symbol: e.target.value })}
+          style={styles.select}
+        >
+          {SYMBOL_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {/* RCS */}
       <div style={styles.formRow}>
         <span style={styles.label}>RCS (m2)</span>
@@ -263,8 +446,7 @@ function TargetForm({ target, targetLibrary }: { target: EditorTarget; targetLib
           value={target.rcs}
           onChange={(e) => updateTarget(target.id, { rcs: parseFloat(e.target.value) || 1 })}
           step={0.5}
-          min={0.1}
-          max={100}
+          min={0.01}
           style={styles.input}
         />
       </div>
@@ -298,47 +480,54 @@ function TargetForm({ target, targetLibrary }: { target: EditorTarget; targetLib
         </select>
       </div>
 
-      {/* Waypoints section */}
-      <div style={{ ...styles.sectionTitle, marginTop: '10px' }}>
-        Waypoints ({target.waypoints.length})
-      </div>
-
-      {target.waypoints.length > 0 && (
+      {/* Ballistic missile UI OR Waypoints UI */}
+      {isBallistic ? (
+        <BallisticForm target={target} />
+      ) : (
         <>
-          <div style={styles.waypointHeader}>
-            <span>#</span>
-            <span>Lat</span>
-            <span>Lon</span>
-            <span>Alt(m)</span>
-            <span>Spd(m/s)</span>
-            <span>Arr(s)</span>
-            <span />
+          {/* Waypoints section */}
+          <div style={{ ...styles.sectionTitle, marginTop: '10px' }}>
+            Waypoints ({target.waypoints.length})
           </div>
-          {target.waypoints.map((wp, i) => (
-            <WaypointRow
-              key={i}
-              index={i}
-              waypoint={wp}
-              isLatest={i === target.waypoints.length - 1}
-              onUpdate={(updates) => updateWaypoint(target.id, i, updates)}
-              onDelete={() => removeWaypoint(target.id, i)}
-            />
-          ))}
+
+          {target.waypoints.length > 0 && (
+            <>
+              <div style={styles.waypointHeader}>
+                <span>#</span>
+                <span>Lat</span>
+                <span>Lon</span>
+                <span>Alt(m)</span>
+                <span>Spd(m/s)</span>
+                <span>Arr(s)</span>
+                <span />
+              </div>
+              {target.waypoints.map((wp, i) => (
+                <WaypointRow
+                  key={i}
+                  index={i}
+                  waypoint={wp}
+                  isLatest={i === target.waypoints.length - 1}
+                  onUpdate={(updates) => updateWaypoint(target.id, i, updates)}
+                  onDelete={() => removeWaypoint(target.id, i)}
+                />
+              ))}
+            </>
+          )}
+
+          {target.waypoints.length === 0 && (
+            <div style={{ color: '#555', fontSize: '10px', textAlign: 'center', padding: '8px 0' }}>
+              No waypoints. Click below to place on map.
+            </div>
+          )}
+
+          <button
+            style={styles.waypointAddBtn(isPlacing)}
+            onClick={handleAddWaypoint}
+          >
+            {isPlacing ? 'Click map to place waypoint...' : '+ Add Waypoint on Map'}
+          </button>
         </>
       )}
-
-      {target.waypoints.length === 0 && (
-        <div style={{ color: '#555', fontSize: '10px', textAlign: 'center', padding: '8px 0' }}>
-          No waypoints. Click below to place on map.
-        </div>
-      )}
-
-      <button
-        style={styles.waypointAddBtn(isPlacing)}
-        onClick={handleAddWaypoint}
-      >
-        {isPlacing ? 'Click map to place waypoint...' : '+ Add Waypoint on Map'}
-      </button>
 
       <button style={styles.deleteBtn} onClick={handleDelete}>
         Delete Target
@@ -427,6 +616,7 @@ export function TargetTab() {
           targets.map((t) => {
             const isSelected =
               selectedItemType === 'target' && selectedItemId === t.id;
+            const isBallistic = t.classification === 'ballistic_missile';
             return (
               <div
                 key={t.id}
@@ -436,7 +626,10 @@ export function TargetTab() {
                   setActiveTargetId(t.id);
                 }}
               >
-                <div style={styles.dot} />
+                <div style={{
+                  ...styles.dot,
+                  background: isBallistic ? '#ff3333' : '#ff8800',
+                }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div
                     style={{
@@ -448,10 +641,12 @@ export function TargetTab() {
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {t.label || t.id}
+                    {t.nickname || t.label || t.id}
                   </div>
                   <div style={{ fontSize: '10px', color: '#666' }}>
-                    {t.waypoints.length} waypoint{t.waypoints.length !== 1 ? 's' : ''} | RCS {t.rcs} m2
+                    {isBallistic
+                      ? `BM | Range ${t.ballisticRangeKm ?? '?'}km | RCS ${t.rcs} m2`
+                      : `${t.waypoints.length} wp${t.waypoints.length !== 1 ? 's' : ''} | RCS ${t.rcs} m2`}
                   </div>
                 </div>
               </div>
