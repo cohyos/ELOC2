@@ -6,6 +6,7 @@
 export interface GeoPoint {
   lat: number;
   lon: number;
+  alt?: number;
 }
 
 /** A polygon defined by an array of vertices (lat/lon). */

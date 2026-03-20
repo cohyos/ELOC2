@@ -71,6 +71,9 @@ export function EditorMap() {
   } | {
     type: 'sensor';
     sensorId: string;
+  } | {
+    type: 'launch';
+    targetId: string;
   } | null>(null);
 
   // Leaflet layer groups
@@ -156,13 +159,41 @@ export function EditorMap() {
           rangeMaxKm: defaults.rangeMaxKm,
           template: 'long-range-radar',
         };
+        // Auto-fetch terrain height
+        fetch(`/api/terrain/elevation?lat=${e.lngLat.lat}&lon=${e.lngLat.lng}`)
+          .then(r => r.json())
+          .then(data => {
+            if (data.elevationM != null) {
+              state.updateSensor(newSensor.id, { alt: Math.round(data.elevationM) });
+            }
+          })
+          .catch(() => {});
         state.addSensor(newSensor);
         state.selectItem('sensor', newSensor.id);
+        state.setEditMode('select');
+      } else if (currentMode === 'place-launch-point') {
+        const targetId = state.activeTargetId;
+        if (!targetId) return;
+        const lat = e.lngLat.lat;
+        const lon = e.lngLat.lng;
+        // Auto-fetch terrain height for launch
+        fetch(`/api/terrain/elevation?lat=${lat}&lon=${lon}`)
+          .then(r => r.json())
+          .then(data => {
+            state.updateTarget(targetId, {
+              launchAlt: data.elevationM != null ? Math.round(data.elevationM) : 0,
+            });
+          })
+          .catch(() => {});
+        state.updateTarget(targetId, {
+          launchLat: lat,
+          launchLon: lon,
+          launchAlt: 0,
+        });
         state.setEditMode('select');
       } else if (currentMode === 'place-waypoint') {
         const targetId = state.activeTargetId;
         if (!targetId) return;
-
         const target = state.targets.find((t) => t.id === targetId);
         if (!target) return;
 
@@ -209,6 +240,7 @@ export function EditorMap() {
 
   // Update sensor layer
   useEffect(() => {
+    const markerDiv = markersRef.current;
     const m = mapRef.current;
     if (!m || !layersReady || !sensorGroupRef.current || !coverageGroupRef.current) return;
 
@@ -404,7 +436,7 @@ export function EditorMap() {
     for (const zone of threatZones) drawZonePolygon(zone, 'threat');
   }, [operationalArea, exclusionZones, threatZones, layersReady]);
 
-  // Update zone draw preview
+  // Update cursor based on edit mode
   useEffect(() => {
     if (!layersReady || !zoneDrawGroupRef.current) return;
     zoneDrawGroupRef.current.clearLayers();
@@ -452,20 +484,42 @@ export function EditorMap() {
       ? 'Click map to place sensor'
       : editMode === 'place-waypoint'
       ? 'Click map to add waypoint'
+      : editMode === 'place-launch-point'
+      ? 'Click map to set launch point'
       : editMode === 'draw-zone' && zoneDrawMode
       ? zoneModeLabels[zoneDrawMode] || 'Click to define zone'
       : null;
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <div
-        ref={mapContainer}
+    <div style={{ position: 'relative', width: '100%', height: '100%', userSelect: 'none' }}>
+      <div ref={mapContainer} style={{ width: '100%', height: '100%' }} />
+
+      {/* SVG overlay for geometry (z-index 14) */}
+      <svg
+        ref={svgRef}
         style={{
-          width: '100%',
-          height: '100%',
-          filter: 'brightness(0.85) saturate(0.7)',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          pointerEvents: 'none',
+          zIndex: 14,
         }}
       />
+
+      {/* HTML overlay for markers (z-index 15) */}
+      <div
+        ref={markersRef}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          zIndex: 15,
+        }}
+      />
+
       {modeLabel && (
         <div
           style={{
@@ -481,7 +535,7 @@ export function EditorMap() {
             fontWeight: 600,
             border: '1px solid #ffcc0044',
             pointerEvents: editMode === 'draw-zone' ? 'auto' : 'none',
-            zIndex: 10,
+            zIndex: 20,
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
@@ -518,70 +572,26 @@ export function EditorMap() {
             left: '10px',
             display: 'flex',
             gap: '4px',
-            zIndex: 10,
+            zIndex: 20,
           }}
         >
           <button
             onClick={() => useEditorStore.getState().startZoneDraw('operational-area')}
-            style={{
-              background: '#1a1a2ecc',
-              color: '#00cc44',
-              border: '1px solid #00cc4466',
-              borderRadius: '3px',
-              padding: '4px 8px',
-              fontSize: '10px',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            + Op Area
-          </button>
+            style={{ background: '#1a1a2ecc', color: '#00cc44', border: '1px solid #00cc4466', borderRadius: '3px', padding: '4px 8px', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}
+          >+ Op Area</button>
           <button
             onClick={() => useEditorStore.getState().startZoneDraw('exclusion-zone')}
-            style={{
-              background: '#1a1a2ecc',
-              color: '#ff3333',
-              border: '1px solid #ff333366',
-              borderRadius: '3px',
-              padding: '4px 8px',
-              fontSize: '10px',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            + Exclusion
-          </button>
+            style={{ background: '#1a1a2ecc', color: '#ff3333', border: '1px solid #ff333366', borderRadius: '3px', padding: '4px 8px', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}
+          >+ Exclusion</button>
           <button
             onClick={() => useEditorStore.getState().startZoneDraw('threat-zone')}
-            style={{
-              background: '#1a1a2ecc',
-              color: '#ff8800',
-              border: '1px solid #ff880066',
-              borderRadius: '3px',
-              padding: '4px 8px',
-              fontSize: '10px',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            + Threat
-          </button>
+            style={{ background: '#1a1a2ecc', color: '#ff8800', border: '1px solid #ff880066', borderRadius: '3px', padding: '4px 8px', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}
+          >+ Threat</button>
           {(operationalArea.length > 0 || exclusionZones.length > 0 || threatZones.length > 0) && (
             <button
               onClick={() => useEditorStore.getState().clearZones()}
-              style={{
-                background: '#1a1a2ecc',
-                color: '#888',
-                border: '1px solid #44444466',
-                borderRadius: '3px',
-                padding: '4px 8px',
-                fontSize: '10px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Clear Zones
-            </button>
+              style={{ background: '#1a1a2ecc', color: '#888', border: '1px solid #44444466', borderRadius: '3px', padding: '4px 8px', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}
+            >Clear Zones</button>
           )}
         </div>
       )}
@@ -590,7 +600,7 @@ export function EditorMap() {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: recalculate arrival times for a target's waypoints
+// Helper: recalculate arrival times
 // ---------------------------------------------------------------------------
 
 function recalcArrivalTimes(targetId: string) {
@@ -602,7 +612,7 @@ function recalcArrivalTimes(targetId: string) {
     if (i === 0) {
       store.updateWaypoint(targetId, 0, { arrivalTimeSec: 0 });
     } else {
-      const prev = store.targets.find((t) => t.id === targetId)!.waypoints[i - 1];
+      const prev = useEditorStore.getState().targets.find((t) => t.id === targetId)!.waypoints[i - 1];
       const curr = target.waypoints[i];
       const distKm = haversineDistanceKm(prev.lat, prev.lon, curr.lat, curr.lon);
       const speed = curr.speedMs > 0 ? curr.speedMs : 1;

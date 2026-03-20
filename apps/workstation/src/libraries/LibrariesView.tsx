@@ -2,14 +2,16 @@ import React, { useState } from 'react';
 import { SensorLibraryPanel } from './SensorLibraryPanel';
 import { TargetLibraryPanel } from './TargetLibraryPanel';
 import { ScenarioLibraryPanel } from './ScenarioLibraryPanel';
+import { DeploymentLibraryPanel } from './DeploymentLibraryPanel';
 
 interface Props {
   onBack: () => void;
   onLoadScenario?: (id: string) => void;
   onEditScenario?: (id: string) => void;
+  onLoadDeployment?: (id: string) => void;
 }
 
-type Tab = 'sensors' | 'targets' | 'scenarios';
+type Tab = 'sensors' | 'targets' | 'scenarios' | 'deployments';
 
 const headerStyle: React.CSSProperties = {
   display: 'flex',
@@ -32,7 +34,7 @@ const tabStyle = (active: boolean): React.CSSProperties => ({
   fontFamily: 'system-ui, -apple-system, sans-serif',
 });
 
-export function LibrariesView({ onBack, onLoadScenario, onEditScenario }: Props) {
+export function LibrariesView({ onBack, onLoadScenario, onEditScenario, onLoadDeployment }: Props) {
   const [tab, setTab] = useState<Tab>('sensors');
 
   return (
@@ -57,6 +59,7 @@ export function LibrariesView({ onBack, onLoadScenario, onEditScenario }: Props)
           <button style={tabStyle(tab === 'sensors')} onClick={() => setTab('sensors')}>Sensor Types</button>
           <button style={tabStyle(tab === 'targets')} onClick={() => setTab('targets')}>Target Types</button>
           <button style={tabStyle(tab === 'scenarios')} onClick={() => setTab('scenarios')}>Scenarios</button>
+          <button style={tabStyle(tab === 'deployments')} onClick={() => setTab('deployments')}>Deployments</button>
         </div>
       </div>
       <div style={{ flex: 1, padding: '16px', overflow: 'hidden' }}>
@@ -67,6 +70,9 @@ export function LibrariesView({ onBack, onLoadScenario, onEditScenario }: Props)
             onLoadScenario={onLoadScenario}
             onEditScenario={onEditScenario}
           />
+        )}
+        {tab === 'deployments' && (
+          <DeploymentLibraryPanel onLoadDeployment={onLoadDeployment} />
         )}
       </div>
     </div>

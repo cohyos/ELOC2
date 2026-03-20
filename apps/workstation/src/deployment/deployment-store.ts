@@ -35,9 +35,15 @@ export interface DeploymentMetrics {
   geometryQuality: number;
 }
 
+export type DeploymentDrawMode = 'select' | 'draw-area' | 'draw-exclusion' | 'draw-threat' | 'place-sensor';
+
 interface DeploymentState {
   // Mode
   active: boolean;
+  drawMode: DeploymentDrawMode;
+  drawVertices: GeoPoint[];
+  deploymentName: string;
+  pendingSensorSpec: SensorSpec | null;
 
   // Area & zones
   scannedArea: GeoPolygon;
@@ -74,6 +80,20 @@ interface DeploymentState {
   clearAll: () => void;
   runOptimization: () => Promise<void>;
   exportScenario: () => Promise<void>;
+  setDeploymentName: (name: string) => void;
+  saveDeployment: (name?: string) => Promise<void>;
+  // Drawing mode
+  setDrawMode: (mode: DeploymentDrawMode) => void;
+  addDrawVertex: (vertex: GeoPoint) => void;
+  finishDraw: () => void;
+  cancelDraw: () => void;
+  // Place sensor on map
+  startPlaceSensor: (spec: SensorSpec) => void;
+  placeSensorAtPosition: (position: GeoPoint) => void;
+  // Update sensor position (for dragging)
+  updatePlacedSensorPosition: (index: number, position: GeoPoint) => void;
+  // Remove a placed sensor
+  removePlacedSensor: (index: number) => void;
 }
 
 // Default scanned area: Central Israel region
@@ -95,6 +115,10 @@ const DEFAULT_INVENTORY: SensorSpec[] = [
 
 export const useDeploymentStore = create<DeploymentState>((set, get) => ({
   active: false,
+  drawMode: 'select' as DeploymentDrawMode,
+  drawVertices: [] as GeoPoint[],
+  deploymentName: '',
+  pendingSensorSpec: null,
   scannedArea: DEFAULT_SCANNED_AREA,
   inclusionZones: [],
   exclusionZones: [],
@@ -175,7 +199,6 @@ export const useDeploymentStore = create<DeploymentState>((set, get) => ({
       });
       if (!res.ok) throw new Error('Export failed');
       const data = await res.json();
-      // Download as JSON
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -186,5 +209,127 @@ export const useDeploymentStore = create<DeploymentState>((set, get) => ({
     } catch (err: any) {
       set({ error: err.message || 'Export failed' });
     }
+  },
+
+  setDeploymentName: (name) => set({ deploymentName: name }),
+
+  saveDeployment: async (name?: string) => {
+    const state = get();
+    const saveName = name || state.deploymentName || `deployment-${Date.now()}`;
+    const id = saveName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    try {
+      const res = await fetch('/api/deployment/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          name: saveName,
+          constraints: {
+            scannedArea: state.scannedArea,
+            inclusionZones: state.inclusionZones,
+            exclusionZones: state.exclusionZones,
+            threatCorridors: state.threatCorridors,
+            minCoveragePercent: 70,
+            gridResolutionM: 2000,
+          },
+          sensors: state.sensorInventory,
+          result: state.placedSensors.length > 0 ? {
+            placedSensors: state.placedSensors,
+            metrics: state.metrics,
+          } : undefined,
+        }),
+      });
+      if (!res.ok) throw new Error('Save failed');
+      set({ deploymentName: saveName, error: null });
+    } catch (err: any) {
+      set({ error: err.message || 'Save failed' });
+    }
+  },
+
+  // Drawing mode
+  setDrawMode: (mode) => set({ drawMode: mode, drawVertices: [], pendingSensorSpec: null }),
+  addDrawVertex: (vertex) => set((s) => ({ drawVertices: [...s.drawVertices, vertex] })),
+  finishDraw: () => {
+    const s = get();
+    if (s.drawVertices.length < 3) {
+      set({ drawMode: 'select', drawVertices: [] });
+      return;
+    }
+    const verts = [...s.drawVertices];
+    if (s.drawMode === 'draw-area') {
+      set({ scannedArea: verts, drawMode: 'select', drawVertices: [] });
+    } else if (s.drawMode === 'draw-exclusion') {
+      set((prev) => ({ exclusionZones: [...prev.exclusionZones, verts], drawMode: 'select', drawVertices: [] }));
+    } else if (s.drawMode === 'draw-threat') {
+      set((prev) => ({ threatCorridors: [...prev.threatCorridors, verts], drawMode: 'select', drawVertices: [] }));
+    }
+  },
+  cancelDraw: () => set({ drawMode: 'select', drawVertices: [] }),
+
+  startPlaceSensor: (spec) => set({ drawMode: 'place-sensor', pendingSensorSpec: spec }),
+
+  placeSensorAtPosition: (position) => {
+    const s = get();
+    if (!s.pendingSensorSpec) return;
+    const newPlaced: PlacedSensor = {
+      spec: s.pendingSensorSpec,
+      position,
+      scores: { coverage: 0, geometry: 0, threat: 0, total: 0 },
+    };
+    // Remove from inventory
+    set((prev) => ({
+      placedSensors: [...prev.placedSensors, newPlaced],
+      sensorInventory: prev.sensorInventory.filter(si => si.id !== prev.pendingSensorSpec?.id),
+      drawMode: 'select',
+      pendingSensorSpec: null,
+    }));
+    // Auto-fetch terrain elevation
+    fetch(`/api/terrain/elevation?lat=${position.lat}&lon=${position.lon}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.elevationM != null) {
+          const st = get();
+          const idx = st.placedSensors.length - 1;
+          if (idx >= 0) {
+            set((prev) => ({
+              placedSensors: prev.placedSensors.map((ps, i) =>
+                i === idx ? { ...ps, position: { ...ps.position, alt: Math.round(data.elevationM) } } : ps
+              ),
+            }));
+          }
+        }
+      })
+      .catch(() => {});
+  },
+
+  removePlacedSensor: (index) =>
+    set((s) => {
+      const removed = s.placedSensors[index];
+      return {
+        placedSensors: s.placedSensors.filter((_, i) => i !== index),
+        // Add back to inventory
+        sensorInventory: removed ? [...s.sensorInventory, removed.spec] : s.sensorInventory,
+      };
+    }),
+
+  updatePlacedSensorPosition: (index, position) => {
+    set((s) => ({
+      placedSensors: s.placedSensors.map((ps, i) =>
+        i === index ? { ...ps, position } : ps
+      ),
+    }));
+    // Auto-fetch terrain elevation on drag
+    fetch(`/api/terrain/elevation?lat=${position.lat}&lon=${position.lon}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.elevationM != null) {
+          set((s) => ({
+            placedSensors: s.placedSensors.map((ps, i) =>
+              i === index ? { ...ps, position: { ...ps.position, alt: Math.round(data.elevationM) } } : ps
+            ),
+          }));
+        }
+      })
+      .catch(() => {});
   },
 }));

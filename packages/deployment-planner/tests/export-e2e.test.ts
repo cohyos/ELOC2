@@ -395,10 +395,11 @@ describe('Deployment-to-Scenario Export E2E', () => {
       expect(def0).toHaveProperty('position');
       expect(def0).toHaveProperty('coverage');
 
-      // sensorId follows the expected pattern
-      expect(def0.sensorId).toMatch(/^eo-deploy-\d+$/);
+      // sensorId uses spec.id when available
+      expect(def0.sensorId).toBe('eo-alpha');
 
-      // type matches
+      // type matches (both `type` and `sensorType` fields)
+      expect(def0.type).toBe('eo');
       expect(def0.sensorType).toBe('eo');
 
       // position has lat/lon/alt
