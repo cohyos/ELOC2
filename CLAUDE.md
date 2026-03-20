@@ -110,6 +110,7 @@ The `Knowledge_Base_and_Agents_instructions/` folder contains **25 foundational 
 | `Map_Renderer_Evaluation.md` | **Rendering approach evaluation, dual architecture justification** | **Wave 5** |
 | `EO_Processing_Server_Architecture.md` | **EO processing microservice: RTSP ingestion, YOLO detection, gRPC output** | **Wave 5** |
 | `High_Load_Architecture.md` | **Distributed architecture for 100+ targets, 10+ operators, Redis Streams** | **Wave 5** |
+| `Instructor_Operator_UX_Plan.md` | **Instructor/Operator UX plan: REQ-17–23, role picker, header layout, PDF reports, user mgmt** | **Current** |
 | `Claude_code_prompt_templates.md` | Copy-paste agent prompts with shared prefix | Agent execution |
 | `Claude_agent_build_prompts.md` | Detailed agent prompts with scope + done criteria | Agent execution |
 | `Chunk_index.md` | Index of all knowledge base chunks for retrieval | Reference |
@@ -152,6 +153,19 @@ See `Knowledge_Base_and_Agents_instructions/ELOC2_Corrections_and_Upgrades_Plan.
 | 3: Detection | **Complete** | RCS-based radar, EO max range, auto-loop, user count, threat profiles, sensor library, system load |
 | 4: Terrain + ASTERIX | **Complete** | SRTM LOS, ASTERIX CAT-048/062, investigation modes, feasibility docs |
 | 5: Environment + 3D | **Complete** | Weather effects, clutter, Deck.gl 3D, ballistic display, architecture docs |
+
+### Instructor/Operator UX Plan (REQ-17 — REQ-23)
+See `Knowledge_Base_and_Agents_instructions/Instructor_Operator_UX_Plan.md` for full details.
+
+| REQ | Title | Status |
+|-----|-------|--------|
+| REQ-17 | No Auto-Start (idle on connect, instructor clicks Start) | ⬜ Pending |
+| REQ-18 | No Auto-Inject (instructor-gated random target injection) | ⬜ Pending |
+| REQ-19 | PDF Reports (operator + instructor types, time range, direct download) | ⬜ Pending |
+| REQ-20 | Hybrid Role Selection (auth login OR no-auth role picker, max 1 instructor) | ⬜ Pending |
+| REQ-21 | Instructor Button Grouping (visual divider, separate toolbar zone) | ⬜ Pending |
+| REQ-22 | Operator Mode Restrictions (greyed buttons, tooltip, no sim control) | ⬜ Pending |
+| REQ-23 | User Management Page (CRUD, online users, instructor-only) | ⬜ Pending |
 
 ## Recent Fixes (Rounds 1-3, branch `claude/eloc2-development-U3sup`)
 
