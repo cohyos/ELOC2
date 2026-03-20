@@ -8,6 +8,7 @@ import type {
   TargetClassification,
   ClassificationSource,
 } from './common-types.js';
+import type { DopplerQuality } from './source-track.js';
 
 // ---------------------------------------------------------------------------
 // Track status
@@ -69,4 +70,8 @@ export interface SystemTrack {
   classificationSource?: ClassificationSource;
   /** Confidence in the classification, range [0, 1]. */
   classificationConfidence?: number;
+  /** Latest fused radial velocity (m/s) from Doppler. Positive = receding, negative = approaching. */
+  radialVelocity?: number;
+  /** Doppler measurement quality from the last contributing radar. */
+  dopplerQuality?: DopplerQuality;
 }

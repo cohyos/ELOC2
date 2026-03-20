@@ -3266,19 +3266,37 @@ export class LiveEngine {
 
     let closureRate = 0;
     let closureSensorId: string | null = null;
-    for (const sensor of this.state.sensors) {
-      if (!track.velocity) break;
-      const dlat = track.state.lat - sensor.position.lat;
-      const dlon = track.state.lon - sensor.position.lon;
-      const dist = Math.sqrt(dlat ** 2 + dlon ** 2);
-      if (dist < 1e-9) continue;
 
-      const ux = dlon / dist;
-      const uy = dlat / dist;
-      const vr = track.velocity.vx * ux + track.velocity.vy * uy;
-      if (closureSensorId === null || Math.abs(vr) > Math.abs(closureRate)) {
-        closureRate = -vr;
-        closureSensorId = sensor.sensorId as string;
+    // Prefer Doppler-measured radial velocity when available and not blind
+    if (track.radialVelocity !== undefined && track.dopplerQuality !== 'blind') {
+      closureRate = -track.radialVelocity; // radialVelocity positive=receding → closureRate positive=approaching
+      // Find nearest sensor for the closureSensorId label
+      let minDist = Infinity;
+      for (const sensor of this.state.sensors) {
+        const dlat = track.state.lat - sensor.position.lat;
+        const dlon = track.state.lon - sensor.position.lon;
+        const dist = dlat * dlat + dlon * dlon;
+        if (dist < minDist) {
+          minDist = dist;
+          closureSensorId = sensor.sensorId as string;
+        }
+      }
+    } else {
+      // Fallback: compute from Cartesian velocity
+      for (const sensor of this.state.sensors) {
+        if (!track.velocity) break;
+        const dlat = track.state.lat - sensor.position.lat;
+        const dlon = track.state.lon - sensor.position.lon;
+        const dist = Math.sqrt(dlat ** 2 + dlon ** 2);
+        if (dist < 1e-9) continue;
+
+        const ux = dlon / dist;
+        const uy = dlat / dist;
+        const vr = track.velocity.vx * ux + track.velocity.vy * uy;
+        if (closureSensorId === null || Math.abs(vr) > Math.abs(closureRate)) {
+          closureRate = -vr;
+          closureSensorId = sensor.sensorId as string;
+        }
       }
     }
 
