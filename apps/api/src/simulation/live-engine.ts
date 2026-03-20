@@ -657,10 +657,12 @@ export class LiveEngine {
     for (const target of this.scenario.targets) {
       if (!isTargetActive(target, timeSec)) continue;
 
-      const pos = interpolatePosition(target.waypoints, timeSec);
+      // Waypoint times are relative to startTime (same as ScenarioRunner)
+      const relativeTime = timeSec - target.startTime;
+      const pos = interpolatePosition(target.waypoints, relativeTime);
       if (!pos) continue;
 
-      const vel = interpolateVelocity(target.waypoints, timeSec);
+      const vel = interpolateVelocity(target.waypoints, relativeTime);
 
       result.push({
         targetId: target.targetId,
@@ -1455,17 +1457,30 @@ export class LiveEngine {
   // ── Auto-loop & idle shutdown ──────────────────────────────────────────
 
   private onUserConnected(): void {
+    // Cancel any pending idle shutdown (e.g. during role switch reconnect)
+    if (this.idleShutdownTimer) {
+      clearTimeout(this.idleShutdownTimer);
+      this.idleShutdownTimer = null;
+    }
     // Broadcast updated user counts only — no auto-loop start on connect
     this.broadcastUserCount();
   }
+
+  private idleShutdownTimer: ReturnType<typeof setTimeout> | null = null;
 
   private onUserDisconnected(): void {
     // Notify remaining clients about instructor availability change
     this.broadcastInstructorAvailability();
     const users = this.getConnectedUsers();
     if (users.total === 0) {
-      // All users disconnected — idle shutdown
-      this.onAllUsersDisconnected();
+      // Grace period before idle shutdown — allows role switching without stopping sim
+      this.idleShutdownTimer = setTimeout(() => {
+        this.idleShutdownTimer = null;
+        const current = this.getConnectedUsers();
+        if (current.total === 0) {
+          this.onAllUsersDisconnected();
+        }
+      }, 5000);
     }
   }
 

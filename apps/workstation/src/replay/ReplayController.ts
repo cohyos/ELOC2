@@ -62,8 +62,8 @@ export class ReplayController {
 
   reconnectWithRole(role: 'instructor' | 'operator') {
     this.disconnect();
-    // Small delay to ensure clean disconnect
-    setTimeout(() => this.connect(role), 100);
+    // Short delay to ensure clean disconnect before reconnecting
+    setTimeout(() => this.connect(role), 300);
   }
 
   disconnect() {

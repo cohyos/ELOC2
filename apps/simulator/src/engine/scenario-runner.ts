@@ -277,7 +277,7 @@ export class ScenarioRunner {
   /**
    * Determine whether a sensor should produce an update on this step.
    * Uses modular arithmetic on step count to stagger updates:
-   *   - radar: every 4-6s → every 5 steps (assuming 1s steps)
+   *   - radar: every 3s → every 3 steps (assuming 1s steps)
    *   - eo: every 2-3s → every 2 steps
    *   - c4isr: every 10-15s → every 12 steps
    */
@@ -287,7 +287,7 @@ export class ScenarioRunner {
   ): boolean {
     switch (sensorType) {
       case 'radar':
-        return stepCount % 5 === 0;
+        return stepCount % 3 === 0;
       case 'eo':
         return stepCount % 2 === 0;
       case 'c4isr':

@@ -317,6 +317,26 @@ const btnBase = (isMobile: boolean): React.CSSProperties => ({
 // Component
 // ---------------------------------------------------------------------------
 
+// Stable component — defined outside App to prevent remount on every re-render
+function InstructorButton({ children, onClick, style, title, disabled, isInstructor, ...props }: any) {
+  const effectiveDisabled = !isInstructor || disabled;
+  return (
+    <button
+      {...props}
+      style={{
+        ...style,
+        opacity: effectiveDisabled ? 0.35 : (style?.opacity ?? 1),
+        cursor: effectiveDisabled ? 'not-allowed' : (style?.cursor ?? 'pointer'),
+      }}
+      onClick={effectiveDisabled ? undefined : onClick}
+      disabled={effectiveDisabled}
+      title={!isInstructor ? 'Instructor role required' : title}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function App() {
   const isMobile = useIsMobile();
   const [view, setView] = useState<'workstation' | 'editor' | 'deployment' | 'users'>('workstation');
@@ -540,24 +560,7 @@ export function App() {
   // ── Role gating ──────────────────────────────────────────────────────
   const isInstructor = authEnabled ? authUser?.role === 'instructor' : effectiveRole === 'instructor';
 
-  const InstructorButton = ({ children, onClick, style, title, disabled, ...props }: any) => {
-    const effectiveDisabled = !isInstructor || disabled;
-    return (
-      <button
-        {...props}
-        style={{
-          ...style,
-          opacity: effectiveDisabled ? 0.35 : (style?.opacity ?? 1),
-          cursor: effectiveDisabled ? 'not-allowed' : (style?.cursor ?? 'pointer'),
-        }}
-        onClick={effectiveDisabled ? undefined : onClick}
-        disabled={effectiveDisabled}
-        title={!isInstructor ? 'Instructor role required' : title}
-      >
-        {children}
-      </button>
-    );
-  };
+  // InstructorButton is now a stable component defined outside App (prevents remount flicker)
 
   return (
     <div style={{
@@ -618,7 +621,7 @@ export function App() {
             const startPauseBaseDisabled = simRunning ? !canPause : !canStart;
             const startPauseDisabled = !isInstructor || startPauseBaseDisabled;
             return (
-              <InstructorButton
+              <InstructorButton isInstructor={isInstructor}
                 style={{ ...btn, background: simRunning ? '#cc3300' : '#00aa44', color: '#fff', fontWeight: 600, padding: '3px 12px', opacity: startPauseBaseDisabled ? 0.4 : 1, cursor: startPauseBaseDisabled ? 'not-allowed' : 'pointer' }}
                 onClick={startPauseBaseDisabled ? undefined : handleStartPause}
                 disabled={startPauseBaseDisabled}
@@ -630,7 +633,7 @@ export function App() {
           {(() => {
             const canReset = allowedActions.includes('reset');
             return (
-              <InstructorButton
+              <InstructorButton isInstructor={isInstructor}
                 style={{ ...btn, opacity: canReset ? 1 : 0.4, cursor: canReset ? 'pointer' : 'not-allowed' }}
                 onClick={canReset ? handleReset : undefined}
                 disabled={!canReset}
@@ -640,7 +643,7 @@ export function App() {
             );
           })()}
           {[1, 2, 5, 10].map(s => (
-            <InstructorButton key={s} style={{ ...btn, background: simSpeed === s ? '#4a9eff' : '#333', color: simSpeed === s ? '#fff' : '#aaa' }} onClick={() => handleSpeed(s)}>{s}x</InstructorButton>
+            <InstructorButton isInstructor={isInstructor} key={s} style={{ ...btn, background: simSpeed === s ? '#4a9eff' : '#333', color: simSpeed === s ? '#fff' : '#aaa' }} onClick={() => handleSpeed(s)}>{s}x</InstructorButton>
           ))}
           <span style={{ fontSize: '11px', color: '#aaa', fontFamily: 'monospace', minWidth: '50px' }}>T+{formatTime(simElapsed)}</span>
 
@@ -660,16 +663,16 @@ export function App() {
           </span>
 
           {/* Editor */}
-          <InstructorButton style={{ ...btn, background: '#2a2a4e', color: '#aa88ff', border: '1px solid #aa88ff44' }} onClick={() => setView('editor')}>Editor</InstructorButton>
+          <InstructorButton isInstructor={isInstructor} style={{ ...btn, background: '#2a2a4e', color: '#aa88ff', border: '1px solid #aa88ff44' }} onClick={() => setView('editor')}>Editor</InstructorButton>
 
           {/* Deploy */}
-          <InstructorButton style={{ ...btn, background: '#2a2a4e', color: '#44ddaa', border: '1px solid #44ddaa44' }} onClick={() => setView('deployment')}>Deploy</InstructorButton>
+          <InstructorButton isInstructor={isInstructor} style={{ ...btn, background: '#2a2a4e', color: '#44ddaa', border: '1px solid #44ddaa44' }} onClick={() => setView('deployment')}>Deploy</InstructorButton>
 
           {/* Users */}
-          <InstructorButton style={{ ...btn, background: '#2a2a4e', color: '#ff88cc', border: '1px solid #ff88cc44' }} onClick={() => setView('users')}>Users</InstructorButton>
+          <InstructorButton isInstructor={isInstructor} style={{ ...btn, background: '#2a2a4e', color: '#ff88cc', border: '1px solid #ff88cc44' }} onClick={() => setView('users')}>Users</InstructorButton>
 
           {/* Demo */}
-          <InstructorButton
+          <InstructorButton isInstructor={isInstructor}
             style={{ ...btn, background: demoActive ? '#4a9eff' : '#2a2a4e', color: demoActive ? '#fff' : '#4a9eff', border: '1px solid #4a9eff44' }}
             onClick={() => {
               if (demoActive) {
@@ -685,7 +688,7 @@ export function App() {
 
           {/* Live Inject */}
           {simulationState !== 'idle' && (
-            <InstructorButton
+            <InstructorButton isInstructor={isInstructor}
               style={{ ...btn, background: injectionMode ? '#ff8800' : '#333', color: injectionMode ? '#fff' : '#aaa', border: injectionMode ? '1px solid #ff880066' : 'none', fontWeight: injectionMode ? 600 : 400 }}
               onClick={toggleInjectionMode}
               title="Toggle live injection toolbar (Ctrl+I)"
@@ -695,7 +698,7 @@ export function App() {
           )}
 
           {/* GT (Ground Truth) toggle */}
-          <InstructorButton style={{ ...btn, background: showGroundTruth ? '#0a2a2a' : '#333', color: showGroundTruth ? '#00ffff' : '#aaa', border: showGroundTruth ? '1px solid #00ffff' : '1px solid transparent' }} onClick={toggleGroundTruth} title="Toggle ground truth overlay">
+          <InstructorButton isInstructor={isInstructor} style={{ ...btn, background: showGroundTruth ? '#0a2a2a' : '#333', color: showGroundTruth ? '#00ffff' : '#aaa', border: showGroundTruth ? '1px solid #00ffff' : '1px solid transparent' }} onClick={toggleGroundTruth} title="Toggle ground truth overlay">
             GT
           </InstructorButton>
         </div>
