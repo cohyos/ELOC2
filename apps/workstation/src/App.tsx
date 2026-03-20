@@ -665,6 +665,9 @@ export function App() {
           {/* Deploy */}
           <InstructorButton style={{ ...btn, background: '#2a2a4e', color: '#44ddaa', border: '1px solid #44ddaa44' }} onClick={() => setView('deployment')}>Deploy</InstructorButton>
 
+          {/* Users */}
+          <InstructorButton style={{ ...btn, background: '#2a2a4e', color: '#ff88cc', border: '1px solid #ff88cc44' }} onClick={() => setView('users')}>Users</InstructorButton>
+
           {/* Demo */}
           <InstructorButton
             style={{ ...btn, background: demoActive ? '#4a9eff' : '#2a2a4e', color: demoActive ? '#fff' : '#4a9eff', border: '1px solid #4a9eff44' }}
