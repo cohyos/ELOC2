@@ -4,7 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { DeploymentPanel } from './DeploymentPanel';
 import { DeploymentMetrics } from './DeploymentMetrics';
 import { useDeploymentStore } from './deployment-store';
-import type { GeoPolygon, PlacedSensor } from './deployment-store';
+import type { GeoPolygon, GeoPoint, PlacedSensor } from './deployment-store';
 import { enableCtrlBoxZoom } from '../map/ctrl-box-zoom';
 
 const colors = {
@@ -22,13 +22,7 @@ const colors = {
   warning: '#ffcc00',
 };
 
-/**
- * Convert a GeoPolygon to an SVG path string using map.project().
- */
-function polygonToSvgPath(
-  polygon: GeoPolygon,
-  map: maplibregl.Map,
-): string {
+function polygonToSvgPath(polygon: GeoPolygon, map: maplibregl.Map): string {
   if (polygon.length < 3) return '';
   return polygon.map((p, i) => {
     const px = map.project([p.lon, p.lat]);
@@ -36,23 +30,21 @@ function polygonToSvgPath(
   }).join(' ') + ' Z';
 }
 
-/**
- * Render the deployment map using MapLibre (raster tiles only) + HTML/SVG overlays.
- * Same architecture as the main workstation: MapLibre for tiles, all data drawn via overlays.
- */
 function DeploymentMap() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const markersRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
+  const dragState = useRef<{ index: number } | null>(null);
 
   const scannedArea = useDeploymentStore(s => s.scannedArea);
   const exclusionZones = useDeploymentStore(s => s.exclusionZones);
   const threatCorridors = useDeploymentStore(s => s.threatCorridors);
   const placedSensors = useDeploymentStore(s => s.placedSensors);
+  const drawMode = useDeploymentStore(s => s.drawMode);
+  const drawVertices = useDeploymentStore(s => s.drawVertices);
 
-  // Draw overlays: SVG polygons + HTML markers, projected via map.project()
   const drawOverlays = useCallback(() => {
     const map = mapRef.current;
     const svg = svgRef.current;
@@ -66,7 +58,6 @@ function DeploymentMap() {
     svg.style.width = `${w}px`;
     svg.style.height = `${h}px`;
 
-    // Build SVG content
     let svgContent = '';
 
     // Scanned area
@@ -89,11 +80,21 @@ function DeploymentMap() {
       svgContent += `<path d="${path}" fill="rgba(255,51,51,0.15)" stroke="${colors.danger}" stroke-width="1.5" />`;
     }
 
-    // Sensor coverage circles (approximate as SVG ellipses)
+    // Draw preview
+    if (drawVertices.length >= 2) {
+      const coords = drawVertices.map(v => map.project([v.lon, v.lat]));
+      let d = coords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x},${c.y}`).join(' ');
+      if (drawVertices.length >= 3) d += ' Z';
+      svgContent += `<path d="${d}" fill="rgba(255,204,0,0.1)" stroke="#ffcc00" stroke-width="2" stroke-dasharray="4 2" />`;
+      for (const c of coords) {
+        svgContent += `<circle cx="${c.x}" cy="${c.y}" r="4" fill="#ffcc00" stroke="#fff" stroke-width="1.5" />`;
+      }
+    }
+
+    // Sensor coverage circles
     for (const ps of placedSensors) {
       const center = map.project([ps.position.lon, ps.position.lat]);
       const sensorColor = ps.spec.type === 'eo' ? colors.eo : colors.radar;
-      // Approximate radius: project a point maxRangeM north
       const degOffset = ps.spec.maxRangeM / 111320;
       const edge = map.project([ps.position.lon, ps.position.lat + degOffset]);
       const rPx = Math.abs(center.y - edge.y);
@@ -102,12 +103,13 @@ function DeploymentMap() {
 
     svg.innerHTML = svgContent;
 
-    // Build HTML markers for placed sensors
+    // HTML markers for placed sensors (draggable)
     let html = '';
-    for (const ps of placedSensors) {
+    for (let i = 0; i < placedSensors.length; i++) {
+      const ps = placedSensors[i];
       const px = map.project([ps.position.lon, ps.position.lat]);
       const sensorColor = ps.spec.type === 'eo' ? colors.eo : colors.radar;
-      html += `<div style="position:absolute;left:${px.x}px;top:${px.y}px;transform:translate(-50%,-50%);pointer-events:none;">
+      html += `<div style="position:absolute;left:${px.x}px;top:${px.y}px;transform:translate(-50%,-50%);cursor:grab;pointer-events:auto;" data-placed-sensor="${i}">
         <div style="width:12px;height:12px;border-radius:50%;background:${sensorColor};border:2px solid #fff;box-shadow:0 0 6px ${sensorColor}88;"></div>
       </div>`;
       html += `<div style="position:absolute;left:${px.x + 10}px;top:${px.y - 16}px;pointer-events:none;font:bold 11px monospace;color:${sensorColor};text-shadow:0 0 3px #000,0 0 6px #000;">
@@ -118,13 +120,12 @@ function DeploymentMap() {
       </div>`;
     }
     markerContainer.innerHTML = html;
-  }, [scannedArea, exclusionZones, threatCorridors, placedSensors]);
+  }, [scannedArea, exclusionZones, threatCorridors, placedSensors, drawVertices]);
 
   // Initialize MapLibre
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
-    // Compute center from scanned area
     const cLat = scannedArea.reduce((s, p) => s + p.lat, 0) / (scannedArea.length || 1);
     const cLon = scannedArea.reduce((s, p) => s + p.lon, 0) / (scannedArea.length || 1);
 
@@ -148,8 +149,6 @@ function DeploymentMap() {
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
     map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
-
-    // Ctrl+left-click+drag rectangle zoom
     const cleanupBoxZoom = enableCtrlBoxZoom(map);
 
     map.on('error', (e) => {
@@ -166,6 +165,14 @@ function DeploymentMap() {
     map.on('resize', scheduleRedraw);
     map.on('load', () => drawOverlays());
 
+    // Click handler for drawing modes
+    map.on('click', (e) => {
+      const dm = useDeploymentStore.getState().drawMode;
+      if (dm !== 'select') {
+        useDeploymentStore.getState().addDrawVertex({ lat: e.lngLat.lat, lon: e.lngLat.lng });
+      }
+    });
+
     mapRef.current = map;
 
     return () => {
@@ -180,49 +187,100 @@ function DeploymentMap() {
     if (mapRef.current) drawOverlays();
   }, [drawOverlays]);
 
+  // Update cursor for drawing modes
+  useEffect(() => {
+    const m = mapRef.current;
+    if (!m) return;
+    m.getCanvas().style.cursor = drawMode !== 'select' ? 'crosshair' : '';
+  }, [drawMode]);
+
+  // Draggable sensors
+  useEffect(() => {
+    const markerDiv = markersRef.current;
+    const m = mapRef.current;
+    if (!markerDiv || !m) return;
+
+    const onMouseDown = (e: MouseEvent) => {
+      const el = (e.target as HTMLElement).closest('[data-placed-sensor]') as HTMLElement | null;
+      if (!el) return;
+      dragState.current = { index: parseInt(el.dataset.placedSensor!, 10) };
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!dragState.current) return;
+      const rect = m.getCanvas().getBoundingClientRect();
+      const lngLat = m.unproject([e.clientX - rect.left, e.clientY - rect.top]);
+      useDeploymentStore.getState().updatePlacedSensorPosition(dragState.current.index, {
+        lat: lngLat.lat, lon: lngLat.lng,
+      });
+      m.getCanvas().style.cursor = 'grabbing';
+    };
+
+    const onMouseUp = () => {
+      if (!dragState.current) return;
+      dragState.current = null;
+      if (m) m.getCanvas().style.cursor = '';
+    };
+
+    markerDiv.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+
+    return () => {
+      markerDiv.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []);
+
+  // Draw mode label
+  const modeLabels: Record<string, string> = {
+    'draw-area': 'Click to define scanned area',
+    'draw-exclusion': 'Click to define exclusion zone',
+    'draw-threat': 'Click to define threat corridor',
+  };
+  const modeLabel = drawMode !== 'select' ? modeLabels[drawMode] : null;
+
   return (
     <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%' }}>
-      {/* MapLibre container (raster tiles only) */}
       <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
 
-      {/* SVG overlay for polygons and coverage circles (z-index 14) */}
-      <svg
-        ref={svgRef}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          pointerEvents: 'none',
-          zIndex: 14,
-        }}
-      />
+      <svg ref={svgRef} style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 14 }} />
+      <div ref={markersRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 15 }} />
 
-      {/* HTML overlay for sensor markers (z-index 15) */}
-      <div
-        ref={markersRef}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          pointerEvents: 'none',
-          zIndex: 15,
-        }}
-      />
+      {/* Mode indicator */}
+      {modeLabel && (
+        <div style={{
+          position: 'absolute', top: '10px', left: '50%', transform: 'translateX(-50%)',
+          background: '#1a1a2ecc', color: '#ffcc00', padding: '6px 16px', borderRadius: '4px',
+          fontSize: '12px', fontWeight: 600, border: '1px solid #ffcc0044', zIndex: 20,
+          display: 'flex', alignItems: 'center', gap: '8px', pointerEvents: 'auto',
+        }}>
+          {modeLabel}
+          {drawVertices.length >= 3 && (
+            <button
+              onClick={() => useDeploymentStore.getState().finishDraw()}
+              style={{ background: '#00cc44', color: '#fff', border: 'none', borderRadius: '3px', padding: '2px 10px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
+            >
+              Finish ({drawVertices.length} pts)
+            </button>
+          )}
+          <button
+            onClick={() => useDeploymentStore.getState().cancelDraw()}
+            style={{ background: '#ff333344', color: '#ff6666', border: 'none', borderRadius: '3px', padding: '2px 8px', fontSize: '10px', cursor: 'pointer' }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       {/* Legend */}
       <div style={{
-        position: 'absolute',
-        top: '10px',
-        right: '50px',
-        background: '#141425ee',
-        border: `1px solid ${colors.border}`,
-        borderRadius: '4px',
-        padding: '8px 12px',
-        fontSize: '10px',
-        color: colors.textDim,
-        zIndex: 16,
+        position: 'absolute', top: '10px', right: '50px', background: '#141425ee',
+        border: `1px solid ${colors.border}`, borderRadius: '4px', padding: '8px 12px',
+        fontSize: '10px', color: colors.textDim, zIndex: 16,
       }}>
         <div style={{ marginBottom: '4px', fontWeight: 600, color: colors.text }}>Legend</div>
         <div><span style={{ color: colors.accent }}>---</span> Scanned Area</div>
@@ -252,55 +310,30 @@ export function DeploymentView({ onBack }: DeploymentViewProps) {
       gridTemplateColumns: '320px 1fr',
       gridTemplateAreas: '"header header" "panel map" "panel metrics"',
     }}>
-      {/* Header */}
       <header style={{
-        gridArea: 'header',
-        background: colors.headerBg,
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 16px',
-        gap: '12px',
-        fontSize: '13px',
-        borderBottom: `1px solid ${colors.border}`,
-        zIndex: 10,
+        gridArea: 'header', background: colors.headerBg, display: 'flex',
+        alignItems: 'center', padding: '0 16px', gap: '12px', fontSize: '13px',
+        borderBottom: `1px solid ${colors.border}`, zIndex: 10,
       }}>
         <span style={{ fontSize: '15px', fontWeight: 700, color: '#fff', letterSpacing: '1px' }}>ELOC2</span>
         <span style={{ color: colors.accent, fontSize: '12px', fontWeight: 600 }}>Deployment Planner</span>
         <span style={{ color: colors.textDim, fontSize: '11px' }}>REQ-15: EO Sensor Deployment Optimization</span>
         <div style={{ marginLeft: 'auto' }}>
-          <button
-            onClick={onBack}
-            style={{
-              background: '#333',
-              color: '#aaa',
-              border: 'none',
-              padding: '3px 12px',
-              borderRadius: '3px',
-              cursor: 'pointer',
-              fontSize: '11px',
-            }}
-          >
-            Back to Workstation
-          </button>
+          <button onClick={onBack} style={{
+            background: '#333', color: '#aaa', border: 'none', padding: '3px 12px',
+            borderRadius: '3px', cursor: 'pointer', fontSize: '11px',
+          }}>Back to Workstation</button>
         </div>
       </header>
 
-      {/* Left Panel */}
-      <div style={{
-        gridArea: 'panel',
-        background: colors.panelBg,
-        borderRight: `1px solid ${colors.border}`,
-        overflowY: 'auto',
-      }}>
+      <div style={{ gridArea: 'panel', background: colors.panelBg, borderRight: `1px solid ${colors.border}`, overflowY: 'auto' }}>
         <DeploymentPanel />
       </div>
 
-      {/* Map */}
       <div style={{ gridArea: 'map', position: 'relative', overflow: 'hidden' }}>
         <DeploymentMap />
       </div>
 
-      {/* Metrics Bar */}
       <div style={{ gridArea: 'metrics' }}>
         <DeploymentMetrics />
       </div>
