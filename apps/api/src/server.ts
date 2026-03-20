@@ -63,6 +63,23 @@ server.get('/api/health', async () => {
   };
 });
 
+// Instructor availability check (for no-auth role selection)
+server.get('/api/simulation/instructor-available', async () => {
+  const users = engine.getConnectedUsers();
+  return { available: users.instructors === 0 };
+});
+
+// Auto-inject toggle (instructor only)
+server.post('/api/simulation/auto-inject', async (request) => {
+  const { enabled } = request.body as { enabled: boolean };
+  if (enabled) {
+    engine.enableAutoInject();
+  } else {
+    engine.disableAutoInject();
+  }
+  return { ok: true, autoInjectEnabled: enabled };
+});
+
 // Initialize auth if enabled
 if (AUTH_ENABLED) {
   const { authPlugin } = await import('./auth/auth-plugin.js');
