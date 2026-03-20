@@ -86,6 +86,10 @@ export class ReplayController {
   private handleMessage(data: any) {
     if (data.type === 'role.assigned') {
       useUiStore.getState().setEffectiveRole(data.role);
+      if (data.role === 'operator') {
+        // Turn off instructor-only features when assigned operator role
+        useGroundTruthStore.getState().setShowGroundTruth(false);
+      }
       if (data.reason === 'instructor_slot_taken') {
         useUiStore.getState().setSelectedRole('operator');
         console.log('[ReplayController] Instructor slot taken — downgraded to operator');

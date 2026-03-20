@@ -14,6 +14,7 @@ interface GroundTruthState {
   showGroundTruth: boolean;
   setTargets: (targets: GroundTruthTarget[]) => void;
   toggleGroundTruth: () => void;
+  setShowGroundTruth: (show: boolean) => void;
 }
 
 export const useGroundTruthStore = create<GroundTruthState>((set) => ({
@@ -21,4 +22,5 @@ export const useGroundTruthStore = create<GroundTruthState>((set) => ({
   showGroundTruth: false,
   setTargets: (targets) => set({ targets }),
   toggleGroundTruth: () => set((s) => ({ showGroundTruth: !s.showGroundTruth })),
+  setShowGroundTruth: (show) => set({ showGroundTruth: show }),
 }));
