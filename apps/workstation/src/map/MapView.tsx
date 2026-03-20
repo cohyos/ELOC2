@@ -47,6 +47,7 @@ export function MapView() {
   const unresolvedGroups = useTaskStore(s => s.unresolvedGroups);
   const registrationStates = useTaskStore(s => s.registrationStates);
   const selectedTrackId = useUiStore(s => s.selectedTrackId);
+  const selectedGroundTruthId = useUiStore(s => s.selectedGroundTruthId);
   const highlightedSensorIds = useUiStore(s => s.highlightedSensorIds);
   const selectionBearingRays = useUiStore(s => s.selectionBearingRays);
   const setHighlightedSensors = useUiStore(s => s.setHighlightedSensors);
@@ -536,6 +537,7 @@ export function MapView() {
           onSelectTrack={selectTrack}
           onSelectSensor={selectSensor}
           onSelectGroundTruth={selectGroundTruth}
+          selectedGroundTruthId={selectedGroundTruthId}
           groundTruthTargets={groundTruthTargets}
           showGroundTruth={showGroundTruth}
           coverZones={coverZones}
