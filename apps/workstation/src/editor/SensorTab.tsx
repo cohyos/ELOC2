@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useEditorStore } from '../stores/editor-store';
 import type { EditorSensor } from '../stores/editor-store';
 import {
@@ -6,6 +6,16 @@ import {
   SENSOR_TEMPLATE_LABELS,
   type SensorTemplateName,
 } from './sensor-templates';
+
+interface SensorLibraryEntry {
+  id: string;
+  name: string;
+  type: string;
+  coverage: { minAzDeg?: number; maxAzDeg?: number; maxRangeM?: number };
+  fov?: { halfAngleHDeg?: number; halfAngleVDeg?: number; depthM?: number };
+  eoParams?: { slewRateDegSec?: number };
+  description: string;
+}
 
 const SENSOR_COLORS: Record<string, string> = {
   radar: '#4488ff',
@@ -135,7 +145,7 @@ function NumberInput({
   );
 }
 
-function SensorForm({ sensor }: { sensor: EditorSensor }) {
+function SensorForm({ sensor, sensorLibrary }: { sensor: EditorSensor; sensorLibrary: SensorLibraryEntry[] }) {
   const updateSensor = useEditorStore((s) => s.updateSensor);
   const removeSensor = useEditorStore((s) => s.removeSensor);
 
@@ -144,6 +154,41 @@ function SensorForm({ sensor }: { sensor: EditorSensor }) {
       updateSensor(sensor.id, updates);
     },
     [sensor.id, updateSensor]
+  );
+
+  // Auto-derive altitude from terrain when lat/lon changes
+  useEffect(() => {
+    if (sensor.lat === 0 && sensor.lon === 0) return;
+    const controller = new AbortController();
+    fetch(`/api/terrain/elevation?lat=${sensor.lat}&lon=${sensor.lon}`, { signal: controller.signal })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.elevationM != null && data.elevationM !== null) {
+          updateSensor(sensor.id, { alt: Math.round(data.elevationM) });
+        }
+      })
+      .catch(() => { /* ignore aborted/failed */ });
+    return () => controller.abort();
+  }, [sensor.lat, sensor.lon, sensor.id, updateSensor]);
+
+  const handleLibrarySelect = useCallback(
+    (libraryId: string) => {
+      const entry = sensorLibrary.find((e) => e.id === libraryId);
+      if (!entry) return;
+      const sensorType = (entry.type === 'eo' ? 'eo' : entry.type === 'radar' ? 'radar' : 'c4isr') as EditorSensor['type'];
+      update({
+        libraryId,
+        type: sensorType,
+        azMin: entry.coverage?.minAzDeg ?? 0,
+        azMax: entry.coverage?.maxAzDeg ?? 360,
+        rangeMaxKm: (entry.coverage?.maxRangeM ?? 100000) / 1000,
+        fovHalfAngleH: entry.fov?.halfAngleHDeg,
+        fovHalfAngleV: entry.fov?.halfAngleVDeg,
+        slewRateDegSec: entry.eoParams?.slewRateDegSec,
+        nickname: sensor.nickname || entry.name,
+      });
+    },
+    [update, sensorLibrary, sensor.nickname]
   );
 
   const handleTemplateChange = useCallback(
@@ -180,6 +225,37 @@ function SensorForm({ sensor }: { sensor: EditorSensor }) {
   return (
     <div style={{ marginTop: '8px' }}>
       <div style={styles.sectionTitle}>Sensor Configuration</div>
+
+      {/* Nickname */}
+      <div style={styles.formRow}>
+        <span style={styles.label}>Nickname</span>
+        <input
+          type="text"
+          value={sensor.nickname || ''}
+          onChange={(e) => update({ nickname: e.target.value })}
+          style={styles.input}
+          placeholder="Optional name"
+        />
+      </div>
+
+      {/* Sensor Library */}
+      {sensorLibrary.length > 0 && (
+        <div style={styles.formRow}>
+          <span style={styles.label}>From Library</span>
+          <select
+            value={sensor.libraryId || ''}
+            onChange={(e) => handleLibrarySelect(e.target.value)}
+            style={styles.select}
+          >
+            <option value="">-- Select --</option>
+            {sensorLibrary.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Template */}
       <div style={styles.formRow}>
@@ -361,6 +437,17 @@ export function SensorTab() {
   const selectItem = useEditorStore((s) => s.selectItem);
   const editMode = useEditorStore((s) => s.editMode);
   const setEditMode = useEditorStore((s) => s.setEditMode);
+  const [sensorLibrary, setSensorLibrary] = useState<SensorLibraryEntry[]>([]);
+
+  // Fetch sensor library on mount
+  useEffect(() => {
+    fetch('/api/sensors/library')
+      .then((r) => r.json())
+      .then((data) => {
+        setSensorLibrary(data?.sensors || []);
+      })
+      .catch(() => { /* ignore */ });
+  }, []);
 
   const selectedSensor =
     selectedItemType === 'sensor'
@@ -445,7 +532,7 @@ export function SensorTab() {
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {s.type.toUpperCase()}-{s.id.slice(0, 8)}
+                    {s.nickname || `${s.type.toUpperCase()}-${s.id.slice(0, 8)}`}
                   </div>
                   <div style={{ fontSize: '10px', color: '#666' }}>
                     {s.lat.toFixed(3)}, {s.lon.toFixed(3)} | {s.rangeMaxKm}km
@@ -458,7 +545,7 @@ export function SensorTab() {
       </div>
 
       {/* Configuration form for selected sensor */}
-      {selectedSensor && <SensorForm sensor={selectedSensor} />}
+      {selectedSensor && <SensorForm sensor={selectedSensor} sensorLibrary={sensorLibrary} />}
     </div>
   );
 }

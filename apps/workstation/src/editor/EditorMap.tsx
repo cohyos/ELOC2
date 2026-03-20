@@ -2,8 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useEditorStore } from '../stores/editor-store';
-import type { EditorSensor, EditorTarget, EditorWaypoint } from '../stores/editor-store';
+import type { EditorSensor, EditorTarget, EditorWaypoint, GeoVertex } from '../stores/editor-store';
 import { SENSOR_TEMPLATES } from './sensor-templates';
+import { enableCtrlBoxZoom } from '../map/ctrl-box-zoom';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -25,6 +26,24 @@ const TARGET_PATH_SOURCE = 'editor-targets-source';
 const TARGET_PATH_LAYER = 'editor-target-paths';
 const WAYPOINT_MARKER_SOURCE = 'editor-waypoint-markers-source';
 const WAYPOINT_MARKER_LAYER = 'editor-waypoint-markers';
+
+const ZONE_SOURCE = 'editor-zones';
+const ZONE_FILL_LAYER = 'editor-zones-fill';
+const ZONE_OUTLINE_LAYER = 'editor-zones-outline';
+const ZONE_DRAW_SOURCE = 'editor-zone-draw';
+const ZONE_DRAW_LINE_LAYER = 'editor-zone-draw-line';
+const ZONE_DRAW_POINT_LAYER = 'editor-zone-draw-points';
+
+const ZONE_COLORS: Record<string, string> = {
+  operational: '#00cc4466',
+  exclusion: '#ff333366',
+  threat: '#ff880066',
+};
+const ZONE_OUTLINE_COLORS: Record<string, string> = {
+  operational: '#00cc44',
+  exclusion: '#ff3333',
+  threat: '#ff8800',
+};
 
 // ---------------------------------------------------------------------------
 // Haversine distance (km)
@@ -156,6 +175,76 @@ function buildWaypointMarkersGeoJSON(
 }
 
 // ---------------------------------------------------------------------------
+// GeoJSON builders — zones
+// ---------------------------------------------------------------------------
+
+function buildZoneGeoJSON(
+  operationalArea: GeoVertex[],
+  exclusionZones: GeoVertex[][],
+  threatZones: GeoVertex[][],
+): GeoJSON.FeatureCollection {
+  const features: GeoJSON.Feature[] = [];
+  if (operationalArea.length >= 3) {
+    const coords: [number, number][] = operationalArea.map((v) => [v.lon, v.lat]);
+    coords.push([operationalArea[0].lon, operationalArea[0].lat]); // close ring
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'Polygon', coordinates: [coords] },
+      properties: { zoneType: 'operational', fillColor: ZONE_COLORS.operational, outlineColor: ZONE_OUTLINE_COLORS.operational },
+    });
+  }
+  for (const zone of exclusionZones) {
+    if (zone.length < 3) continue;
+    const coords: [number, number][] = zone.map((v) => [v.lon, v.lat]);
+    coords.push([zone[0].lon, zone[0].lat]);
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'Polygon', coordinates: [coords] },
+      properties: { zoneType: 'exclusion', fillColor: ZONE_COLORS.exclusion, outlineColor: ZONE_OUTLINE_COLORS.exclusion },
+    });
+  }
+  for (const zone of threatZones) {
+    if (zone.length < 3) continue;
+    const coords: [number, number][] = zone.map((v) => [v.lon, v.lat]);
+    coords.push([zone[0].lon, zone[0].lat]);
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'Polygon', coordinates: [coords] },
+      properties: { zoneType: 'threat', fillColor: ZONE_COLORS.threat, outlineColor: ZONE_OUTLINE_COLORS.threat },
+    });
+  }
+  return { type: 'FeatureCollection', features };
+}
+
+function buildZoneDrawGeoJSON(vertices: GeoVertex[]): {
+  line: GeoJSON.FeatureCollection;
+  points: GeoJSON.FeatureCollection;
+} {
+  const pointFeatures: GeoJSON.Feature[] = vertices.map((v, i) => ({
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [v.lon, v.lat] },
+    properties: { index: i },
+  }));
+  const lineFeatures: GeoJSON.Feature[] = [];
+  if (vertices.length >= 2) {
+    const coords: [number, number][] = vertices.map((v) => [v.lon, v.lat]);
+    // Close the polygon preview if 3+ vertices
+    if (vertices.length >= 3) {
+      coords.push([vertices[0].lon, vertices[0].lat]);
+    }
+    lineFeatures.push({
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates: coords },
+      properties: {},
+    });
+  }
+  return {
+    line: { type: 'FeatureCollection', features: lineFeatures },
+    points: { type: 'FeatureCollection', features: pointFeatures },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -164,8 +253,12 @@ export function EditorMap() {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [layersReady, setLayersReady] = useState(false);
   const dragState = useRef<{
+    type: 'waypoint';
     targetId: string;
     waypointIndex: number;
+  } | {
+    type: 'sensor';
+    sensorId: string;
   } | null>(null);
 
   const sensors = useEditorStore((s) => s.sensors);
@@ -173,6 +266,11 @@ export function EditorMap() {
   const editMode = useEditorStore((s) => s.editMode);
   const activeTargetId = useEditorStore((s) => s.activeTargetId);
   const selectedItemId = useEditorStore((s) => s.selectedItemId);
+  const operationalArea = useEditorStore((s) => s.operationalArea);
+  const exclusionZones = useEditorStore((s) => s.exclusionZones);
+  const threatZones = useEditorStore((s) => s.threatZones);
+  const zoneDrawVertices = useEditorStore((s) => s.zoneDrawVertices);
+  const zoneDrawMode = useEditorStore((s) => s.zoneDrawMode);
 
   // Initialize map
   useEffect(() => {
@@ -182,13 +280,12 @@ export function EditorMap() {
       container: mapContainer.current,
       style: {
         version: 8,
-        glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
         sources: {
           osm: {
             type: 'raster',
-            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+            tiles: ['https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'],
             tileSize: 256,
-            attribution: '&copy; OpenStreetMap contributors',
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
           },
         },
         layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
@@ -206,6 +303,9 @@ export function EditorMap() {
       new maplibregl.ScaleControl({ unit: 'metric' }),
       'bottom-left'
     );
+
+    // Ctrl+left-click+drag rectangle zoom
+    const cleanupBoxZoom = enableCtrlBoxZoom(mapRef.current);
 
     mapRef.current.on('load', () => {
       const m = mapRef.current;
@@ -307,8 +407,66 @@ export function EditorMap() {
         console.warn('Editor sensor labels init failed:', e);
       }
 
+      // --- Zone layers ---
+      m.addSource(ZONE_SOURCE, {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      m.addLayer({
+        id: ZONE_FILL_LAYER,
+        type: 'fill',
+        source: ZONE_SOURCE,
+        paint: {
+          'fill-color': ['get', 'fillColor'],
+          'fill-opacity': 0.3,
+        },
+      });
+      m.addLayer({
+        id: ZONE_OUTLINE_LAYER,
+        type: 'line',
+        source: ZONE_SOURCE,
+        paint: {
+          'line-color': ['get', 'outlineColor'],
+          'line-width': 2,
+          'line-dasharray': [4, 2],
+        },
+      });
+
+      // --- Zone draw layers ---
+      m.addSource(ZONE_DRAW_SOURCE, {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      m.addLayer({
+        id: ZONE_DRAW_LINE_LAYER,
+        type: 'line',
+        source: ZONE_DRAW_SOURCE,
+        paint: {
+          'line-color': '#ffcc00',
+          'line-width': 2,
+          'line-dasharray': [4, 2],
+        },
+      });
+      // Use a separate source for draw points
+      m.addSource(ZONE_DRAW_SOURCE + '-pts', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      m.addLayer({
+        id: ZONE_DRAW_POINT_LAYER,
+        type: 'circle',
+        source: ZONE_DRAW_SOURCE + '-pts',
+        paint: {
+          'circle-radius': 5,
+          'circle-color': '#ffcc00',
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#fff',
+        },
+      });
+
       // --- Click on sensor to select ---
       m.on('click', SENSOR_LAYER, (e) => {
+        if (useEditorStore.getState().editMode !== 'select') return;
         if (e.features && e.features.length > 0) {
           const id = e.features[0].properties?.id;
           if (id) {
@@ -319,10 +477,41 @@ export function EditorMap() {
       });
 
       m.on('mouseenter', SENSOR_LAYER, () => {
-        if (mapRef.current) mapRef.current.getCanvas().style.cursor = 'pointer';
+        const mode = useEditorStore.getState().editMode;
+        if (mapRef.current && mode === 'select') mapRef.current.getCanvas().style.cursor = 'pointer';
       });
       m.on('mouseleave', SENSOR_LAYER, () => {
-        if (mapRef.current) mapRef.current.getCanvas().style.cursor = '';
+        if (mapRef.current && !dragState.current) mapRef.current.getCanvas().style.cursor = '';
+      });
+
+      // --- Sensor drag (ED-5) ---
+      m.on('mousedown', SENSOR_LAYER, (e) => {
+        if (useEditorStore.getState().editMode !== 'select') return;
+        if (!e.features || e.features.length === 0) return;
+        const sensorId = e.features[0].properties?.id as string;
+        if (!sensorId) return;
+
+        dragState.current = { type: 'sensor', sensorId };
+        m.getCanvas().style.cursor = 'grabbing';
+        e.preventDefault();
+
+        const onMove = (moveEvt: maplibregl.MapMouseEvent) => {
+          if (!dragState.current || dragState.current.type !== 'sensor') return;
+          useEditorStore.getState().updateSensor(dragState.current.sensorId, {
+            lat: moveEvt.lngLat.lat,
+            lon: moveEvt.lngLat.lng,
+          });
+        };
+
+        const onUp = () => {
+          dragState.current = null;
+          m.getCanvas().style.cursor = '';
+          m.off('mousemove', onMove);
+          m.off('mouseup', onUp);
+        };
+
+        m.on('mousemove', onMove);
+        m.on('mouseup', onUp);
       });
 
       // --- Waypoint marker interactions ---
@@ -345,6 +534,7 @@ export function EditorMap() {
         if (!props) return;
 
         dragState.current = {
+          type: 'waypoint',
           targetId: props.targetId as string,
           waypointIndex: props.waypointIndex as number,
         };
@@ -353,7 +543,7 @@ export function EditorMap() {
         e.preventDefault(); // Prevent map pan
 
         const onMove = (moveEvt: maplibregl.MapMouseEvent) => {
-          if (!dragState.current) return;
+          if (!dragState.current || dragState.current.type !== 'waypoint') return;
           const { targetId, waypointIndex } = dragState.current;
           const store = useEditorStore.getState();
           const target = store.targets.find((t) => t.id === targetId);
@@ -396,6 +586,7 @@ export function EditorMap() {
     });
 
     return () => {
+      cleanupBoxZoom();
       mapRef.current?.remove();
       mapRef.current = null;
       setLayersReady(false);
@@ -411,7 +602,10 @@ export function EditorMap() {
       const state = useEditorStore.getState();
       const currentMode = state.editMode;
 
-      if (currentMode === 'place-sensor') {
+      if (currentMode === 'draw-zone') {
+        state.addZoneVertex({ lat: e.lngLat.lat, lon: e.lngLat.lng });
+        return;
+      } else if (currentMode === 'place-sensor') {
         const defaults = SENSOR_TEMPLATES['long-range-radar'];
         const newSensor: EditorSensor = {
           id: crypto.randomUUID(),
@@ -472,7 +666,7 @@ export function EditorMap() {
   useEffect(() => {
     const m = mapRef.current;
     if (!m) return;
-    if (editMode === 'place-sensor' || editMode === 'place-waypoint') {
+    if (editMode === 'place-sensor' || editMode === 'place-waypoint' || editMode === 'draw-zone') {
       m.getCanvas().style.cursor = 'crosshair';
     } else {
       m.getCanvas().style.cursor = '';
@@ -503,12 +697,41 @@ export function EditorMap() {
     if (wpSrc) wpSrc.setData(buildWaypointMarkersGeoJSON(targets, activeTargetId));
   }, [targets, activeTargetId, layersReady]);
 
+  // Update zone layers
+  useEffect(() => {
+    const m = mapRef.current;
+    if (!m || !layersReady) return;
+
+    const zoneSrc = m.getSource(ZONE_SOURCE) as maplibregl.GeoJSONSource;
+    if (zoneSrc) zoneSrc.setData(buildZoneGeoJSON(operationalArea, exclusionZones, threatZones));
+  }, [operationalArea, exclusionZones, threatZones, layersReady]);
+
+  // Update zone draw preview
+  useEffect(() => {
+    const m = mapRef.current;
+    if (!m || !layersReady) return;
+
+    const { line, points } = buildZoneDrawGeoJSON(zoneDrawVertices);
+    const lineSrc = m.getSource(ZONE_DRAW_SOURCE) as maplibregl.GeoJSONSource;
+    if (lineSrc) lineSrc.setData(line);
+    const ptsSrc = m.getSource(ZONE_DRAW_SOURCE + '-pts') as maplibregl.GeoJSONSource;
+    if (ptsSrc) ptsSrc.setData(points);
+  }, [zoneDrawVertices, layersReady]);
+
   // Mode indicator overlay
+  const zoneModeLabels: Record<string, string> = {
+    'operational-area': 'Click to define operational area vertices',
+    'exclusion-zone': 'Click to define exclusion zone vertices',
+    'threat-zone': 'Click to define threat zone vertices',
+  };
+
   const modeLabel =
     editMode === 'place-sensor'
       ? 'Click map to place sensor'
       : editMode === 'place-waypoint'
       ? 'Click map to add waypoint'
+      : editMode === 'draw-zone' && zoneDrawMode
+      ? zoneModeLabels[zoneDrawMode] || 'Click to define zone'
       : null;
 
   return (
@@ -535,16 +758,112 @@ export function EditorMap() {
             fontSize: '12px',
             fontWeight: 600,
             border: '1px solid #ffcc0044',
-            pointerEvents: 'none',
+            pointerEvents: editMode === 'draw-zone' ? 'auto' : 'none',
             zIndex: 10,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
           }}
         >
           {modeLabel}
+          {editMode === 'draw-zone' && zoneDrawVertices.length >= 3 && (
+            <button
+              onClick={() => useEditorStore.getState().finishZoneDraw()}
+              style={{
+                background: '#00cc44',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '3px',
+                padding: '2px 10px',
+                fontSize: '11px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Finish ({zoneDrawVertices.length} pts)
+            </button>
+          )}
           <span
-            style={{ marginLeft: '12px', color: '#888', fontSize: '10px' }}
+            style={{ color: '#888', fontSize: '10px' }}
           >
             ESC to cancel
           </span>
+        </div>
+      )}
+      {/* Zone control buttons */}
+      {editMode === 'select' && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '10px',
+            left: '10px',
+            display: 'flex',
+            gap: '4px',
+            zIndex: 10,
+          }}
+        >
+          <button
+            onClick={() => useEditorStore.getState().startZoneDraw('operational-area')}
+            style={{
+              background: '#1a1a2ecc',
+              color: '#00cc44',
+              border: '1px solid #00cc4466',
+              borderRadius: '3px',
+              padding: '4px 8px',
+              fontSize: '10px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            + Op Area
+          </button>
+          <button
+            onClick={() => useEditorStore.getState().startZoneDraw('exclusion-zone')}
+            style={{
+              background: '#1a1a2ecc',
+              color: '#ff3333',
+              border: '1px solid #ff333366',
+              borderRadius: '3px',
+              padding: '4px 8px',
+              fontSize: '10px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            + Exclusion
+          </button>
+          <button
+            onClick={() => useEditorStore.getState().startZoneDraw('threat-zone')}
+            style={{
+              background: '#1a1a2ecc',
+              color: '#ff8800',
+              border: '1px solid #ff880066',
+              borderRadius: '3px',
+              padding: '4px 8px',
+              fontSize: '10px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            + Threat
+          </button>
+          {(operationalArea.length > 0 || exclusionZones.length > 0 || threatZones.length > 0) && (
+            <button
+              onClick={() => useEditorStore.getState().clearZones()}
+              style={{
+                background: '#1a1a2ecc',
+                color: '#888',
+                border: '1px solid #44444466',
+                borderRadius: '3px',
+                padding: '4px 8px',
+                fontSize: '10px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Clear Zones
+            </button>
+          )}
         </div>
       )}
     </div>

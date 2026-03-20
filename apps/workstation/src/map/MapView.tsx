@@ -24,6 +24,7 @@ import { useCoverZoneStore } from '../stores/cover-zone-store';
 import { useFovOverlapStore } from '../stores/fov-overlap-store';
 import { useQualityStore } from '../stores/quality-store';
 import { DeckGlOverlay } from '../3d/DeckGlOverlay';
+import { enableCtrlBoxZoom } from './ctrl-box-zoom';
 import { useTaskStore as useTaskStoreForBallistic } from '../stores/task-store';
 
 export function MapView() {
@@ -125,6 +126,9 @@ export function MapView() {
 
     map.current.addControl(new maplibregl.NavigationControl(), 'top-right');
     map.current.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+
+    // Ctrl+left-click+drag rectangle zoom
+    const cleanupBoxZoom = enableCtrlBoxZoom(map.current);
 
     /** Initialize all data layers on the map — idempotent (safe to call multiple times) */
     const initAllLayers = (m: maplibregl.Map) => {
@@ -247,6 +251,7 @@ export function MapView() {
     }, 8000);
 
     return () => {
+      cleanupBoxZoom();
       clearTimeout(timer1);
       clearTimeout(timer2);
       clearTimeout(timer3);
@@ -502,11 +507,7 @@ export function MapView() {
   // Set map instance as soon as the map exists (don't wait for layersReady)
   useEffect(() => {
     if (map.current && !mapInstance) {
-      // Small delay to ensure map is rendered
-      const t = setTimeout(() => {
-        if (map.current) setMapInstance(map.current);
-      }, 500);
-      return () => clearTimeout(t);
+      setMapInstance(map.current);
     }
   }, [layersReady, mapInstance]);
 

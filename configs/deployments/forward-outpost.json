@@ -1,0 +1,54 @@
+{
+  "id": "forward-outpost",
+  "name": "Forward Outpost",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "constraints": {
+    "scannedArea": [
+      { "lat": 31.4, "lon": 34.6 },
+      { "lat": 31.4, "lon": 35.0 },
+      { "lat": 31.7, "lon": 35.0 },
+      { "lat": 31.7, "lon": 34.6 }
+    ],
+    "inclusionZones": [],
+    "exclusionZones": [],
+    "threatCorridors": [],
+    "minCoveragePercent": 85,
+    "gridResolutionM": 1500
+  },
+  "sensors": [
+    { "id": "FO-RADAR-1", "type": "radar", "maxRangeM": 100000, "fovHalfAngleDeg": 180, "minAzDeg": 0, "maxAzDeg": 360 },
+    { "id": "FO-EO-1", "type": "eo", "maxRangeM": 35000, "fovHalfAngleDeg": 2, "minAzDeg": 0, "maxAzDeg": 360 },
+    { "id": "FO-EO-2", "type": "eo", "maxRangeM": 35000, "fovHalfAngleDeg": 2, "minAzDeg": 0, "maxAzDeg": 360 },
+    { "id": "FO-EO-3", "type": "eo", "maxRangeM": 35000, "fovHalfAngleDeg": 2, "minAzDeg": 0, "maxAzDeg": 360 }
+  ],
+  "result": {
+    "placedSensors": [
+      {
+        "spec": { "id": "FO-RADAR-1", "type": "radar", "maxRangeM": 100000, "fovHalfAngleDeg": 180, "minAzDeg": 0, "maxAzDeg": 360 },
+        "position": { "lat": 31.55, "lon": 34.8 },
+        "scores": { "coverage": 0.92, "geometry": 0.6, "threat": 0.5, "total": 0.74 }
+      },
+      {
+        "spec": { "id": "FO-EO-1", "type": "eo", "maxRangeM": 35000, "fovHalfAngleDeg": 2, "minAzDeg": 0, "maxAzDeg": 360 },
+        "position": { "lat": 31.5, "lon": 34.7 },
+        "scores": { "coverage": 0.55, "geometry": 0.7, "threat": 0.5, "total": 0.585 }
+      },
+      {
+        "spec": { "id": "FO-EO-2", "type": "eo", "maxRangeM": 35000, "fovHalfAngleDeg": 2, "minAzDeg": 0, "maxAzDeg": 360 },
+        "position": { "lat": 31.6, "lon": 34.9 },
+        "scores": { "coverage": 0.53, "geometry": 0.68, "threat": 0.48, "total": 0.57 }
+      },
+      {
+        "spec": { "id": "FO-EO-3", "type": "eo", "maxRangeM": 35000, "fovHalfAngleDeg": 2, "minAzDeg": 0, "maxAzDeg": 360 },
+        "position": { "lat": 31.45, "lon": 34.85 },
+        "scores": { "coverage": 0.52, "geometry": 0.66, "threat": 0.52, "total": 0.562 }
+      }
+    ],
+    "metrics": {
+      "coveragePercent": 88,
+      "triangulationCoveragePercent": 62,
+      "worstCaseGapM": 10000,
+      "geometryQuality": 0.68
+    }
+  }
+}

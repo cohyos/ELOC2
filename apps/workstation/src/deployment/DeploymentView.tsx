@@ -5,6 +5,7 @@ import { DeploymentPanel } from './DeploymentPanel';
 import { DeploymentMetrics } from './DeploymentMetrics';
 import { useDeploymentStore } from './deployment-store';
 import type { GeoPolygon, PlacedSensor } from './deployment-store';
+import { enableCtrlBoxZoom } from '../map/ctrl-box-zoom';
 
 const colors = {
   bg: '#0d0d1a',
@@ -148,6 +149,9 @@ function DeploymentMap() {
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
     map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
+    // Ctrl+left-click+drag rectangle zoom
+    const cleanupBoxZoom = enableCtrlBoxZoom(map);
+
     map.on('error', (e) => {
       console.error('[DeploymentMap] MapLibre error:', e.error?.message || e);
     });
@@ -165,6 +169,7 @@ function DeploymentMap() {
     mapRef.current = map;
 
     return () => {
+      cleanupBoxZoom();
       map.remove();
       mapRef.current = null;
     };

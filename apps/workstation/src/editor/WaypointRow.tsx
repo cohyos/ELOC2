@@ -57,8 +57,8 @@ interface WaypointRowProps {
 }
 
 export function WaypointRow({ index, waypoint, isLatest, onUpdate, onDelete }: WaypointRowProps) {
-  const altValid = waypoint.alt >= 0 && waypoint.alt <= 30000;
-  const speedValid = waypoint.speedMs >= 0 && waypoint.speedMs <= 1000;
+  const altValid = waypoint.alt >= 0 && waypoint.alt <= 200000;
+  const speedValid = waypoint.speedMs >= 0 && waypoint.speedMs <= 7000;
 
   return (
     <div style={styles.row(isLatest)}>
@@ -81,13 +81,13 @@ export function WaypointRow({ index, waypoint, isLatest, onUpdate, onDelete }: W
         value={waypoint.alt}
         onChange={(e) => onUpdate({ alt: parseFloat(e.target.value) || 0 })}
         min={0}
-        max={30000}
+        max={200000}
         step={100}
         style={{
           ...styles.input,
           ...(altValid ? {} : styles.inputError),
         }}
-        title={altValid ? `Altitude: ${waypoint.alt}m` : 'Alt must be 0-30000'}
+        title={altValid ? `Altitude: ${waypoint.alt}m` : 'Alt must be 0-200000'}
       />
 
       {/* Speed */}
@@ -96,13 +96,13 @@ export function WaypointRow({ index, waypoint, isLatest, onUpdate, onDelete }: W
         value={waypoint.speedMs}
         onChange={(e) => onUpdate({ speedMs: parseFloat(e.target.value) || 0 })}
         min={0}
-        max={1000}
+        max={7000}
         step={10}
         style={{
           ...styles.input,
           ...(speedValid ? {} : styles.inputError),
         }}
-        title={speedValid ? `Speed: ${waypoint.speedMs} m/s` : 'Speed must be 0-1000'}
+        title={speedValid ? `Speed: ${waypoint.speedMs} m/s` : 'Speed must be 0-7000'}
       />
 
       {/* Arrival time */}

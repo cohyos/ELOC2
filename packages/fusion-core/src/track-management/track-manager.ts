@@ -66,7 +66,7 @@ export class TrackManager {
 
   private readonly meta: Map<string, TrackMeta> = new Map();
   private readonly config: TrackManagerConfig;
-  private correlatorConfig: CorrelatorConfig = { gateThreshold: 16.27 };
+  private correlatorConfig: CorrelatorConfig = { gateThreshold: 16.27, velocityGateThreshold: 50 };
   private mergeDistanceM: number = 3000;
 
   constructor(config: Partial<TrackManagerConfig> = {}) {
@@ -129,6 +129,8 @@ export class TrackManager {
       lastUpdated: now,
       sources: [observation.sensorId],
       eoInvestigationStatus: 'none',
+      radialVelocity: observation.radialVelocity,
+      dopplerQuality: observation.dopplerQuality,
     };
 
     this.tracks.set(id, track);
@@ -157,6 +159,14 @@ export class TrackManager {
     track.covariance = fusedState.covariance.map((row) => [...row]) as Covariance3x3;
     track.confidence = fusedState.confidence;
     track.lastUpdated = Date.now() as Timestamp;
+
+    // Propagate Doppler from fused state
+    if (fusedState.radialVelocity !== undefined) {
+      track.radialVelocity = fusedState.radialVelocity;
+    }
+    if (fusedState.dopplerQuality !== undefined) {
+      track.dopplerQuality = fusedState.dopplerQuality;
+    }
 
     // Add source if not already present
     if (!track.sources.includes(observation.sensorId)) {
@@ -262,6 +272,8 @@ export class TrackManager {
       lastUpdated: now,
       sources,
       eoInvestigationStatus: 'none',
+      radialVelocity: primary.radialVelocity,
+      dopplerQuality: primary.dopplerQuality,
     };
 
     // Drop old tracks

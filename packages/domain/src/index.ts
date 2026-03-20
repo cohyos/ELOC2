@@ -32,6 +32,7 @@ export { CLEAR_WEATHER } from './weather.js';
 // Source track
 export type {
   SensorFrame,
+  DopplerQuality,
   SourceObservation,
   LocalTrackStatus,
   LocalTrack,

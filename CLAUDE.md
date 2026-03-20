@@ -115,9 +115,11 @@ The `Knowledge_Base_and_Agents_instructions/` folder contains **25 foundational 
 | `Instructor_Operator_UX_Plan.md` | **Instructor/Operator UX plan: REQ-17–23, role picker, header layout, PDF reports, user mgmt** | **Current** |
 | `Claude_code_prompt_templates.md` | Copy-paste agent prompts with shared prefix | Agent execution |
 | `Claude_agent_build_prompts.md` | Detailed agent prompts with scope + done criteria | Agent execution |
+| `Raster_Map_Reimplementation_Design.md` | **Full spec for raster map renderer replacement, rollback strategy** | **Design** |
+| `ELOC2_System_Updates_Plan.md` | **System updates plan: bug fixes, libraries, editor/planner, implementation status** | **Current** |
 | `Chunk_index.md` | Index of all knowledge base chunks for retrieval | Reference |
 
-## Current Completion (as of 2026-03-19)
+## Current Completion (as of 2026-03-20)
 
 ### Original Build Phases (0–9)
 | Phase | Status | Notes |
@@ -168,6 +170,41 @@ See `Knowledge_Base_and_Agents_instructions/Instructor_Operator_UX_Plan.md` for 
 | REQ-21 | Instructor Button Grouping | ✅ Complete |
 | REQ-22 | Operator Mode Restrictions | ✅ Complete |
 | REQ-23 | User Management Page | ✅ Complete |
+
+### System Updates (2026-03-20, branch `claude/review-knowledge-base-FTTzx`)
+
+| Task | Status | Notes |
+|------|--------|-------|
+| BF-1: Report button fix | ✅ Complete | Fixed pdfmake font paths (TTF instead of JS), added error display in modal |
+| BF-3: Map first-click fix | ✅ Complete | Removed 500ms setTimeout delay on map instance handoff to DebugOverlay |
+| BF-4: Refresh rate optimization | ✅ Complete | EO tasking 5s→3s, fallback polling 10s→5s |
+| UI-1: Rectangle zoom | ✅ Complete | Ctrl+left-click+drag box zoom on all 3 maps |
+| UI-2: Unified map behavior | ✅ Complete | All maps use CARTO Dark tiles, same controls/interaction |
+| LIB-1: Sensor type library | ✅ Complete | 15 sensor types (5 radar + 5 EO + 5 original), CRUD API + UI panel |
+| LIB-2: Target type library | ✅ Complete | 52 targets: 12 BM, 11 ABT, 11 fighters, 6 heli, 6 civil, 6 mil transport |
+| LIB-3: Scenario library UI | ✅ Complete | List/load/clone/export/delete with instructor-gated CRUD |
+| DP-1: Deployment persistence | ✅ Complete | File-based JSON persistence in `configs/deployments/` |
+| DP-2: Deployment library | ✅ Complete | 3 predefined deployments (discovery-squadron, border-line, forward-outpost) |
+| DP-3: Sensor library integration | ✅ Complete | Sensor type picker from library in deployment panel |
+| ED-1: Load deployment into editor | ✅ Complete | "Load Deployment" button in editor header |
+| ED-2: Zone drawing (areas/exclusions/threats) | ✅ Complete | Polygon drawing mode with operational/exclusion/threat zones |
+| ED-3: Sensor enhancements | ✅ Complete | Nickname, library picker, template auto-fill |
+| ED-4: Target enhancements | ✅ Complete | Nickname, IR emission, classification, library integration |
+| ED-5: Draggable sensors | ✅ Complete | Sensor drag on editor map (waypoint drag already existed) |
+| ED-6: Target library integration | ✅ Complete | "From Library" dropdown auto-fills RCS/speed/altitude/IR |
+| Waypoint limits | ✅ Complete | Speed: 0–7000 m/s, Altitude: 0–200,000m (ballistic missile support) |
+| Terrain elevation API | ✅ Complete | GET `/api/terrain/elevation?lat=X&lon=Y` |
+| Raster map reimplementation | ✅ Design Only | Full spec in `Raster_Map_Reimplementation_Design.md`, awaiting approval |
+
+## Key Files Added
+- `apps/workstation/src/map/ctrl-box-zoom.ts` — Ctrl+drag rectangle zoom utility
+- `apps/workstation/src/libraries/LibrariesView.tsx` — Libraries view (tabbed: sensors, targets, scenarios)
+- `apps/workstation/src/libraries/SensorLibraryPanel.tsx` — Sensor CRUD panel
+- `apps/workstation/src/libraries/TargetLibraryPanel.tsx` — Target CRUD panel with category filters
+- `apps/workstation/src/libraries/ScenarioLibraryPanel.tsx` — Scenario list/clone/export/delete panel
+- `configs/target-library.json` — 52 realistic target types (BM, ABT, fighters, heli, civil, mil)
+- `configs/deployments/` — 3 pre-defined deployment files (JSON persistence)
+- `Knowledge_Base_and_Agents_instructions/Raster_Map_Reimplementation_Design.md` — Map renderer design doc
 
 ## Recent Fixes (Rounds 1-3, branch `claude/eloc2-development-U3sup`)
 

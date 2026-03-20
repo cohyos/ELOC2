@@ -20,6 +20,8 @@ export interface EditorSensor {
   slewRateDegSec?: number;
   initialGimbalAz?: number;
   template?: string;
+  nickname?: string;
+  libraryId?: string;
 }
 
 export interface EditorTarget {
@@ -27,6 +29,10 @@ export interface EditorTarget {
   label: string;
   rcs: number;
   waypoints: EditorWaypoint[];
+  nickname?: string;
+  irEmission?: number;
+  classification?: string;
+  libraryId?: string;
 }
 
 export interface EditorWaypoint {
@@ -56,6 +62,17 @@ export interface EditorAction {
 }
 
 // ---------------------------------------------------------------------------
+// Zone types
+// ---------------------------------------------------------------------------
+
+export interface GeoVertex {
+  lat: number;
+  lon: number;
+}
+
+export type ZoneDrawMode = 'operational-area' | 'exclusion-zone' | 'threat-zone';
+
+// ---------------------------------------------------------------------------
 // Store interface
 // ---------------------------------------------------------------------------
 
@@ -70,9 +87,16 @@ export interface EditorState {
   actions: EditorAction[];
   selectedItemType: 'sensor' | 'target' | null;
   selectedItemId: string | null;
-  editMode: 'select' | 'place-sensor' | 'place-waypoint';
+  editMode: 'select' | 'place-sensor' | 'place-waypoint' | 'draw-zone';
   validationResult: { errors: string[]; warnings: string[] } | null;
   activeTargetId: string | null;
+
+  // Zones (ED-2)
+  operationalArea: GeoVertex[];
+  exclusionZones: GeoVertex[][];
+  threatZones: GeoVertex[][];
+  zoneDrawMode: ZoneDrawMode | null;
+  zoneDrawVertices: GeoVertex[];
 
   // CRUD actions
   addSensor: (sensor: EditorSensor) => void;
@@ -104,6 +128,16 @@ export interface EditorState {
   updateAction: (id: string, updates: Partial<EditorAction>) => void;
   buildScenarioDefinition: () => ScenarioExport;
   loadFromScenarioDefinition: (def: ScenarioExport) => void;
+
+  // Zone actions (ED-2)
+  setOperationalArea: (vertices: GeoVertex[]) => void;
+  addExclusionZone: (vertices: GeoVertex[]) => void;
+  addThreatZone: (vertices: GeoVertex[]) => void;
+  clearZones: () => void;
+  startZoneDraw: (mode: ZoneDrawMode) => void;
+  addZoneVertex: (vertex: GeoVertex) => void;
+  finishZoneDraw: () => void;
+  cancelZoneDraw: () => void;
 }
 
 /** Shape matching ScenarioDefinition from scenario-library */
@@ -168,9 +202,14 @@ const initialState = {
   actions: [] as EditorAction[],
   selectedItemType: null as 'sensor' | 'target' | null,
   selectedItemId: null as string | null,
-  editMode: 'select' as const,
+  editMode: 'select' as EditorState['editMode'],
   validationResult: null as EditorState['validationResult'],
   activeTargetId: null as string | null,
+  operationalArea: [] as GeoVertex[],
+  exclusionZones: [] as GeoVertex[][],
+  threatZones: [] as GeoVertex[][],
+  zoneDrawMode: null as ZoneDrawMode | null,
+  zoneDrawVertices: [] as GeoVertex[],
 };
 
 // ---------------------------------------------------------------------------
@@ -300,6 +339,54 @@ export const useEditorStore = create<EditorState>((set) => ({
         a.id === id ? { ...a, ...updates } : a
       ),
     })),
+
+  // Zone actions (ED-2)
+  setOperationalArea: (vertices) => set({ operationalArea: vertices }),
+
+  addExclusionZone: (vertices) =>
+    set((s) => ({ exclusionZones: [...s.exclusionZones, vertices] })),
+
+  addThreatZone: (vertices) =>
+    set((s) => ({ threatZones: [...s.threatZones, vertices] })),
+
+  clearZones: () =>
+    set({ operationalArea: [], exclusionZones: [], threatZones: [] }),
+
+  startZoneDraw: (mode) =>
+    set({ editMode: 'draw-zone', zoneDrawMode: mode, zoneDrawVertices: [] }),
+
+  addZoneVertex: (vertex) =>
+    set((s) => ({ zoneDrawVertices: [...s.zoneDrawVertices, vertex] })),
+
+  finishZoneDraw: () => {
+    const s = useEditorStore.getState();
+    if (s.zoneDrawVertices.length < 3) {
+      // Need at least 3 points for a polygon
+      set({ editMode: 'select', zoneDrawMode: null, zoneDrawVertices: [] });
+      return;
+    }
+    const vertices = [...s.zoneDrawVertices];
+    if (s.zoneDrawMode === 'operational-area') {
+      set({ operationalArea: vertices, editMode: 'select', zoneDrawMode: null, zoneDrawVertices: [] });
+    } else if (s.zoneDrawMode === 'exclusion-zone') {
+      set((prev) => ({
+        exclusionZones: [...prev.exclusionZones, vertices],
+        editMode: 'select',
+        zoneDrawMode: null,
+        zoneDrawVertices: [],
+      }));
+    } else if (s.zoneDrawMode === 'threat-zone') {
+      set((prev) => ({
+        threatZones: [...prev.threatZones, vertices],
+        editMode: 'select',
+        zoneDrawMode: null,
+        zoneDrawVertices: [],
+      }));
+    }
+  },
+
+  cancelZoneDraw: () =>
+    set({ editMode: 'select', zoneDrawMode: null, zoneDrawVertices: [] }),
 
   buildScenarioDefinition: () => {
     const s = useEditorStore.getState();

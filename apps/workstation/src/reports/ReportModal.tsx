@@ -18,6 +18,7 @@ export function ReportModal({ open, onClose, isInstructor, simElapsed }: ReportM
   const [fromTime, setFromTime] = useState(0);
   const [toTime, setToTime] = useState(simElapsed);
   const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Sync toTime when simElapsed changes and modal opens
   React.useEffect(() => {
@@ -30,13 +31,17 @@ export function ReportModal({ open, onClose, isInstructor, simElapsed }: ReportM
 
   const handleGenerate = async () => {
     setGenerating(true);
+    setError(null);
     try {
       const res = await fetch('/api/report/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: selectedType, timeRange: { from: fromTime, to: toTime } }),
       });
-      if (!res.ok) throw new Error('Generation failed');
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.details || errBody.error || `Server error ${res.status}`);
+      }
       const blob = await res.blob();
       // Extract filename from Content-Disposition header
       const disposition = res.headers.get('Content-Disposition');
@@ -54,8 +59,9 @@ export function ReportModal({ open, onClose, isInstructor, simElapsed }: ReportM
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Report generation failed:', err);
+      setError(err.message || 'Report generation failed');
     }
     setGenerating(false);
   };
@@ -248,6 +254,21 @@ export function ReportModal({ open, onClose, isInstructor, simElapsed }: ReportM
             'Generate'
           )}
         </button>
+
+        {/* Error display */}
+        {error && (
+          <div style={{
+            marginTop: '12px',
+            padding: '8px 12px',
+            background: '#2a1a1a',
+            border: '1px solid #ff444444',
+            borderRadius: '4px',
+            color: '#ff6666',
+            fontSize: '12px',
+          }}>
+            {error}
+          </div>
+        )}
 
         {/* Spinner keyframes */}
         <style>{`

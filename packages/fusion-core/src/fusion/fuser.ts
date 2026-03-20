@@ -1,5 +1,6 @@
 import type {
   Covariance3x3,
+  DopplerQuality,
   Position3D,
   RegistrationState,
   SourceObservation,
@@ -15,6 +16,8 @@ export interface FusedState {
   state: Position3D;
   covariance: Covariance3x3;
   confidence: number;
+  radialVelocity?: number;
+  dopplerQuality?: DopplerQuality;
 }
 
 // ---------------------------------------------------------------------------
@@ -38,7 +41,12 @@ export function fuseObservation(
   track: SystemTrack,
 ): FusedState {
   const invTrackCov = mat3x3Inverse(track.covariance);
-  const invObsCov = mat3x3Inverse(observation.covariance);
+
+  // Downweight observations with blind Doppler quality by inflating covariance 4x
+  const obsCov = observation.dopplerQuality === 'blind'
+    ? observation.covariance.map(row => row.map(v => v * 4)) as Covariance3x3
+    : observation.covariance;
+  const invObsCov = mat3x3Inverse(obsCov);
 
   if (invTrackCov === null || invObsCov === null) {
     // Fallback: simple averaging
@@ -85,6 +93,12 @@ export function fuseObservation(
   // Blend with previous confidence: take the better of current confidence or a boost
   const confidence = Math.min(1, Math.max(0, track.confidence + improvement * 0.1));
 
+  // Propagate Doppler: prefer observation unless quality is blind
+  const radialVelocity = observation.dopplerQuality !== 'blind'
+    ? observation.radialVelocity ?? track.radialVelocity
+    : track.radialVelocity;
+  const dopplerQuality = observation.dopplerQuality ?? track.dopplerQuality;
+
   return {
     state: {
       lat: fusedState[0],
@@ -93,6 +107,8 @@ export function fuseObservation(
     },
     covariance: fusedCov,
     confidence,
+    radialVelocity,
+    dopplerQuality,
   };
 }
 
@@ -112,6 +128,8 @@ function fallbackAverage(
     },
     covariance: observation.covariance,
     confidence: Math.min(1, Math.max(0, track.confidence + 0.05)),
+    radialVelocity: observation.radialVelocity ?? track.radialVelocity,
+    dopplerQuality: observation.dopplerQuality ?? track.dopplerQuality,
   };
 }
 
@@ -166,5 +184,9 @@ export function fuseWithRegistration(
     state: { ...observation.position },
     covariance: inflatedCov,
     confidence,
+    radialVelocity: observation.dopplerQuality !== 'blind'
+      ? observation.radialVelocity ?? track.radialVelocity
+      : track.radialVelocity,
+    dopplerQuality: observation.dopplerQuality ?? track.dopplerQuality,
   };
 }

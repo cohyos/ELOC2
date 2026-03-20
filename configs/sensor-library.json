@@ -2,14 +2,14 @@
   "sensors": [
     {
       "id": "radar-360-150km",
-      "name": "360\u00b0 Surveillance Radar",
+      "name": "360° Surveillance Radar",
       "type": "radar",
       "coverage": { "minAzDeg": 0, "maxAzDeg": 360, "maxRangeM": 150000 },
       "description": "Full azimuth surveillance radar, 150km range"
     },
     {
       "id": "radar-sector-180km",
-      "name": "Sector Radar 180\u00b0",
+      "name": "Sector Radar 180°",
       "type": "radar",
       "coverage": { "minAzDeg": 0, "maxAzDeg": 180, "maxRangeM": 180000 },
       "description": "Half-sector radar, 180km range"
@@ -36,6 +36,137 @@
       "type": "radar",
       "coverage": { "minAzDeg": 0, "maxAzDeg": 360, "maxRangeM": 200000 },
       "description": "Long-range area surveillance radar"
+    },
+    {
+      "id": "radar-elta-elm2084",
+      "name": "EL/M-2084 Multi-Mission Radar",
+      "type": "radar",
+      "coverage": { "minAzDeg": 0, "maxAzDeg": 360, "maxRangeM": 100000 },
+      "radarParams": {
+        "scanTypeDeg": 360,
+        "modes": ["search", "track"],
+        "system": "Iron Dome"
+      },
+      "description": "EL/M-2084 Iron Dome fire-control radar, 360° coverage, 100km range, simultaneous search and track"
+    },
+    {
+      "id": "radar-elta-elm2080",
+      "name": "EL/M-2080 Green Pine",
+      "type": "radar",
+      "coverage": { "minAzDeg": 0, "maxAzDeg": 120, "maxRangeM": 500000 },
+      "radarParams": {
+        "scanTypeDeg": 120,
+        "modes": ["search", "track", "ballistic-detection"],
+        "system": "Arrow"
+      },
+      "description": "EL/M-2080 Green Pine phased-array radar for Arrow system, 120° sector, 500km range, ballistic missile detection and tracking"
+    },
+    {
+      "id": "radar-elta-elm2288",
+      "name": "EL/M-2288 AD-STAR",
+      "type": "radar",
+      "coverage": { "minAzDeg": 0, "maxAzDeg": 360, "maxRangeM": 250000 },
+      "radarParams": {
+        "scanTypeDeg": 360,
+        "modes": ["search", "track"],
+        "dimensionality": "3D"
+      },
+      "description": "EL/M-2288 AD-STAR medium-range 3D surveillance radar, 360° coverage, 250km range"
+    },
+    {
+      "id": "radar-tps-80",
+      "name": "AN/TPS-80 G/ATOR",
+      "type": "radar",
+      "coverage": { "minAzDeg": 0, "maxAzDeg": 360, "maxRangeM": 200000 },
+      "radarParams": {
+        "scanTypeDeg": 360,
+        "modes": ["search", "track", "ground-surveillance"],
+        "dimensionality": "3D"
+      },
+      "description": "AN/TPS-80 G/ATOR multi-role ground/air radar, 360° coverage, 200km range"
+    },
+    {
+      "id": "radar-spyder-mrs",
+      "name": "SPYDER MR Search Radar",
+      "type": "radar",
+      "coverage": { "minAzDeg": 0, "maxAzDeg": 360, "maxRangeM": 80000 },
+      "radarParams": {
+        "scanTypeDeg": 360,
+        "modes": ["search"],
+        "system": "SPYDER-MR"
+      },
+      "description": "SPYDER MR short-range acquisition radar, 360° coverage, 80km range"
+    },
+    {
+      "id": "eo-meos-500",
+      "name": "MEOS 500 IRST",
+      "type": "eo",
+      "coverage": { "minAzDeg": 0, "maxAzDeg": 360, "maxRangeM": 50000 },
+      "fov": { "halfAngleHDeg": 0.75, "halfAngleVDeg": 0.75, "depthM": 50000 },
+      "eoParams": {
+        "mountType": "gimbal",
+        "slewRateDegSec": 60,
+        "spectrum": "thermal-MWIR",
+        "resolution": "high"
+      },
+      "description": "MEOS 500 IRST high-resolution thermal sensor, gimbal-mounted, 50km range, 1.5° narrow FOV"
+    },
+    {
+      "id": "eo-toplite-iii",
+      "name": "TopLite III Turret",
+      "type": "eo",
+      "coverage": { "minAzDeg": 0, "maxAzDeg": 360, "maxRangeM": 30000 },
+      "fov": { "halfAngleHDeg": 1.5, "halfAngleVDeg": 1.5, "depthM": 30000 },
+      "eoParams": {
+        "mountType": "gimbal",
+        "slewRateDegSec": 90,
+        "spectrum": "multi-spectral",
+        "channels": ["CCD-TV", "thermal-FLIR", "laser-rangefinder"]
+      },
+      "description": "TopLite III multi-spectral turret, gimbal-mounted, 30km range, 3° FOV, CCD/FLIR/laser"
+    },
+    {
+      "id": "eo-pods-litening",
+      "name": "Litening Pod (Ground Mounted)",
+      "type": "eo",
+      "coverage": { "minAzDeg": 0, "maxAzDeg": 360, "maxRangeM": 40000 },
+      "fov": { "halfAngleHDeg": 1.25, "halfAngleVDeg": 1.25, "depthM": 40000 },
+      "eoParams": {
+        "mountType": "gimbal",
+        "slewRateDegSec": 45,
+        "spectrum": "multi-spectral",
+        "channels": ["CCD-TV", "thermal-FLIR", "laser-designator"]
+      },
+      "description": "Litening pod adapted for ground mount, gimbal, 40km range, 2.5° FOV, laser designator capable"
+    },
+    {
+      "id": "eo-staring-skyguard",
+      "name": "SkyGuard Staring Array",
+      "type": "eo",
+      "coverage": { "minAzDeg": 0, "maxAzDeg": 360, "maxRangeM": 25000 },
+      "fov": { "halfAngleHDeg": 10, "halfAngleVDeg": 10, "depthM": 25000 },
+      "eoParams": {
+        "mountType": "staring",
+        "slewRateDegSec": 0,
+        "spectrum": "thermal-MWIR",
+        "mode": "persistent-surveillance"
+      },
+      "description": "SkyGuard staring infrared array, 25km range, 20° wide FOV, persistent 360° surveillance"
+    },
+    {
+      "id": "eo-dss",
+      "name": "Distributed Sensor Station",
+      "type": "eo",
+      "coverage": { "minAzDeg": 0, "maxAzDeg": 360, "maxRangeM": 35000 },
+      "fov": { "halfAngleHDeg": 2, "halfAngleVDeg": 2, "depthM": 35000 },
+      "eoParams": {
+        "mountType": "gimbal",
+        "slewRateDegSec": 120,
+        "spectrum": "multi-spectral",
+        "mode": "autonomous-cueing",
+        "channels": ["CCD-TV", "thermal-SWIR"]
+      },
+      "description": "Distributed Sensor Station, gimbal-mounted, 35km range, 4° FOV, autonomous cueing with fast slew"
     }
   ]
 }

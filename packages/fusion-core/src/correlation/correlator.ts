@@ -31,10 +31,18 @@ export interface CorrelatorConfig {
    * causing ghost tracks when sensor noise exceeded the gate radius.
    */
   gateThreshold: number;
+  /**
+   * Maximum allowed mismatch (m/s) between observed Doppler radial velocity
+   * and predicted radial velocity from track state. Candidates exceeding this
+   * are rejected even if they pass the spatial gate.
+   * Default 50 m/s.
+   */
+  velocityGateThreshold: number;
 }
 
 const DEFAULT_CONFIG: CorrelatorConfig = {
   gateThreshold: 16.27,
+  velocityGateThreshold: 50,
 };
 
 // ---------------------------------------------------------------------------
@@ -138,6 +146,25 @@ export function correlate(
     const distSquared = dist * dist;
 
     if (distSquared <= config.gateThreshold) {
+      // Velocity consistency gate: reject if Doppler radial velocity
+      // disagrees with the predicted radial velocity from the track state.
+      if (
+        observation.radialVelocity !== undefined &&
+        track.velocity &&
+        track.radialVelocity !== undefined
+      ) {
+        const dlat = track.state.lat - observation.position.lat;
+        const dlon = track.state.lon - observation.position.lon;
+        const dist2d = Math.sqrt(dlat * dlat + dlon * dlon);
+        if (dist2d > 1e-9) {
+          const ux = dlon / dist2d;
+          const uy = dlat / dist2d;
+          const predictedVr = track.velocity.vx * ux + track.velocity.vy * uy;
+          const vrDiff = Math.abs(observation.radialVelocity - predictedVr);
+          if (vrDiff > config.velocityGateThreshold) continue;
+        }
+      }
+
       candidates.push({ trackId: track.systemTrackId, distance: distSquared });
     }
   }

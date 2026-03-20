@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useDeploymentStore } from './deployment-store';
 import type { SensorSpec } from './deployment-store';
 
@@ -37,6 +37,35 @@ const btnStyle: React.CSSProperties = {
   marginBottom: '4px',
 };
 
+const selectStyle: React.CSSProperties = {
+  background: '#1e1e30',
+  color: '#e0e0e0',
+  border: '1px solid #2a2a3e',
+  borderRadius: '3px',
+  padding: '4px 6px',
+  fontSize: '11px',
+  width: '100%',
+  cursor: 'pointer',
+  fontFamily: 'system-ui, -apple-system, sans-serif',
+};
+
+interface DeploymentSummary {
+  id: string;
+  name: string;
+  createdAt: string;
+  sensorCount: number;
+  coveragePercent: number;
+}
+
+interface SensorLibraryEntry {
+  id: string;
+  name: string;
+  type: 'radar' | 'eo';
+  coverage: { minAzDeg: number; maxAzDeg: number; maxRangeM: number };
+  fov?: { halfAngleHDeg: number; depthM?: number };
+  description?: string;
+}
+
 let sensorCounter = 10;
 
 export function DeploymentPanel() {
@@ -55,6 +84,99 @@ export function DeploymentPanel() {
   const runOptimization = useDeploymentStore(s => s.runOptimization);
   const exportScenario = useDeploymentStore(s => s.exportScenario);
   const clearAll = useDeploymentStore(s => s.clearAll);
+
+  // ── DP-2: Saved deployments list ────────────────────────────────────────
+  const [savedDeployments, setSavedDeployments] = useState<DeploymentSummary[]>([]);
+  const [selectedDeploymentId, setSelectedDeploymentId] = useState('');
+  const [loadingDeployment, setLoadingDeployment] = useState(false);
+
+  // ── DP-3: Sensor library ────────────────────────────────────────────────
+  const [sensorLibrary, setSensorLibrary] = useState<SensorLibraryEntry[]>([]);
+  const [selectedLibrarySensor, setSelectedLibrarySensor] = useState('');
+
+  // Fetch saved deployments and sensor library on mount
+  useEffect(() => {
+    fetch('/api/deployment/list')
+      .then(r => r.ok ? r.json() : [])
+      .then((list: DeploymentSummary[]) => setSavedDeployments(list))
+      .catch(() => {});
+
+    fetch('/api/sensors/library')
+      .then(r => r.ok ? r.json() : { sensors: [] })
+      .then((data: { sensors: SensorLibraryEntry[] }) => {
+        setSensorLibrary(data.sensors || []);
+      })
+      .catch(() => {});
+  }, []);
+
+  // ── DP-2: Load a saved deployment ───────────────────────────────────────
+  const handleLoadDeployment = async () => {
+    if (!selectedDeploymentId) return;
+    setLoadingDeployment(true);
+    try {
+      const res = await fetch(`/api/deployment/${selectedDeploymentId}`);
+      if (!res.ok) throw new Error('Failed to load deployment');
+      const deployment = await res.json();
+
+      // Populate the store with loaded deployment data
+      const store = useDeploymentStore.getState();
+      store.clearAll();
+
+      // Set constraints
+      if (deployment.constraints) {
+        store.setScannedArea(deployment.constraints.scannedArea);
+        // Clear and re-add exclusion zones
+        for (const zone of (deployment.constraints.exclusionZones || [])) {
+          store.addExclusionZone(zone);
+        }
+        for (const corridor of (deployment.constraints.threatCorridors || [])) {
+          store.addThreatCorridor(corridor);
+        }
+      }
+
+      // Replace sensor inventory with loaded sensors
+      // First clear existing inventory
+      const currentInventory = useDeploymentStore.getState().sensorInventory;
+      for (const s of currentInventory) {
+        store.removeSensorFromInventory(s.id);
+      }
+      // Add loaded sensors
+      for (const s of (deployment.sensors || [])) {
+        store.addSensorToInventory(s);
+      }
+
+      // Set placed sensors and metrics
+      if (deployment.result) {
+        store.setPlacedSensors(deployment.result.placedSensors || []);
+        store.setMetrics(deployment.result.metrics || null);
+      }
+    } catch (err: any) {
+      useDeploymentStore.getState().setError(err.message || 'Load failed');
+    } finally {
+      setLoadingDeployment(false);
+    }
+  };
+
+  // ── DP-3: Add sensor from library ───────────────────────────────────────
+  const handleAddFromLibrary = () => {
+    if (!selectedLibrarySensor) return;
+    const entry = sensorLibrary.find(s => s.id === selectedLibrarySensor);
+    if (!entry) return;
+
+    sensorCounter++;
+    const fovHalf = entry.type === 'eo'
+      ? (entry.fov?.halfAngleHDeg ?? 5)
+      : ((entry.coverage.maxAzDeg - entry.coverage.minAzDeg) / 2);
+
+    addSensor({
+      id: `${entry.id}-${sensorCounter}`,
+      type: entry.type,
+      maxRangeM: entry.coverage.maxRangeM,
+      fovHalfAngleDeg: fovHalf,
+      minAzDeg: entry.coverage.minAzDeg,
+      maxAzDeg: entry.coverage.maxAzDeg,
+    });
+  };
 
   const handleAddEO = () => {
     sensorCounter++;
@@ -114,6 +236,35 @@ export function DeploymentPanel() {
     <div style={{ padding: '12px', color: colors.text, fontSize: '13px', overflowY: 'auto', height: '100%' }}>
       <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#fff', margin: '0 0 16px' }}>Deployment Planner</h3>
 
+      {/* DP-2: Load Deployment */}
+      <div style={{ marginBottom: '16px' }}>
+        <div style={sectionTitle}>Load Deployment</div>
+        <select
+          value={selectedDeploymentId}
+          onChange={e => setSelectedDeploymentId(e.target.value)}
+          style={{ ...selectStyle, marginBottom: '4px' }}
+        >
+          <option value="">-- Select a saved deployment --</option>
+          {savedDeployments.map(d => (
+            <option key={d.id} value={d.id}>
+              {d.name} ({d.sensorCount} sensors, {d.coveragePercent}% cov)
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={handleLoadDeployment}
+          disabled={!selectedDeploymentId || loadingDeployment}
+          style={{
+            ...btnStyle,
+            color: colors.accent,
+            opacity: !selectedDeploymentId || loadingDeployment ? 0.5 : 1,
+            cursor: !selectedDeploymentId || loadingDeployment ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {loadingDeployment ? 'Loading...' : 'Load Deployment'}
+        </button>
+      </div>
+
       {/* Sensor Inventory */}
       <div style={{ marginBottom: '16px' }}>
         <div style={sectionTitle}>Sensor Inventory ({inventory.length})</div>
@@ -134,6 +285,42 @@ export function DeploymentPanel() {
             </button>
           </div>
         ))}
+
+        {/* DP-3: Add from sensor library */}
+        {sensorLibrary.length > 0 && (
+          <div style={{ marginTop: '6px', marginBottom: '6px' }}>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <select
+                value={selectedLibrarySensor}
+                onChange={e => setSelectedLibrarySensor(e.target.value)}
+                style={{ ...selectStyle, flex: 1 }}
+              >
+                <option value="">From library...</option>
+                {sensorLibrary.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.type.toUpperCase()}, {(s.coverage.maxRangeM / 1000).toFixed(0)}km)
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleAddFromLibrary}
+                disabled={!selectedLibrarySensor}
+                style={{
+                  ...btnStyle,
+                  width: 'auto',
+                  padding: '4px 8px',
+                  color: colors.success,
+                  opacity: !selectedLibrarySensor ? 0.5 : 1,
+                  cursor: !selectedLibrarySensor ? 'not-allowed' : 'pointer',
+                  marginBottom: 0,
+                }}
+              >
+                + Add
+              </button>
+            </div>
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
           <button onClick={handleAddEO} style={{ ...btnStyle, width: 'auto', flex: 1, color: colors.eo }}>+ EO</button>
           <button onClick={handleAddRadar} style={{ ...btnStyle, width: 'auto', flex: 1, color: colors.radar }}>+ Radar</button>

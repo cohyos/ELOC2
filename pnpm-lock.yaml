@@ -80,6 +80,9 @@ importers:
       '@eloc2/simulator':
         specifier: workspace:*
         version: link:../simulator
+      '@eloc2/terrain':
+        specifier: workspace:*
+        version: link:../../packages/terrain
       '@fastify/static':
         specifier: ^9.0.0
         version: 9.0.0

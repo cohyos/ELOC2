@@ -17,15 +17,85 @@ import type {
   GeoPolygon,
   GeoPoint,
 } from '@eloc2/deployment-planner';
+import fs from 'node:fs';
+import path from 'node:path';
 
-// In-memory store for saved deployments
-const savedDeployments = new Map<string, SavedDeployment>();
+// Directory for persisted deployment JSON files
+const DEPLOYMENTS_DIR = path.resolve(
+  process.cwd(),
+  'configs',
+  'deployments',
+);
+
+/** Ensure the deployments directory exists. */
+function ensureDir(): void {
+  if (!fs.existsSync(DEPLOYMENTS_DIR)) {
+    fs.mkdirSync(DEPLOYMENTS_DIR, { recursive: true });
+  }
+}
+
+/** Build the file path for a deployment id. */
+function deploymentPath(id: string): string {
+  // Sanitise id to prevent directory traversal
+  const safe = id.replace(/[^a-zA-Z0-9_-]/g, '');
+  return path.join(DEPLOYMENTS_DIR, `${safe}.json`);
+}
+
+/** Read a single deployment from disk (or null). */
+function readDeployment(id: string): SavedDeployment | null {
+  const fp = deploymentPath(id);
+  if (!fs.existsSync(fp)) return null;
+  try {
+    const raw = fs.readFileSync(fp, 'utf-8');
+    return JSON.parse(raw) as SavedDeployment;
+  } catch {
+    return null;
+  }
+}
+
+/** Write a deployment to disk. */
+function writeDeployment(d: SavedDeployment): void {
+  ensureDir();
+  fs.writeFileSync(deploymentPath(d.id), JSON.stringify(d, null, 2), 'utf-8');
+}
+
+/** List all saved deployments from disk. */
+function listDeployments(): SavedDeployment[] {
+  ensureDir();
+  const files = fs.readdirSync(DEPLOYMENTS_DIR).filter(f => f.endsWith('.json'));
+  const results: SavedDeployment[] = [];
+  for (const file of files) {
+    try {
+      const raw = fs.readFileSync(path.join(DEPLOYMENTS_DIR, file), 'utf-8');
+      results.push(JSON.parse(raw) as SavedDeployment);
+    } catch {
+      // skip malformed files
+    }
+  }
+  return results;
+}
+
+// Counter for generating unique ids (scan existing files to avoid collisions)
 let nextId = 1;
+function initCounter(): void {
+  ensureDir();
+  const files = fs.readdirSync(DEPLOYMENTS_DIR).filter(f => f.endsWith('.json'));
+  for (const file of files) {
+    const match = file.match(/^deploy-(\d+)\.json$/);
+    if (match) {
+      const n = parseInt(match[1], 10);
+      if (n >= nextId) nextId = n + 1;
+    }
+  }
+}
 
 /**
  * Deployment planning API routes (REQ-15).
  */
 export function registerDeploymentRoutes(app: FastifyInstance) {
+  // Initialise id counter from existing files
+  initCounter();
+
   // POST /api/deployment/optimize — Run optimization with constraints
   app.post<{
     Body: {
@@ -94,7 +164,7 @@ export function registerDeploymentRoutes(app: FastifyInstance) {
     return { sensors: sensorDefs };
   });
 
-  // POST /api/deployment/save — Save deployment
+  // POST /api/deployment/save — Save deployment to JSON file
   app.post<{
     Body: {
       name: string;
@@ -113,13 +183,14 @@ export function registerDeploymentRoutes(app: FastifyInstance) {
       sensors,
       result,
     };
-    savedDeployments.set(id, saved);
+    writeDeployment(saved);
     return { id, name, createdAt: saved.createdAt };
   });
 
-  // GET /api/deployment/list — List saved deployments
+  // GET /api/deployment/list — List saved deployments (reads directory)
   app.get('/api/deployment/list', async () => {
-    return Array.from(savedDeployments.values()).map(d => ({
+    const all = listDeployments();
+    return all.map(d => ({
       id: d.id,
       name: d.name,
       createdAt: d.createdAt,
@@ -128,9 +199,9 @@ export function registerDeploymentRoutes(app: FastifyInstance) {
     }));
   });
 
-  // GET /api/deployment/:id — Load deployment
+  // GET /api/deployment/:id — Load deployment from JSON file
   app.get<{ Params: { id: string } }>('/api/deployment/:id', async (request, reply) => {
-    const deployment = savedDeployments.get(request.params.id);
+    const deployment = readDeployment(request.params.id);
     if (!deployment) {
       reply.code(404);
       return { error: 'Deployment not found' };
@@ -139,8 +210,6 @@ export function registerDeploymentRoutes(app: FastifyInstance) {
   });
 
   // POST /api/deployment/export-to-scenario — Export deployment as scenario sensor config
-  // Takes a deployment result and converts placed sensors to a scenario-compatible format.
-  // User can then override sensor positions before running the scenario.
   app.post<{
     Body: {
       deploymentId?: string;
@@ -152,7 +221,7 @@ export function registerDeploymentRoutes(app: FastifyInstance) {
     let sensors: PlacedSensor[];
 
     if (request.body.deploymentId) {
-      const deployment = savedDeployments.get(request.body.deploymentId);
+      const deployment = readDeployment(request.body.deploymentId);
       if (!deployment) {
         reply.code(404);
         return { error: 'Deployment not found' };
