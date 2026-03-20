@@ -444,6 +444,10 @@ export class LiveEngine {
   private confirmedGeometryTime = new Map<string, number>();
   /** Accumulated sensor tasked ticks (each tick a sensor has an active dwell counts as 1) */
   private sensorTaskedTicks = new Map<string, number>();
+  /** Accumulated sensor observation ticks (each tick a sensor produces at least one observation counts as 1) */
+  private sensorObservationTicks = new Map<string, number>();
+  /** Sensors that produced observations in the current tick (reset each tick) */
+  private currentTickObservingSensors = new Set<string>();
   /** Total ticks elapsed (for sensor utilization denominator) */
   private totalTicks = 0;
   /** Cached quality metrics (recomputed each tick) */
@@ -1392,6 +1396,8 @@ export class LiveEngine {
     this.firstDetectionTime.clear();
     this.confirmedGeometryTime.clear();
     this.sensorTaskedTicks.clear();
+    this.sensorObservationTicks.clear();
+    this.currentTickObservingSensors.clear();
     this.totalTicks = 0;
     this.cachedQualityMetrics = null;
 
@@ -1785,6 +1791,9 @@ export class LiveEngine {
       const sensorType = this.state.sensors.find(s => s.sensorId === obs.sensorId)?.sensorType ?? 'radar';
       const fusionDecision = selectFusionMode(health ?? undefined, sensorType, 0.5);
       this.fusionModePerSensor.set(obs.sensorId as string, fusionDecision.mode);
+
+      // Track that this sensor produced an observation this tick
+      this.currentTickObservingSensors.add(obs.sensorId as string);
 
       observations.push(obs);
     }
@@ -3242,16 +3251,8 @@ export class LiveEngine {
     const proposedTask = tasks.find(t => t.status === 'proposed');
 
     const taskForScore = activeTask ?? proposedTask ?? tasks[tasks.length - 1];
-    const scoreBreakdown = taskForScore?.scoreBreakdown ?? {
-      threatScore: 0,
-      uncertaintyReduction: 0,
-      geometryGain: 0,
-      operatorIntent: 0,
-      slewCost: 0,
-      occupancyCost: 0,
-      total: 0,
-    };
 
+    // Compute kinematics
     const speed = track.velocity
       ? Math.sqrt(track.velocity.vx ** 2 + track.velocity.vy ** 2 + track.velocity.vz ** 2)
       : 0;
@@ -3279,6 +3280,35 @@ export class LiveEngine {
         closureRate = -vr;
         closureSensorId = sensor.sensorId as string;
       }
+    }
+
+    // Use EO task score breakdown if available, otherwise compute standalone threat assessment
+    let scoreBreakdown;
+    if (taskForScore?.scoreBreakdown) {
+      scoreBreakdown = taskForScore.scoreBreakdown;
+    } else {
+      // Standalone threat assessment based on track kinematics
+      const confidenceBase = track.confidence * 10;
+      const altPenalty = Math.max(0, 1 - track.state.alt / 15000);
+      const speedBonus = speed / 500;
+      const closureBonus = Math.max(0, closureRate / 200);
+      const threatScore = confidenceBase * (1 + altPenalty + speedBonus + closureBonus);
+
+      // Uncertainty from covariance
+      const cov = track.covariance;
+      const trace = (cov[0]?.[0] ?? 0) + (cov[1]?.[1] ?? 0) + (cov[2]?.[2] ?? 0);
+      const uncertaintyReduction = trace > 0 ? Math.min(10, Math.sqrt(trace) / 100) : 0;
+
+      const total = threatScore + uncertaintyReduction;
+      scoreBreakdown = {
+        threatScore,
+        uncertaintyReduction,
+        geometryGain: 0,
+        operatorIntent: this.operatorPriorityTracks.has(trackId) ? 3.0 : 0,
+        slewCost: 0,
+        occupancyCost: 0,
+        total,
+      };
     }
 
     const taskingPriority = activeTask
@@ -3756,10 +3786,16 @@ export class LiveEngine {
   private computeQualityMetrics(): void {
     this.totalTicks++;
 
-    // Update sensor tasked ticks
+    // Update sensor tasked ticks (EO dwells)
     for (const [sensorId] of this.dwellState) {
       this.sensorTaskedTicks.set(sensorId, (this.sensorTaskedTicks.get(sensorId) ?? 0) + 1);
     }
+
+    // Update sensor observation ticks (radar/c4isr observation counts)
+    for (const sensorId of this.currentTickObservingSensors) {
+      this.sensorObservationTicks.set(sensorId, (this.sensorObservationTicks.get(sensorId) ?? 0) + 1);
+    }
+    this.currentTickObservingSensors.clear();
 
     const groundTruth = this.getGroundTruth();
     const tracks = this.state.tracks;
@@ -3880,8 +3916,15 @@ export class LiveEngine {
     if (this.totalTicks === 0) return result;
     for (const sensor of this.state.sensors) {
       const sensorId = sensor.sensorId as string;
-      const tasked = this.sensorTaskedTicks.get(sensorId) ?? 0;
-      result[sensorId] = tasked / this.totalTicks;
+      if (sensor.sensorType === 'eo') {
+        // EO sensors: utilization = % of ticks with active dwell
+        const tasked = this.sensorTaskedTicks.get(sensorId) ?? 0;
+        result[sensorId] = tasked / this.totalTicks;
+      } else {
+        // Radar/C4ISR sensors: utilization = % of ticks that produced at least one observation
+        const observed = this.sensorObservationTicks.get(sensorId) ?? 0;
+        result[sensorId] = observed / this.totalTicks;
+      }
     }
     return result;
   }

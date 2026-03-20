@@ -85,6 +85,7 @@ interface DebugOverlayProps {
   onSelectTrack?: (id: string) => void;
   onSelectSensor?: (id: string) => void;
   onSelectGroundTruth?: (id: string) => void;
+  selectedGroundTruthId?: string | null;
   groundTruthTargets?: GroundTruthTarget[];
   showGroundTruth?: boolean;
   coverZones?: CoverZone[];
@@ -97,7 +98,7 @@ interface DebugOverlayProps {
   ballisticEstimates?: BallisticEstimateWS[];
 }
 
-export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor, onSelectGroundTruth, groundTruthTargets, showGroundTruth, coverZones, operationalZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds, ballisticEstimates }: DebugOverlayProps) {
+export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, layerVisibility, onSelectTrack, onSelectSensor, onSelectGroundTruth, selectedGroundTruthId, groundTruthTargets, showGroundTruth, coverZones, operationalZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds, ballisticEstimates }: DebugOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const frameRef = useRef<number>(0);
@@ -542,26 +543,86 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
         if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
         const px = proj(lon, lat);
 
+        const gtId = target.targetId ?? target.name;
+        const isSelected = selectedGroundTruthId === gtId;
+
         // Diamond marker (rotated square) — clickable to show details
         const el = document.createElement('div');
+        const size = isSelected ? 18 : 14;
+        const offset = size / 2;
         el.style.cssText = `
-          position:absolute; left:${px.x - 7}px; top:${px.y - 7}px;
-          width:14px; height:14px; background:#00ffff;
-          border:2px solid #fff; z-index:22; cursor:pointer;
+          position:absolute; left:${px.x - offset}px; top:${px.y - offset}px;
+          width:${size}px; height:${size}px; background:${isSelected ? '#00ffff' : '#00ffff'};
+          border:${isSelected ? '3px solid #fff' : '2px solid #fff'}; z-index:22; cursor:pointer;
           transform:rotate(45deg); pointer-events:auto;
+          ${isSelected ? 'box-shadow:0 0 12px #00ffff, 0 0 24px #00ffff66;' : ''}
         `;
         el.title = `GT: ${target.name} — ${target.classification ?? 'unclassified'}`;
         if (onSelectGroundTruth) {
-          const gtId = target.targetId ?? target.name;
           el.addEventListener('click', (e) => { e.stopPropagation(); onSelectGroundTruth(gtId); });
         }
         container.appendChild(el);
 
+        // Selection ring for selected GT target
+        if (isSelected) {
+          const ring = document.createElement('div');
+          const ringSize = 32;
+          ring.style.cssText = `
+            position:absolute; left:${px.x - ringSize / 2}px; top:${px.y - ringSize / 2}px;
+            width:${ringSize}px; height:${ringSize}px; border:2px solid #00ffff;
+            border-radius:50%; z-index:21; pointer-events:none;
+            box-shadow:0 0 8px #00ffff88; animation:pulse-ring 1.5s ease-in-out infinite;
+          `;
+          container.appendChild(ring);
+
+          // Draw connecting line to nearest matched track
+          let nearestDist = Infinity;
+          let nearestTrack: typeof tracks[0] | null = null;
+          for (const track of tracks) {
+            const R = 6371000;
+            const dLat = (track.state.lat - target.position.lat) * Math.PI / 180;
+            const dLon = (track.state.lon - target.position.lon) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) ** 2 +
+              Math.cos(target.position.lat * Math.PI / 180) * Math.cos(track.state.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+            const d = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            if (d < nearestDist) { nearestDist = d; nearestTrack = track; }
+          }
+
+          if (nearestTrack && nearestDist < 5000) {
+            const trkPx = proj(nearestTrack.state.lon, nearestTrack.state.lat);
+            // Dashed line from GT diamond to system track
+            const line = createSvgEl('line', {
+              x1: String(px.x), y1: String(px.y),
+              x2: String(trkPx.x), y2: String(trkPx.y),
+              stroke: nearestDist < 500 ? '#00cc44' : nearestDist < 2000 ? '#ffcc00' : '#ff3333',
+              'stroke-width': '2',
+              'stroke-dasharray': '6,4',
+              'stroke-opacity': '0.8',
+            });
+            svg.appendChild(line);
+
+            // Distance label at midpoint
+            const midX = (px.x + trkPx.x) / 2;
+            const midY = (px.y + trkPx.y) / 2;
+            const distLbl = document.createElement('div');
+            const distStr = nearestDist < 1000 ? `${nearestDist.toFixed(0)}m` : `${(nearestDist / 1000).toFixed(2)}km`;
+            distLbl.style.cssText = `
+              position:absolute; left:${midX}px; top:${midY - 8}px;
+              font-size:9px; color:#fff; background:#000a; padding:1px 4px;
+              border-radius:2px; z-index:24; pointer-events:none;
+              font-family:monospace; white-space:nowrap;
+            `;
+            distLbl.textContent = distStr;
+            container.appendChild(distLbl);
+          }
+        }
+
         // Name label
         const lbl = document.createElement('div');
+        const lblOffset = isSelected ? 16 : 12;
         lbl.style.cssText = `
-          position:absolute; left:${px.x + 12}px; top:${px.y - 8}px;
-          font-size:10px; color:#00ffff; white-space:nowrap;
+          position:absolute; left:${px.x + lblOffset}px; top:${px.y - 8}px;
+          font-size:${isSelected ? '11px' : '10px'}; color:#00ffff; white-space:nowrap;
           text-shadow:0 0 3px #000, 0 0 3px #000; z-index:23;
           pointer-events:none; font-family:monospace; font-weight:bold;
         `;
@@ -572,7 +633,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
         if (target.classification) {
           const cls = document.createElement('div');
           cls.style.cssText = `
-            position:absolute; left:${px.x + 12}px; top:${px.y + 4}px;
+            position:absolute; left:${px.x + lblOffset}px; top:${px.y + 4}px;
             font-size:9px; color:#00cccc; white-space:nowrap;
             text-shadow:0 0 3px #000, 0 0 3px #000; z-index:23;
             pointer-events:none; font-family:monospace;
@@ -837,7 +898,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
         }
       }
     }
-  }, [map, tracks, sensors, trailHistory, layerVisibility, onSelectTrack, onSelectSensor, onSelectGroundTruth, groundTruthTargets, showGroundTruth, coverZones, operationalZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds]);
+  }, [map, tracks, sensors, trailHistory, layerVisibility, onSelectTrack, onSelectSensor, onSelectGroundTruth, selectedGroundTruthId, groundTruthTargets, showGroundTruth, coverZones, operationalZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds]);
 
   // Re-render on map move/zoom
   useEffect(() => {
@@ -862,7 +923,7 @@ export function DebugOverlay({ map, tracks, sensors, trailHistory, layersReady, 
   // Re-render when data changes
   useEffect(() => {
     render();
-  }, [tracks, sensors, trailHistory, groundTruthTargets, showGroundTruth, coverZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds, render]);
+  }, [tracks, sensors, trailHistory, groundTruthTargets, showGroundTruth, selectedGroundTruthId, coverZones, searchModeStates, fovOverlaps, bearingAssociations, multiSensorResolutions, convergedTrackIds, render]);
 
   // EO Video Popup state
   const eoVideoPopupTrackId = useUiStore(s => s.eoVideoPopupTrackId);

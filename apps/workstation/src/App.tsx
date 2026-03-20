@@ -799,6 +799,10 @@ export function App() {
                 const role = e.target.value as 'instructor' | 'operator';
                 setSelectedRole(role);
                 replayController.reconnectWithRole(role);
+                // Turn off instructor-only features when switching to operator
+                if (role === 'operator') {
+                  useGroundTruthStore.getState().setShowGroundTruth(false);
+                }
               }}
               style={{ background: '#333', color: '#e0e0e0', border: '1px solid #555', borderRadius: '3px', padding: '2px 6px', fontSize: '11px' }}
               title="Select your role"
