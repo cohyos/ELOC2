@@ -594,6 +594,105 @@ function buildConclusionsSection(
 }
 
 // ---------------------------------------------------------------------------
+// Situational Awareness Section (Instructor only)
+// ---------------------------------------------------------------------------
+
+function buildSituationalAwarenessSection(
+  engine: LiveEngine,
+  qualityMetrics: ReturnType<LiveEngine['getQualityMetrics']>,
+  beforeAfter: ReturnType<LiveEngine['getBeforeAfterComparison']>,
+  allocationQuality: ReturnType<LiveEngine['getEoAllocationQuality']>,
+): string {
+  const lines: string[] = [];
+  lines.push('## 6. Situational Awareness Assessment');
+  lines.push('');
+
+  const gt = engine.getGroundTruth();
+  const state = engine.getState();
+  const tracks = state.tracks;
+  const confirmedTracks = tracks.filter(t => t.status === 'confirmed');
+
+  // GT targets tracked vs missed
+  const gtCount = gt.length;
+  const trackedCount = qualityMetrics
+    ? Math.round(qualityMetrics.trackToTruthAssociation * gtCount)
+    : 0;
+  const missedCount = gtCount - trackedCount;
+
+  lines.push('### Target Coverage');
+  lines.push('');
+  lines.push('| Metric | Value |');
+  lines.push('|--------|------:|');
+  lines.push(`| Ground Truth Targets | ${gtCount} |`);
+  lines.push(`| Targets Tracked | ${trackedCount} |`);
+  lines.push(`| Targets Missed | ${missedCount} |`);
+  lines.push(`| Track-to-Truth Association | ${qualityMetrics ? (qualityMetrics.trackToTruthAssociation * 100).toFixed(1) : 'N/A'}% |`);
+  lines.push('');
+
+  // False tracks
+  const falseTrackRate = qualityMetrics?.falseTrackRate ?? 0;
+  const estimatedFalseTracks = Math.round(falseTrackRate * confirmedTracks.length);
+  lines.push('### False Track Assessment');
+  lines.push('');
+  lines.push(`- Confirmed tracks: ${confirmedTracks.length}`);
+  lines.push(`- Estimated false tracks: ${estimatedFalseTracks}`);
+  lines.push(`- False track rate: ${(falseTrackRate * 100).toFixed(1)}%`);
+  lines.push('');
+
+  // Classification accuracy
+  if (qualityMetrics) {
+    lines.push('### Classification Accuracy');
+    lines.push('');
+    lines.push(`- Overall accuracy: ${(qualityMetrics.classificationAccuracy * 100).toFixed(1)}%`);
+    lines.push(`- Avg position error: ${qualityMetrics.positionErrorAvg.toFixed(2)}`);
+    lines.push(`- Max position error: ${qualityMetrics.positionErrorMax.toFixed(2)}`);
+    lines.push('');
+  }
+
+  // Time gaps — coverage percent indicates how well tracks were maintained
+  if (qualityMetrics) {
+    lines.push('### Track Coverage Continuity');
+    lines.push('');
+    lines.push(`- Coverage: ${(qualityMetrics.coveragePercent * 100).toFixed(1)}%`);
+
+    const detTimes = Object.entries(qualityMetrics.timeToFirstDetection);
+    if (detTimes.length > 0) {
+      const avgDetTime = detTimes.reduce((sum, [, t]) => sum + (t as number), 0) / detTimes.length;
+      lines.push(`- Avg time to first detection: ${avgDetTime.toFixed(1)}s`);
+    }
+
+    const geoTimes = Object.entries(qualityMetrics.timeToConfirmed3D);
+    if (geoTimes.length > 0) {
+      const avgGeoTime = geoTimes.reduce((sum, [, t]) => sum + (t as number), 0) / geoTimes.length;
+      lines.push(`- Avg time to confirmed 3D: ${avgGeoTime.toFixed(1)}s`);
+    }
+    lines.push('');
+  }
+
+  // EO utilization effectiveness
+  lines.push('### EO Utilization Effectiveness');
+  lines.push('');
+
+  const agg = beforeAfter.aggregate;
+  lines.push(`- Tracks investigated via EO: ${agg.totalTracksInvestigated}`);
+  lines.push(`- Tracks gaining classification: ${agg.tracksWithClassification}`);
+  lines.push(`- Tracks with geometry upgrade: ${agg.tracksWithGeometryUpgrade}`);
+  if (agg.totalTracksInvestigated > 0) {
+    lines.push(`- Avg position improvement: ${agg.avgPositionImprovement.toFixed(2)}`);
+  }
+
+  if (allocationQuality) {
+    lines.push(`- Triangulation success rate: ${(allocationQuality.triangulationSuccessRate * 100).toFixed(1)}%`);
+    lines.push(`- EO sensor utilization: ${(allocationQuality.sensorUtilization * 100).toFixed(1)}%`);
+    lines.push(`- Priority alignment: ${(allocationQuality.priorityAlignment * 100).toFixed(1)}%`);
+  }
+
+  lines.push('');
+  lines.push('');
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
