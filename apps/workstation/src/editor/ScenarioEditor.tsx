@@ -8,8 +8,11 @@ import { ActionTab } from './ActionTab';
 import { SettingsTab } from './SettingsTab';
 import { ValidationBar } from './ValidationBar';
 import { useEditorStore } from '../stores/editor-store';
+import { DeploymentMap } from '../deployment/DeploymentView';
+import { DeploymentPanel } from '../deployment/DeploymentPanel';
+import { DeploymentMetrics } from '../deployment/DeploymentMetrics';
 
-type TabId = 'sensors' | 'targets' | 'faults' | 'actions' | 'settings';
+type TabId = 'sensors' | 'targets' | 'faults' | 'actions' | 'settings' | 'deploy';
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'sensors', label: 'Sensors' },
@@ -17,6 +20,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'faults', label: 'Faults' },
   { id: 'actions', label: 'Actions' },
   { id: 'settings', label: 'Settings' },
+  { id: 'deploy', label: 'Deploy' },
 ];
 
 const colors = {
@@ -52,6 +56,8 @@ export function ScenarioEditor({ onBack }: ScenarioEditorProps) {
     return () => window.removeEventListener('keydown', handler);
   }, [setEditMode]);
 
+  const isDeployTab = activeTab === 'deploy';
+
   return (
     <div
       style={{
@@ -61,9 +67,11 @@ export function ScenarioEditor({ onBack }: ScenarioEditorProps) {
         background: colors.bg,
         color: '#e0e0e0',
         overflow: 'hidden',
-        gridTemplateRows: '40px 1fr',
-        gridTemplateColumns: '1fr 400px',
-        gridTemplateAreas: `"header header" "map panel"`,
+        gridTemplateRows: isDeployTab ? '40px 1fr auto' : '40px 1fr',
+        gridTemplateColumns: isDeployTab ? '1fr 320px' : '1fr 400px',
+        gridTemplateAreas: isDeployTab
+          ? `"header header" "map panel" "metrics metrics"`
+          : `"header header" "map panel"`,
       }}
     >
       {/* Header */}
@@ -71,7 +79,7 @@ export function ScenarioEditor({ onBack }: ScenarioEditorProps) {
         <EditorHeader onBack={onBack} />
       </div>
 
-      {/* Map */}
+      {/* Map — swap based on active tab */}
       <div
         style={{
           gridArea: 'map',
@@ -79,7 +87,7 @@ export function ScenarioEditor({ onBack }: ScenarioEditorProps) {
           overflow: 'hidden',
         }}
       >
-        <EditorMap />
+        {isDeployTab ? <DeploymentMap /> : <EditorMap />}
       </div>
 
       {/* Right Panel */}
@@ -110,11 +118,13 @@ export function ScenarioEditor({ onBack }: ScenarioEditorProps) {
                 background:
                   activeTab === tab.id ? '#1a1a2e' : 'transparent',
                 color:
-                  activeTab === tab.id ? colors.accent : colors.textDim,
+                  activeTab === tab.id
+                    ? (tab.id === 'deploy' ? '#44ddaa' : colors.accent)
+                    : colors.textDim,
                 border: 'none',
                 borderBottom:
                   activeTab === tab.id
-                    ? `2px solid ${colors.accent}`
+                    ? `2px solid ${tab.id === 'deploy' ? '#44ddaa' : colors.accent}`
                     : '2px solid transparent',
                 padding: '8px 4px',
                 fontSize: '11px',
@@ -134,11 +144,19 @@ export function ScenarioEditor({ onBack }: ScenarioEditorProps) {
           {activeTab === 'faults' && <FaultTab />}
           {activeTab === 'actions' && <ActionTab />}
           {activeTab === 'settings' && <SettingsTab />}
+          {activeTab === 'deploy' && <DeploymentPanel />}
         </div>
 
-        {/* Validation bar */}
-        <ValidationBar />
+        {/* Validation bar (hide on deploy tab) */}
+        {!isDeployTab && <ValidationBar />}
       </div>
+
+      {/* Deployment metrics bar (deploy tab only) */}
+      {isDeployTab && (
+        <div style={{ gridArea: 'metrics' }}>
+          <DeploymentMetrics />
+        </div>
+      )}
     </div>
   );
 }
