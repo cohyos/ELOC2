@@ -613,7 +613,22 @@ export class LiveEngine {
   constructor(scenarioId?: string) {
     this.scenario = (scenarioId ? getScenarioById(scenarioId) : undefined) ?? centralIsrael;
     this.runner = new ScenarioRunner(this.scenario);
-    this.trackManager = new TrackManager({ confirmAfter: 3, dropAfterMisses: 8 });
+    this.trackManager = new TrackManager({
+      confirmAfter: 3,
+      dropAfterMisses: 8,
+      // Enhanced radar track building
+      enableExistence: true,
+      existencePromotionThreshold: 0.5,
+      existenceConfirmationThreshold: 0.8,
+      existenceDeletionThreshold: 0.1,
+      coastingMissThreshold: 3,
+      pDetection: 0.9,
+      pFalseAlarm: 0.01,
+      maxCoastingTimeSec: 15,
+      associationMode: 'nn', // default NN; switch to 'auto' for JPDA/MHT
+      enableIMM: false,
+      enableTBD: false,
+    });
     this.registrationService = new RegistrationHealthService();
 
     this.state = this.buildInitialState();
@@ -1367,7 +1382,21 @@ export class LiveEngine {
       this.autoInjectTimer = null;
     }
     this.runner = new ScenarioRunner(this.scenario);
-    this.trackManager = new TrackManager({ confirmAfter: 3, dropAfterMisses: 8 });
+    this.trackManager = new TrackManager({
+      confirmAfter: 3,
+      dropAfterMisses: 8,
+      enableExistence: true,
+      existencePromotionThreshold: 0.5,
+      existenceConfirmationThreshold: 0.8,
+      existenceDeletionThreshold: 0.1,
+      coastingMissThreshold: 3,
+      pDetection: 0.9,
+      pFalseAlarm: 0.01,
+      maxCoastingTimeSec: 15,
+      associationMode: 'nn',
+      enableIMM: false,
+      enableTBD: false,
+    });
     this.registrationService = new RegistrationHealthService();
 
     // Reset EO state

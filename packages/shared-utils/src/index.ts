@@ -32,3 +32,18 @@ export {
   mat3x3Scale,
   mahalanobisDistance,
 } from "./matrix.js";
+
+export {
+  identityNxN,
+  zerosNxN,
+  matNxNAdd,
+  matNxNSub,
+  matNxNMultiply,
+  matVecMultiply,
+  matNxNScale,
+  matNxNTranspose,
+  matNxNInverse,
+  outerProduct,
+  addScalarDiag,
+  trace,
+} from "./matrix-nxn.js";
