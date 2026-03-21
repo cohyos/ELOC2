@@ -2,11 +2,17 @@
 
 A full-stack simulation of an air defense C2 system that fuses radar, electro-optical (EO), and C4ISR sensor data into a unified Recognized Air Picture (RAP). Tracks are correlated, fused, and displayed in real time on a tactical workstation.
 
+## Live Application
+
+**Production URL:** https://eloc2-820514480393.me-west1.run.app
+
+Hosted on Google Cloud Run (region: `me-west1`). Auto-deployed on merge to `master` via Cloud Build.
+
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                    Workstation (React + MapLibre)    │
+│              Workstation (React + Leaflet)           │
 │   Map ─ Track detail ─ Sensor detail ─ Timeline     │
 └────────────────────────┬────────────────────────────┘
                          │ REST + WebSocket
@@ -26,27 +32,39 @@ In **development**, Vite runs the workstation on `:3000` with hot reload and pro
 
 ## Monorepo Structure
 
+### Apps (3)
+
+| App | Description |
+|-----|-------------|
+| `apps/api` | Fastify REST + WebSocket server with live simulation engine |
+| `apps/workstation` | React 19 tactical workstation with Leaflet map + Zustand 5 stores |
+| `apps/simulator` | Scenario execution engine (radar/EO/C4ISR models, fault injection) |
+
+### Packages (17)
+
 | Package | Description |
 |---------|-------------|
-| `packages/domain` | Branded types & interfaces (SystemTrack, SensorState, Task, etc.) |
+| `packages/domain` | Branded types & interfaces (SystemTrack, SensorState, Position3D, etc.) |
 | `packages/events` | Event envelope definitions for the domain event bus |
-| `packages/schemas` | Validation utilities for positions, timestamps, sensor IDs |
+| `packages/schemas` | Zod validation schemas for API payloads |
 | `packages/shared-utils` | Geodetic math, matrix ops, UUID generation, simulation clock |
 | `packages/fusion-core` | Sensor fusion: ingestion, correlation, track management, replay |
 | `packages/registration` | Spatial/temporal registration, bias estimation, health scoring |
 | `packages/geometry` | Bearing triangulation, time alignment, geometry quality scoring |
 | `packages/eo-investigation` | EO investigation: cue handling, gimbal control, FOV, identification |
 | `packages/eo-tasking` | EO tasking workflow: candidate scoring, policy engine, assignment |
+| `packages/eo-management` | Modular EO module (pipelines, mode controller, sub-pixel/image) |
 | `packages/projections` | View builders (RAP, sensor health, EO cues, task timeline) |
 | `packages/validation` | System assertions: track continuity, registration safety, replay fidelity |
 | `packages/scenario-library` | Predefined scenarios with flight paths, sensors, and fault scripts |
-| `apps/simulator` | Scenario execution engine (radar/EO/C4ISR models, fault injection) |
-| `apps/api` | Fastify REST + WebSocket server with live simulation engine |
-| `apps/workstation` | React tactical workstation with MapLibre GL map |
+| `packages/deployment-planner` | Sensor deployment optimization (grid, scorers, LP optimizer) |
+| `packages/terrain` | SRTM DEM line-of-sight checker |
+| `packages/asterix-adapter` | CAT-048/CAT-062 binary parsing + export adapter |
+| `packages/database` | PostgreSQL user/session management |
 
 ## Prerequisites
 
-- **Node.js** ≥ 20
+- **Node.js** >= 20
 - **pnpm** 9.15+ (`corepack enable && corepack prepare pnpm@9.15.0 --activate`)
 - **Docker** (optional, for containerized deployment)
 
@@ -82,35 +100,39 @@ Open **http://localhost:3001** — both the UI and API are served on a single po
 ```bash
 # One-time setup
 gcloud auth login
-gcloud config set project YOUR_PROJECT_ID
+gcloud config set project eloc2demo
 
-# Deploy (builds Docker image and deploys)
+# Deploy via Cloud Build (recommended)
+gcloud builds submit --config=cloudbuild.yaml \
+  --substitutions=SHORT_SHA=$(git rev-parse --short HEAD) \
+  --project=eloc2demo
+
+# Or direct deploy
 gcloud run deploy eloc2 \
   --source . \
   --port 3001 \
   --allow-unauthenticated \
   --region me-west1 \
-  --memory 1Gi \
+  --memory 512Mi \
   --cpu 1
 ```
 
-Cloud Run will print the public URL (e.g. `https://eloc2-xxxxx.a.run.app`). Open it to use the workstation.
+Auto-deploy: merge to `master` triggers Cloud Build.
 
 ## Running Tests
 
 ```bash
-# Unit tests (146+ Vitest tests across all packages)
+# All tests (73 Vitest tests across packages)
 pnpm test
 
-# E2E tests (33 Playwright specs: API, scenarios, desktop UI, mobile UI)
+# E2E tests (Playwright)
 pnpm test:e2e
 
-# Generate HTML QA dashboard
+# Generate QA report
 pnpm test:e2e:report
-# Reports output to: tests/e2e/output/qa-report.json
 ```
 
-Cloud Build runs all tests automatically on deploy (see `cloudbuild.yaml`).
+Cloud Build runs tests automatically on deploy (see `cloudbuild.yaml`).
 
 ## Workstation Controls
 
@@ -124,16 +146,20 @@ Cloud Build runs all tests automatically on deploy (see `cloudbuild.yaml`).
 | **Show/Hide Panel** | Toggle the track/sensor detail panel |
 | **Show/Hide Timeline** | Toggle the event timeline |
 | **Demo** | Toggle presenter dashboard mode |
+| **Ctrl+Drag** | Rectangle zoom on map |
 | **Space** | Play / Pause |
 | **Left/Right arrows** | Seek -10s / +10s |
 | **Ctrl+D** | Toggle demo mode |
 | **Ctrl+I** | Toggle live injection mode |
 
-Click a track on the map to see its detail (classification, velocity, contributing sensors, action buttons). Click a sensor icon to see its status, coverage, and registration health.
+### Roles
+
+- **Instructor**: Full access — start/pause/reset, scenario selection, inject targets, manage users, generate reports
+- **Operator**: Restricted — track investigation, priority marking, task approval/rejection only
 
 ## EO Tasking Algorithm
 
-The EO allocation runs every 5 simulation seconds:
+The EO allocation runs every 3 simulation seconds:
 
 1. **Candidate generation**: All eligible tracks paired with all online EO sensors
 2. **Scoring**: `total = threat + uncertainty + geometry - slewCost - occupancy`
@@ -160,9 +186,22 @@ The EO allocation runs every 5 simulation seconds:
 | POST | `/api/scenario/pause` | Pause simulation |
 | POST | `/api/scenario/speed` | Set speed `{ "speed": N }` |
 | POST | `/api/scenario/reset` | Reset scenario `{ "scenarioId?": "..." }` |
-| POST | `/api/operator/priority` | Add/remove track from priority set `{ "trackId": "...", "priority": true }` |
-| POST | `/api/operator/approve` | Approve a proposed task `{ "taskId": "..." }` |
-| POST | `/api/operator/reject` | Reject a proposed task `{ "taskId": "..." }` |
+| POST | `/api/operator/priority` | Add/remove track from priority set |
+| POST | `/api/operator/approve` | Approve a proposed task |
+| POST | `/api/operator/reject` | Reject a proposed task |
+| POST | `/api/operator/lock` | Lock EO sensor to track |
+| POST | `/api/operator/release` | Release locked EO sensor |
+| POST | `/api/operator/classify` | Classify a track |
+| GET | `/api/quality/metrics` | Quality assessment metrics |
+| GET | `/api/quality/allocation` | EO allocation quality criteria |
+| GET | `/api/quality/before-after` | Before/after EO comparison |
+| POST | `/api/reports/generate` | Generate PDF/MD scenario report |
+| GET | `/api/deployment/*` | Deployment planner (7 endpoints) |
+| GET | `/api/terrain/elevation` | Terrain elevation lookup |
+| GET | `/api/sensor-library` | Sensor type library CRUD |
+| GET | `/api/target-library` | Target type library CRUD |
+| POST | `/api/auth/*` | Login/logout/user management (when AUTH_ENABLED) |
+| GET | `/api/asterix/status` | ASTERIX UDP feed status |
 | WS | `/ws/events` | Real-time event + RAP update stream |
 
 ## Tech Stack
@@ -170,9 +209,17 @@ The EO allocation runs every 5 simulation seconds:
 - **Runtime**: Node.js 22, TypeScript 5.7
 - **Build**: pnpm workspaces, Turborepo, tsup, Vite
 - **API**: Fastify 5, @fastify/websocket
-- **Frontend**: React 19, MapLibre GL JS 5, Zustand 5
-- **Testing**: Vitest 3
-- **Deployment**: Docker multi-stage build, Google Cloud Run
+- **Frontend**: React 19, Leaflet (Canvas 2D rendering), Zustand 5
+- **3D Overlay**: Deck.gl (altitude extrusion, ballistic trajectories)
+- **Map Tiles**: CARTO Dark Matter (default), OpenStreetMap
+- **PDF Reports**: pdfmake
+- **Testing**: Vitest 3, Playwright (E2E)
+- **Deployment**: Docker multi-stage build, Google Cloud Run, Cloud Build CI/CD
+- **Database**: PostgreSQL (optional, for auth/sessions)
+
+## Knowledge Base
+
+The `Knowledge_Base_and_Agents_instructions/` directory contains **28 foundational design documents** (10,000+ lines) covering all domain logic, algorithms, UI requirements, architecture decisions, and implementation plans. See `Chunk_index.md` for a retrieval-oriented index.
 
 ## License
 

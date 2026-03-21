@@ -40,7 +40,9 @@ This folder contains tighter retrieval oriented files derived from the master re
 | EO C2 search outcome report           | Technology evaluation rationale and tool selection |
 | Claude code prompt templates          | Copy-paste agent prompts with shared prefix for build agents |
 | Claude agent build prompts            | Detailed agent prompts with scope and done criteria |
-| Instructor_Operator_UX_Plan.md | REQ-17–23: Simulation control, role selection, PDF reports, user management | Current |
+| Instructor Operator UX Plan    | REQ-17–23: Simulation control, role selection, PDF reports, user management |
+| ELOC2 System Updates Plan      | Bug fixes, libraries, editor/planner enhancements, Leaflet migration status |
+| Raster Map Reimplementation Design | Full Leaflet Canvas spec, rollback strategy, migration plan |
 
 These chunk files are written to improve retrieval precision for MCP or RAG while preserving the key research backed claims from the master report \[Joh05, Paw96, Kal04, San01, Cor11, Oke01, Pat09\].
 

@@ -6,7 +6,7 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 
 ## Architecture
 - **Backend**: `apps/api` — Fastify server, WebSocket events, live simulation engine
-- **Frontend**: `apps/workstation` — React 19 + MapLibre GL JS 5 + Zustand 5 stores
+- **Frontend**: `apps/workstation` — React 19 + Leaflet (Canvas 2D) + Zustand 5 stores
 - **Simulator**: `apps/simulator` — ScenarioRunner generates radar/EO observations
 - **Fusion**: `packages/fusion-core` — TrackManager, correlator, information-matrix fuser
 - **Geometry**: `packages/geometry` — Bearing-math, triangulator, quality-scorer, time-aligner
@@ -33,7 +33,7 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 - `apps/workstation/src/map/layers/track-layer.ts` — Track circle + label layers
 - `apps/workstation/src/map/layers/sensor-layer.ts` — Sensor circle + label layers
 - `apps/workstation/src/map/layers/triangulation-layer.ts` — EO bearing rays + intersection points
-- `apps/workstation/src/map/DebugOverlay.tsx` — HTML marker fallback (bypasses MapLibre)
+- `apps/workstation/src/map/DebugOverlay.tsx` — Native Leaflet layer renderer (markers, polylines, circles, polygons)
 - `apps/workstation/src/replay/ReplayController.ts` — WebSocket client, feeds stores
 - `apps/workstation/src/stores/track-store.ts` — Zustand track state
 - `apps/workstation/src/stores/ui-store.ts` — UI state (selected track, panels, replay time)
@@ -80,13 +80,13 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 5. `LiveEngine.broadcastRap()` sends tracks/sensors/geometry via WebSocket as `rap.update`
 6. `ReplayController.handleMessage()` calls `setTracks()`/`setSensors()` on Zustand stores
 7. `MapView` effects call `updateTrackLayer()`/`updateSensorLayer()` when data changes
-8. `DebugOverlay` renders HTML markers using `map.project()` as a fallback
+8. `DebugOverlay` renders via native Leaflet layers (markers, polylines, circles, polygons)
 9. Auth middleware (`auth-plugin.ts`) validates session tokens on protected routes when `AUTH_ENABLED=true`
 10. ASTERIX adapter can ingest live CAT-048/CAT-062 UDP feeds and convert to internal observation format
 
 ## Knowledge Base — Source of Truth
 
-The `Knowledge_Base_and_Agents_instructions/` folder contains **25 foundational design documents** that define ALL domain logic, algorithms, and UI requirements. **Always consult the relevant document before implementing or debugging a feature.**
+The `Knowledge_Base_and_Agents_instructions/` folder contains **28 foundational design documents** (10,000+ lines) that define ALL domain logic, algorithms, and UI requirements. **Always consult the relevant document before implementing or debugging a feature.**
 
 | File | Purpose | Phases |
 |------|---------|--------|
@@ -119,7 +119,7 @@ The `Knowledge_Base_and_Agents_instructions/` folder contains **25 foundational 
 | `ELOC2_System_Updates_Plan.md` | **System updates plan: bug fixes, libraries, editor/planner, implementation status** | **Current** |
 | `Chunk_index.md` | Index of all knowledge base chunks for retrieval | Reference |
 
-## Current Completion (as of 2026-03-20)
+## Current Completion (as of 2026-03-21)
 
 ### Original Build Phases (0–9)
 | Phase | Status | Notes |
@@ -194,7 +194,7 @@ See `Knowledge_Base_and_Agents_instructions/Instructor_Operator_UX_Plan.md` for 
 | ED-6: Target library integration | ✅ Complete | "From Library" dropdown auto-fills RCS/speed/altitude/IR |
 | Waypoint limits | ✅ Complete | Speed: 0–7000 m/s, Altitude: 0–200,000m (ballistic missile support) |
 | Terrain elevation API | ✅ Complete | GET `/api/terrain/elevation?lat=X&lon=Y` |
-| Raster map reimplementation | ✅ Design Only | Full spec in `Raster_Map_Reimplementation_Design.md`, awaiting approval |
+| Raster map reimplementation | ✅ Complete | MapLibre replaced with Leaflet (Canvas 2D), native Leaflet layers for all rendering |
 
 ## Key Files Added
 - `apps/workstation/src/map/ctrl-box-zoom.ts` — Ctrl+drag rectangle zoom utility
@@ -254,24 +254,23 @@ See `Knowledge_Base_and_Agents_instructions/Instructor_Operator_UX_Plan.md` for 
 ## Known Issues
 
 ### Map Rendering Architecture (CRITICAL — read before touching map code)
-- **Full HTML/SVG rendering**: DebugOverlay is the ONLY renderer for ALL visual elements. MapLibre is used ONLY for raster map tiles.
-- **Why**: MapLibre WebGL data layers (circles, lines, fills, symbols — ALL of them) are completely non-functional in the Cloud Run production environment. Not just fonts/glyphs — the entire WebGL pipeline for data layers is broken.
-- **DebugOverlay**: Returns two layers: SVG (z-index 14) for geometry (coverage arcs, EO rays, FOV, triangulation) + HTML divs (z-index 15) for markers (tracks, sensors, labels, trails).
-- **MapLibre data layer code**: Kept as fallback but NOT the active rendering path. Do not rely on it.
-- **Full post-mortem**: See `Knowledge_Base_and_Agents_instructions/Blank_Map_Postmortem_and_Testing_Lessons.md`
+- **Leaflet (Canvas 2D)**: MapLibre was fully replaced with Leaflet. All map rendering uses native Leaflet layers.
+- **Why**: MapLibre WebGL data layers were completely non-functional in Cloud Run production. See `Blank_Map_Postmortem_and_Testing_Lessons.md` for the full post-mortem.
+- **DebugOverlay**: Refactored to use native Leaflet API — L.marker, L.polyline, L.circle, L.polygon. No custom HTML/SVG overlays.
+- **Map tiles**: CARTO Dark Matter (default), with dark/light toggle.
+- **All 3 maps** (main, editor, deployment) use the same Leaflet-based architecture.
 
 ### Deck.gl 3D Rendering
-- Deck.gl uses a **separate WebGL context** from MapLibre, so it may work in environments where MapLibre WebGL data layers fail (e.g., Cloud Run).
-- 3D view (ballistic display, altitude extrusion) is rendered via Deck.gl overlay on the map.
-- If Deck.gl also fails in production, the same HTML/SVG fallback strategy from DebugOverlay applies.
+- Deck.gl uses a **separate WebGL context** overlaid on the Leaflet map.
+- 3D view (ballistic display, altitude extrusion) is rendered via Deck.gl overlay.
+- If Deck.gl fails in production, fallback to 2D Leaflet rendering.
 
 ### Deployment (ACTIVE)
-- Cloud Run service: `eloc2-820514480393.me-west1.run.app`
+- **Live URL**: https://eloc2-820514480393.me-west1.run.app
 - Cloud Build trigger active — merging to master triggers auto deploy
 - Manual deploy:
   ```bash
   gcloud auth login
-  git checkout master && git merge claude/eloc2-development-U3sup
   gcloud builds submit --config=cloudbuild.yaml \
     --substitutions=SHORT_SHA=$(git rev-parse --short HEAD) \
     --project=eloc2demo
@@ -298,8 +297,8 @@ See `Knowledge_Base_and_Agents_instructions/Instructor_Operator_UX_Plan.md` for 
 ## Development
 - Package manager: pnpm (v9.15.0) with workspaces
 - Build: `pnpm build` (uses Turbo)
-- Test: `pnpm test` (514 tests, all passing)
-- Dev branch: `claude/eloc2-handover-deployment-XSyf8`
+- Test: `pnpm test` (73 tests, all passing)
+- Dev branch: `claude/review-knowledge-base-FTTzx`
 - Dockerfile: 2-stage build, serves workstation static files from API on port 3001
 - Vite dev server on port 3000 proxies `/api` and `/ws` to 3001
 - Auth: Set `AUTH_ENABLED=true` env var to enable PostgreSQL-backed authentication (requires running DB)

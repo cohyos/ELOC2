@@ -29,7 +29,6 @@ import { NarrationPanel } from './demo/NarrationPanel';
 import { MetricsOverlay } from './demo/MetricsOverlay';
 import { ResizeHandle } from './components/ResizeHandle';
 import { QualityMetricsPanel } from './quality/QualityMetricsPanel';
-import { DeploymentView } from './deployment/DeploymentView';
 import { UserManagementView } from './admin/UserManagementView';
 import { LibrariesView } from './libraries/LibrariesView';
 import { FusionConfigPanel } from './components/FusionConfigPanel';
@@ -340,7 +339,7 @@ function InstructorButton({ children, onClick, style, title, disabled, isInstruc
 
 export function App() {
   const isMobile = useIsMobile();
-  const [view, setView] = useState<'workstation' | 'editor' | 'deployment' | 'users' | 'libraries'>('workstation');
+  const [view, setView] = useState<'workstation' | 'editor' | 'users' | 'libraries'>('workstation');
 
   // ── Auth ────────────────────────────────────────────────────────────────
   const authEnabled = useAuthStore(s => s.authEnabled);
@@ -543,10 +542,6 @@ export function App() {
     return <ScenarioEditor onBack={() => setView('workstation')} />;
   }
 
-  if (view === 'deployment') {
-    return <DeploymentView onBack={() => setView('workstation')} />;
-  }
-
   if (view === 'users') {
     return <UserManagementView onBack={() => setView('workstation')} />;
   }
@@ -557,7 +552,7 @@ export function App() {
         onBack={() => setView('workstation')}
         onLoadScenario={(id) => { handleScenarioChange(id); setView('workstation'); }}
         onEditScenario={() => setView('editor')}
-        onLoadDeployment={() => setView('deployment')}
+        onLoadDeployment={() => setView('editor')}
       />
     );
   }
@@ -674,11 +669,8 @@ export function App() {
             {simulationState}
           </span>
 
-          {/* Editor */}
+          {/* Editor (includes deployment planner) */}
           <InstructorButton isInstructor={isInstructor} style={{ ...btn, background: '#2a2a4e', color: '#aa88ff', border: '1px solid #aa88ff44' }} onClick={() => setView('editor')}>Editor</InstructorButton>
-
-          {/* Deploy */}
-          <InstructorButton isInstructor={isInstructor} style={{ ...btn, background: '#2a2a4e', color: '#44ddaa', border: '1px solid #44ddaa44' }} onClick={() => setView('deployment')}>Deploy</InstructorButton>
 
           {/* Libraries */}
           <InstructorButton isInstructor={isInstructor} style={{ ...btn, background: '#2a2a4e', color: '#ffaa44', border: '1px solid #ffaa4444' }} onClick={() => setView('libraries')}>Libraries</InstructorButton>

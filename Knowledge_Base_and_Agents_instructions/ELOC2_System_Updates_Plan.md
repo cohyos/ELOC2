@@ -72,15 +72,23 @@
 - `reentrySpeedMs` — Terminal velocity on reentry
 - `defaultLaunchBearingDeg` / `defaultImpactBearingDeg` — Default trajectory bearing
 
-## Phase 5 — Raster Map Reimplementation (DESIGN ONLY)
+## Phase 5 — Raster Map Reimplementation (COMPLETE)
 
-**Status**: Design document complete at `Knowledge_Base_and_Agents_instructions/Raster_Map_Reimplementation_Design.md`
+**Status**: Implemented and merged.
 
-Key decisions:
-- **Recommended**: Leaflet (Canvas 2D) with current HTML/SVG overlay as fallback
-- **Effort**: 3-5 days when approved
-- **Rollback**: Git tag + feature flag + DebugOverlay fallback
-- **No code changes** until all other phases complete and explicit approval given
+Key changes:
+- **MapLibre fully replaced with Leaflet** (Canvas 2D rendering)
+- **DebugOverlay refactored** to use native Leaflet layers (L.marker, L.polyline, L.circle, L.polygon)
+- **DeploymentMap refactored** to native Leaflet layers
+- **All 3 maps** (main, editor, deployment) use the same Leaflet architecture
+- **CARTO Dark Matter** tiles as default, with dark/light toggle
+- **Deck.gl 3D overlay** retained for altitude/trajectory visualization
+- Design doc: `Knowledge_Base_and_Agents_instructions/Raster_Map_Reimplementation_Design.md`
+
+Commits:
+- `7f57694` — Raster map reimplementation: Replace MapLibre with Leaflet
+- `62e0cf3` — Refactor DeploymentMap to native Leaflet layers
+- `1858a10` — Refactor DebugOverlay to native Leaflet layers + fix altitude inheritance
 
 ---
 
