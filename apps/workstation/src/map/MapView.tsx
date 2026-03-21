@@ -26,6 +26,7 @@ export function MapView() {
   const adapterRef = useRef<MapAdapter | null>(null);
   const [layersReady, setLayersReady] = useState(false);
   const [mapAdapter, setMapAdapter] = useState<MapAdapter | null>(null);
+  const leafletMapRef = useRef<L.Map | null>(null);
 
   const tracks = useTrackStore(s => s.tracks);
   const trailHistory = useTrackStore(s => s.trailHistory);
@@ -115,6 +116,7 @@ export function MapView() {
 
     const adapter = new LeafletAdapter(leafletMap);
     adapterRef.current = adapter;
+    leafletMapRef.current = leafletMap;
 
     // Store tileLayer for dark mode switching
     (adapter as any)._tileLayer = tileLayer;
@@ -130,6 +132,7 @@ export function MapView() {
       cleanupBoxZoom();
       leafletMap.remove();
       adapterRef.current = null;
+      leafletMapRef.current = null;
       setLayersReady(false);
       setMapAdapter(null);
     };
@@ -471,9 +474,9 @@ export function MapView() {
         }}
       />
       <LayerFilterPanel />
-      {!hideOverlay && mapAdapter && (
+      {!hideOverlay && mapAdapter && leafletMapRef.current && (
         <DebugOverlay
-          map={mapAdapter}
+          map={leafletMapRef.current}
           tracks={filteredTracksForOverlay}
           sensors={sensors}
           trailHistory={trailHistory}

@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 
-/** A 2D geographic point. */
+/** A geographic point with optional elevation. */
 export interface GeoPoint {
   lat: number;
   lon: number;
+  alt?: number;
 }
 
 export type GeoPolygon = GeoPoint[];

@@ -76,7 +76,7 @@ export function EditorHeader({ onBack }: EditorHeaderProps) {
           type: sensorType,
           lat: ps.position?.lat ?? 0,
           lon: ps.position?.lon ?? 0,
-          alt: 0,
+          alt: ps.position?.alt ?? 0,
           azMin: ps.spec?.minAzDeg ?? 0,
           azMax: ps.spec?.maxAzDeg ?? 360,
           elMin: -5,
