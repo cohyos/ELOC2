@@ -9,13 +9,18 @@ import type {
   ClassificationSource,
 } from './common-types.js';
 import type { DopplerQuality } from './source-track.js';
+import type {
+  TrackQuality,
+  MotionModelStatus,
+  ClassificationHypothesis,
+} from './track-quality.js';
 
 // ---------------------------------------------------------------------------
 // Track status
 // ---------------------------------------------------------------------------
 
 /** Lifecycle status of a system-level fused track. */
-export type TrackStatus = 'tentative' | 'confirmed' | 'dropped';
+export type TrackStatus = 'candidate' | 'tentative' | 'confirmed' | 'coasting' | 'dropped';
 
 // ---------------------------------------------------------------------------
 // Track lineage
@@ -74,4 +79,25 @@ export interface SystemTrack {
   radialVelocity?: number;
   /** Doppler measurement quality from the last contributing radar. */
   dopplerQuality?: DopplerQuality;
+
+  // --- Enhanced track quality fields ---
+
+  /** Bayesian existence probability [0, 1]. */
+  existenceProbability?: number;
+  /** Comprehensive track quality assessment. */
+  trackQuality?: TrackQuality;
+  /** Active motion model from IMM filter. */
+  motionModelStatus?: MotionModelStatus;
+  /** Scheduled time for next sensor revisit. */
+  plannedNextUpdateTime?: Timestamp;
+  /** Local clutter density affecting this track [0, 1]. */
+  sectorClutterLevel?: number;
+  /** Multiple classification hypotheses with probabilities. */
+  classificationHypotheses?: ClassificationHypothesis[];
+  /** Local track IDs contributing to this system track. */
+  contributingLocalTrackIds?: string[];
+  /** Current fusion mode used for this track. */
+  fusionMode?: string;
+  /** Registration health status for this track's primary sensor. */
+  registrationHealth?: string;
 }

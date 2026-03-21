@@ -1,5 +1,6 @@
 import type {
   Covariance3x3,
+  MotionModelStatus,
   Position3D,
   RegistrationState,
   SensorId,
@@ -8,7 +9,7 @@ import type {
   SystemTrackId,
   Timestamp,
 } from '@eloc2/domain';
-import { createLineageEntry } from '@eloc2/domain';
+import { createLineageEntry, createDefaultTrackQuality } from '@eloc2/domain';
 import type {
   CorrelationDecided,
   SystemTrackUpdated,
@@ -21,6 +22,11 @@ import type { CorrelationResult, CorrelatorConfig } from '../correlation/correla
 import { fuseObservation, fuseWithRegistration } from '../fusion/fuser.js';
 import type { FusedState } from '../fusion/fuser.js';
 import { normalizeObservation } from '../ingest/source-ingest.js';
+import {
+  updateExistenceOnDetection,
+  updateExistenceOnMiss,
+} from './existence-calculator.js';
+import type { AssociationMode } from '../association/association-selector.js';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -31,11 +37,56 @@ export interface TrackManagerConfig {
   confirmAfter: number;
   /** Number of consecutive misses before a track is dropped. */
   dropAfterMisses: number;
+
+  // --- Enhanced existence-based lifecycle ---
+
+  /** Enable Bayesian existence probability tracking. Default false (legacy mode). */
+  enableExistence?: boolean;
+  /** Existence probability to promote candidate to tentative. */
+  existencePromotionThreshold?: number;
+  /** Existence probability to promote tentative to confirmed. */
+  existenceConfirmationThreshold?: number;
+  /** Existence probability below which track is dropped. */
+  existenceDeletionThreshold?: number;
+  /** Miss count to enter coasting state. */
+  coastingMissThreshold?: number;
+  /** Sensor probability of detection. */
+  pDetection?: number;
+  /** Per-gate false alarm probability. */
+  pFalseAlarm?: number;
+  /** Max coasting time before forced drop (seconds). */
+  maxCoastingTimeSec?: number;
+
+  // --- Association mode ---
+
+  /** Association algorithm: 'nn' (default), 'jpda', or 'auto'. */
+  associationMode?: AssociationMode;
+
+  // --- IMM ---
+
+  /** Enable Interacting Multiple Model filter. */
+  enableIMM?: boolean;
+
+  // --- TBD ---
+
+  /** Enable Track-Before-Detect. */
+  enableTBD?: boolean;
 }
 
 const DEFAULT_CONFIG: TrackManagerConfig = {
   confirmAfter: 3,
   dropAfterMisses: 5,
+  enableExistence: false,
+  existencePromotionThreshold: 0.5,
+  existenceConfirmationThreshold: 0.8,
+  existenceDeletionThreshold: 0.1,
+  coastingMissThreshold: 3,
+  pDetection: 0.9,
+  pFalseAlarm: 0.01,
+  maxCoastingTimeSec: 15,
+  associationMode: 'nn',
+  enableIMM: false,
+  enableTBD: false,
 };
 
 // ---------------------------------------------------------------------------
@@ -45,6 +96,12 @@ const DEFAULT_CONFIG: TrackManagerConfig = {
 interface TrackMeta {
   updateCount: number;
   missCount: number;
+  /** Bayesian existence probability (when enableExistence is true). */
+  existenceProbability: number;
+  /** Rolling window of hit/miss (true=hit) for quality computation. */
+  rollingSupportWindow: boolean[];
+  /** Active motion model. */
+  motionModelStatus: MotionModelStatus;
 }
 
 // ---------------------------------------------------------------------------
@@ -134,7 +191,20 @@ export class TrackManager {
     };
 
     this.tracks.set(id, track);
-    this.meta.set(id, { updateCount: 1, missCount: 0 });
+    this.meta.set(id, {
+      updateCount: 1,
+      missCount: 0,
+      existenceProbability: 0.3,
+      rollingSupportWindow: [true],
+      motionModelStatus: 'unknown',
+    });
+
+    // If existence tracking is enabled, set initial existence probability on track
+    if (this.config.enableExistence) {
+      track.existenceProbability = 0.3;
+      track.trackQuality = createDefaultTrackQuality();
+      track.motionModelStatus = 'unknown';
+    }
 
     return track;
   }
@@ -185,17 +255,59 @@ export class TrackManager {
     // Increment update count and reset miss count
     meta.updateCount++;
     meta.missCount = 0;
+    meta.rollingSupportWindow.push(true);
+    if (meta.rollingSupportWindow.length > 10) meta.rollingSupportWindow.shift();
 
-    // Auto-confirm if threshold reached
-    if (track.status === 'tentative' && meta.updateCount >= this.config.confirmAfter) {
-      track.status = 'confirmed';
-      track.lineage = [
-        ...track.lineage,
-        createLineageEntry(
-          'track.confirmed',
-          `Confirmed after ${meta.updateCount} consistent updates`,
-        ),
-      ];
+    if (this.config.enableExistence) {
+      // Bayesian existence update on detection
+      meta.existenceProbability = updateExistenceOnDetection(
+        meta.existenceProbability,
+        this.config.pDetection ?? 0.9,
+        this.config.pFalseAlarm ?? 0.01,
+      );
+      track.existenceProbability = meta.existenceProbability;
+      track.confidence = meta.existenceProbability;
+
+      // Existence-based promotion
+      const promoteThreshold = this.config.existencePromotionThreshold ?? 0.5;
+      const confirmThreshold = this.config.existenceConfirmationThreshold ?? 0.8;
+
+      if (
+        (track.status === 'candidate' || track.status === 'coasting') &&
+        meta.existenceProbability >= promoteThreshold
+      ) {
+        track.status = 'tentative';
+        track.lineage = [
+          ...track.lineage,
+          createLineageEntry(
+            'track.promoted',
+            `Promoted to tentative (Pe=${meta.existenceProbability.toFixed(3)})`,
+          ),
+        ];
+      }
+
+      if (track.status === 'tentative' && meta.existenceProbability >= confirmThreshold) {
+        track.status = 'confirmed';
+        track.lineage = [
+          ...track.lineage,
+          createLineageEntry(
+            'track.confirmed',
+            `Confirmed via existence probability (Pe=${meta.existenceProbability.toFixed(3)})`,
+          ),
+        ];
+      }
+    } else {
+      // Legacy hit-count confirmation
+      if (track.status === 'tentative' && meta.updateCount >= this.config.confirmAfter) {
+        track.status = 'confirmed';
+        track.lineage = [
+          ...track.lineage,
+          createLineageEntry(
+            'track.confirmed',
+            `Confirmed after ${meta.updateCount} consistent updates`,
+          ),
+        ];
+      }
     }
 
     return track;
@@ -288,6 +400,15 @@ export class TrackManager {
     this.meta.set(newId, {
       updateCount: (meta1?.updateCount ?? 0) + (meta2?.updateCount ?? 0),
       missCount: 0,
+      existenceProbability: Math.max(
+        meta1?.existenceProbability ?? 0.3,
+        meta2?.existenceProbability ?? 0.3,
+      ),
+      rollingSupportWindow: [
+        ...(meta1?.rollingSupportWindow ?? []),
+        ...(meta2?.rollingSupportWindow ?? []),
+      ].slice(-10),
+      motionModelStatus: meta1?.motionModelStatus ?? 'unknown',
     });
 
     return mergedTrack;
@@ -348,16 +469,60 @@ export class TrackManager {
 
     const meta = this.meta.get(trackId)!;
     meta.missCount++;
+    meta.rollingSupportWindow.push(false);
+    if (meta.rollingSupportWindow.length > 10) meta.rollingSupportWindow.shift();
 
-    if (meta.missCount >= this.config.dropAfterMisses) {
-      track.status = 'dropped';
-      track.lineage = [
-        ...track.lineage,
-        createLineageEntry(
-          'track.dropped',
-          `Dropped after ${meta.missCount} consecutive missed updates`,
-        ),
-      ];
+    if (this.config.enableExistence) {
+      // Bayesian existence decay on miss
+      meta.existenceProbability = updateExistenceOnMiss(
+        meta.existenceProbability,
+        this.config.pDetection ?? 0.9,
+        this.config.pFalseAlarm ?? 0.01,
+      );
+      track.existenceProbability = meta.existenceProbability;
+      track.confidence = meta.existenceProbability;
+
+      const coastThreshold = this.config.coastingMissThreshold ?? 3;
+      const deleteThreshold = this.config.existenceDeletionThreshold ?? 0.1;
+
+      // Transition to coasting
+      if (
+        meta.missCount >= coastThreshold &&
+        track.status === 'confirmed'
+      ) {
+        track.status = 'coasting';
+        track.lineage = [
+          ...track.lineage,
+          createLineageEntry(
+            'track.coasting',
+            `Coasting after ${meta.missCount} misses (Pe=${meta.existenceProbability.toFixed(3)})`,
+          ),
+        ];
+      }
+
+      // Transition to dropped
+      if (meta.existenceProbability < deleteThreshold) {
+        track.status = 'dropped';
+        track.lineage = [
+          ...track.lineage,
+          createLineageEntry(
+            'track.dropped',
+            `Dropped: existence probability ${meta.existenceProbability.toFixed(3)} below threshold ${deleteThreshold}`,
+          ),
+        ];
+      }
+    } else {
+      // Legacy miss-count drop
+      if (meta.missCount >= this.config.dropAfterMisses) {
+        track.status = 'dropped';
+        track.lineage = [
+          ...track.lineage,
+          createLineageEntry(
+            'track.dropped',
+            `Dropped after ${meta.missCount} consecutive missed updates`,
+          ),
+        ];
+      }
     }
 
     return track;

@@ -1,6 +1,7 @@
 import type {
   Covariance3x3,
   DopplerQuality,
+  MotionModelStatus,
   Position3D,
   RegistrationState,
   SourceObservation,
@@ -18,6 +19,10 @@ export interface FusedState {
   confidence: number;
   radialVelocity?: number;
   dopplerQuality?: DopplerQuality;
+  /** Bayesian existence probability, updated by existence calculator. */
+  existenceProbability?: number;
+  /** Active motion model from IMM filter. */
+  motionModelStatus?: MotionModelStatus;
 }
 
 // ---------------------------------------------------------------------------

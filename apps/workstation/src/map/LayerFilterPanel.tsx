@@ -56,7 +56,7 @@ const panelStyle: React.CSSProperties = {
   position: 'absolute',
   top: '10px',
   left: '10px',
-  zIndex: 5,
+  zIndex: 1000,
   background: 'rgba(20, 20, 37, 0.92)',
   border: '1px solid #2a2a3e',
   borderRadius: '6px',

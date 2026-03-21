@@ -6,6 +6,7 @@ import type {
   Timestamp,
   Velocity3D,
 } from './common-types.js';
+import type { DetectionQualityFlags, BeamMetadata } from './track-quality.js';
 
 // ---------------------------------------------------------------------------
 // Source observation
@@ -30,6 +31,21 @@ export interface SourceObservation {
   radialVelocity?: number;
   /** Doppler measurement quality. Radar-only. */
   dopplerQuality?: DopplerQuality;
+
+  // --- Enhanced detection metadata ---
+
+  /** Sensor operating mode that produced this observation. */
+  sensorMode?: string;
+  /** Type of measurement. */
+  measurementType?: 'position' | 'bearing_only' | 'doppler_only';
+  /** Signal-to-noise ratio in dB. */
+  snr?: number;
+  /** Raw signal amplitude. */
+  amplitude?: number;
+  /** Detection quality indicators. */
+  qualityFlags?: DetectionQualityFlags;
+  /** Radar beam / dwell metadata. */
+  beamMetadata?: BeamMetadata;
 }
 
 // ---------------------------------------------------------------------------
