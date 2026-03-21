@@ -3,24 +3,47 @@
  * Converts markdown report content to a PDF document using pdfmake.
  */
 
-import PdfPrinter from 'pdfmake';
 import type { TDocumentDefinitions, Content, ContentText } from 'pdfmake/interfaces';
 import { createRequire } from 'module';
 import path from 'path';
+import fs from 'fs';
 
-// Resolve actual Roboto TTF font paths from pdfmake package
+// Use createRequire to load pdfmake via CJS — avoids ESM resolution issues
 const require = createRequire(import.meta.url);
+const pdfmake = require('pdfmake');
+
+// Register font files into pdfmake's virtual filesystem
 const pdfmakePath = path.dirname(require.resolve('pdfmake/package.json'));
 const fontsDir = path.join(pdfmakePath, 'build', 'fonts', 'Roboto');
 
-const fonts = {
-  Roboto: {
-    normal: path.join(fontsDir, 'Roboto-Regular.ttf'),
-    bold: path.join(fontsDir, 'Roboto-Medium.ttf'),
-    italics: path.join(fontsDir, 'Roboto-Italic.ttf'),
-    bolditalics: path.join(fontsDir, 'Roboto-MediumItalic.ttf'),
-  },
+const fontFiles = {
+  'Roboto-Regular.ttf': path.join(fontsDir, 'Roboto-Regular.ttf'),
+  'Roboto-Medium.ttf': path.join(fontsDir, 'Roboto-Medium.ttf'),
+  'Roboto-Italic.ttf': path.join(fontsDir, 'Roboto-Italic.ttf'),
+  'Roboto-MediumItalic.ttf': path.join(fontsDir, 'Roboto-MediumItalic.ttf'),
 };
+
+// Load font buffers into virtualfs
+for (const [name, filePath] of Object.entries(fontFiles)) {
+  try {
+    pdfmake.virtualfs.storage[name] = fs.readFileSync(filePath);
+  } catch {
+    // Font file not found — PDF generation will fail gracefully at runtime
+  }
+}
+
+// Register font definitions
+pdfmake.setFonts({
+  Roboto: {
+    normal: 'Roboto-Regular.ttf',
+    bold: 'Roboto-Medium.ttf',
+    italics: 'Roboto-Italic.ttf',
+    bolditalics: 'Roboto-MediumItalic.ttf',
+  },
+});
+
+// Suppress URL access policy warning in server context
+pdfmake.setUrlAccessPolicy(() => false);
 
 /**
  * Convert markdown-formatted report content to a PDF buffer.
@@ -133,19 +156,9 @@ export async function markdownToPdf(markdown: string): Promise<Buffer> {
     }),
   };
 
-  return new Promise<Buffer>((resolve, reject) => {
-    try {
-      const printer = new PdfPrinter(fonts);
-      const pdfDoc = printer.createPdfKitDocument(docDefinition);
-      const chunks: Buffer[] = [];
-      pdfDoc.on('data', (chunk: Buffer) => chunks.push(chunk));
-      pdfDoc.on('end', () => resolve(Buffer.concat(chunks)));
-      pdfDoc.on('error', reject);
-      pdfDoc.end();
-    } catch (err) {
-      reject(err);
-    }
-  });
+  const pdfDoc = pdfmake.createPdf(docDefinition);
+  const buffer = await pdfDoc.getBuffer();
+  return Buffer.from(buffer);
 }
 
 /** Strip markdown formatting (bold, italic, code) from text. */

@@ -1,11 +1,11 @@
 /**
- * Ctrl+Left-click+drag rectangle zoom for MapLibre GL maps.
- * MapLibre's built-in BoxZoomHandler uses Shift; this adds Ctrl support.
+ * Ctrl+Left-click+drag rectangle zoom for MapAdapter-wrapped maps.
+ * Works with both MapLibre and Leaflet via the MapAdapter interface.
  */
-import type maplibregl from 'maplibre-gl';
+import type { MapAdapter } from './map-adapter';
 
-export function enableCtrlBoxZoom(map: maplibregl.Map): () => void {
-  const container = map.getContainer();
+export function enableCtrlBoxZoom(adapter: MapAdapter): () => void {
+  const container = adapter.getContainer();
   let startPoint: { x: number; y: number } | null = null;
   let box: HTMLDivElement | null = null;
   let active = false;
@@ -16,7 +16,7 @@ export function enableCtrlBoxZoom(map: maplibregl.Map): () => void {
     e.stopPropagation();
 
     // Disable map drag while box-zooming
-    map.dragPan.disable();
+    adapter.disableDragPan();
 
     const rect = container.getBoundingClientRect();
     startPoint = { x: e.clientX - rect.left, y: e.clientY - rect.top };
@@ -67,7 +67,7 @@ export function enableCtrlBoxZoom(map: maplibregl.Map): () => void {
     active = false;
 
     // Re-enable drag
-    map.dragPan.enable();
+    adapter.enableDragPan();
 
     // Only zoom if box is at least 10px in each dimension
     const width = Math.abs(endX - startPoint.x);
@@ -78,16 +78,16 @@ export function enableCtrlBoxZoom(map: maplibregl.Map): () => void {
     }
 
     // Convert pixel corners to lngLat and fit bounds
-    const sw = map.unproject([
+    const sw = adapter.unproject([
       Math.min(startPoint.x, endX),
       Math.max(startPoint.y, endY),
     ]);
-    const ne = map.unproject([
+    const ne = adapter.unproject([
       Math.max(startPoint.x, endX),
       Math.min(startPoint.y, endY),
     ]);
 
-    map.fitBounds([sw, ne], { padding: 20, duration: 300 });
+    adapter.fitBounds([[sw.lng, sw.lat], [ne.lng, ne.lat]], { padding: 20, duration: 300 });
     startPoint = null;
   };
 
@@ -100,7 +100,7 @@ export function enableCtrlBoxZoom(map: maplibregl.Map): () => void {
       }
       active = false;
       startPoint = null;
-      map.dragPan.enable();
+      adapter.enableDragPan();
     }
   };
 

@@ -1,11 +1,12 @@
-import React, { useEffect, useRef, useCallback } from 'react';
-import maplibregl from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
+import React, { useEffect, useRef } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { DeploymentPanel } from './DeploymentPanel';
 import { DeploymentMetrics } from './DeploymentMetrics';
 import { useDeploymentStore } from './deployment-store';
-import type { GeoPolygon, GeoPoint, PlacedSensor } from './deployment-store';
+import type { GeoPolygon } from './deployment-store';
 import { enableCtrlBoxZoom } from '../map/ctrl-box-zoom';
+import { LeafletAdapter } from '../map/map-adapter';
 
 const colors = {
   bg: '#0d0d1a',
@@ -22,20 +23,28 @@ const colors = {
   warning: '#ffcc00',
 };
 
-function polygonToSvgPath(polygon: GeoPolygon, map: maplibregl.Map): string {
-  if (polygon.length < 3) return '';
-  return polygon.map((p, i) => {
-    const px = map.project([p.lon, p.lat]);
-    return `${i === 0 ? 'M' : 'L'}${px.x},${px.y}`;
-  }).join(' ') + ' Z';
+// ---------------------------------------------------------------------------
+// Helper: convert GeoPolygon to Leaflet LatLng array
+// ---------------------------------------------------------------------------
+
+function geoToLatLngs(polygon: GeoPolygon): [number, number][] {
+  return polygon.map(p => [p.lat, p.lon] as [number, number]);
 }
+
+// ---------------------------------------------------------------------------
+// DeploymentMap — Native Leaflet layers (matches EditorMap pattern)
+// ---------------------------------------------------------------------------
 
 function DeploymentMap() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
-  const svgRef = useRef<SVGSVGElement>(null);
-  const markersRef = useRef<HTMLDivElement>(null);
-  const rafRef = useRef<number>(0);
+  const mapRef = useRef<L.Map | null>(null);
+
+  // Leaflet layer groups
+  const zoneGroupRef = useRef<L.LayerGroup | null>(null);
+  const coverageGroupRef = useRef<L.LayerGroup | null>(null);
+  const sensorGroupRef = useRef<L.LayerGroup | null>(null);
+  const drawPreviewGroupRef = useRef<L.LayerGroup | null>(null);
+
   const dragState = useRef<{ index: number } | null>(null);
 
   const scannedArea = useDeploymentStore(s => s.scannedArea);
@@ -45,134 +54,60 @@ function DeploymentMap() {
   const drawMode = useDeploymentStore(s => s.drawMode);
   const drawVertices = useDeploymentStore(s => s.drawVertices);
 
-  const drawOverlays = useCallback(() => {
-    const map = mapRef.current;
-    const svg = svgRef.current;
-    const markerContainer = markersRef.current;
-    if (!map || !svg || !markerContainer) return;
-
-    const canvas = map.getCanvas();
-    const w = canvas.width / (window.devicePixelRatio || 1);
-    const h = canvas.height / (window.devicePixelRatio || 1);
-    svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
-    svg.style.width = `${w}px`;
-    svg.style.height = `${h}px`;
-
-    let svgContent = '';
-
-    // Scanned area
-    if (scannedArea.length >= 3) {
-      const path = polygonToSvgPath(scannedArea, map);
-      svgContent += `<path d="${path}" fill="rgba(74,158,255,0.08)" stroke="${colors.accent}" stroke-width="2" stroke-dasharray="8 4" />`;
-    }
-
-    // Threat corridors
-    for (const corridor of threatCorridors) {
-      if (corridor.length < 3) continue;
-      const path = polygonToSvgPath(corridor, map);
-      svgContent += `<path d="${path}" fill="rgba(255,204,0,0.12)" stroke="${colors.warning}" stroke-width="1.5" stroke-dasharray="6 3" />`;
-    }
-
-    // Exclusion zones
-    for (const zone of exclusionZones) {
-      if (zone.length < 3) continue;
-      const path = polygonToSvgPath(zone, map);
-      svgContent += `<path d="${path}" fill="rgba(255,51,51,0.15)" stroke="${colors.danger}" stroke-width="1.5" />`;
-    }
-
-    // Draw preview
-    if (drawVertices.length >= 2) {
-      const coords = drawVertices.map(v => map.project([v.lon, v.lat]));
-      let d = coords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x},${c.y}`).join(' ');
-      if (drawVertices.length >= 3) d += ' Z';
-      svgContent += `<path d="${d}" fill="rgba(255,204,0,0.1)" stroke="#ffcc00" stroke-width="2" stroke-dasharray="4 2" />`;
-      for (const c of coords) {
-        svgContent += `<circle cx="${c.x}" cy="${c.y}" r="4" fill="#ffcc00" stroke="#fff" stroke-width="1.5" />`;
-      }
-    }
-
-    // Sensor coverage circles
-    for (const ps of placedSensors) {
-      const center = map.project([ps.position.lon, ps.position.lat]);
-      const sensorColor = ps.spec.type === 'eo' ? colors.eo : colors.radar;
-      const degOffset = ps.spec.maxRangeM / 111320;
-      const edge = map.project([ps.position.lon, ps.position.lat + degOffset]);
-      const rPx = Math.abs(center.y - edge.y);
-      svgContent += `<circle cx="${center.x}" cy="${center.y}" r="${rPx}" fill="${sensorColor}15" stroke="${sensorColor}50" stroke-width="1.5" />`;
-    }
-
-    svg.innerHTML = svgContent;
-
-    // HTML markers for placed sensors (draggable)
-    let html = '';
-    for (let i = 0; i < placedSensors.length; i++) {
-      const ps = placedSensors[i];
-      const px = map.project([ps.position.lon, ps.position.lat]);
-      const sensorColor = ps.spec.type === 'eo' ? colors.eo : colors.radar;
-      html += `<div style="position:absolute;left:${px.x}px;top:${px.y}px;transform:translate(-50%,-50%);cursor:grab;pointer-events:auto;" data-placed-sensor="${i}">
-        <div style="width:12px;height:12px;border-radius:50%;background:${sensorColor};border:2px solid #fff;box-shadow:0 0 6px ${sensorColor}88;"></div>
-      </div>`;
-      html += `<div style="position:absolute;left:${px.x + 10}px;top:${px.y - 16}px;pointer-events:none;font:bold 11px monospace;color:${sensorColor};text-shadow:0 0 3px #000,0 0 6px #000;">
-        ${ps.spec.id}
-      </div>`;
-      html += `<div style="position:absolute;left:${px.x + 10}px;top:${px.y - 2}px;pointer-events:none;font:10px monospace;color:#aaa;text-shadow:0 0 3px #000;">
-        ${(ps.scores.total * 100).toFixed(0)}%
-      </div>`;
-    }
-    markerContainer.innerHTML = html;
-  }, [scannedArea, exclusionZones, threatCorridors, placedSensors, drawVertices]);
-
-  // Initialize MapLibre
+  // Initialize Leaflet
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
     const cLat = scannedArea.reduce((s, p) => s + p.lat, 0) / (scannedArea.length || 1);
     const cLon = scannedArea.reduce((s, p) => s + p.lon, 0) / (scannedArea.length || 1);
 
-    const map = new maplibregl.Map({
-      container: mapContainerRef.current,
-      style: {
-        version: 8,
-        sources: {
-          osm: {
-            type: 'raster',
-            tiles: ['https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'],
-            tileSize: 256,
-            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-          },
-        },
-        layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
-      },
-      center: [cLon, cLat],
+    const map = L.map(mapContainerRef.current, {
+      center: [cLat, cLon],
       zoom: 8.5,
+      zoomControl: false,
+      attributionControl: true,
     });
 
-    map.addControl(new maplibregl.NavigationControl(), 'top-right');
-    map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
-    const cleanupBoxZoom = enableCtrlBoxZoom(map);
+    L.tileLayer('https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png', {
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+      maxZoom: 19,
+    }).addTo(map);
 
-    map.on('error', (e) => {
-      console.error('[DeploymentMap] MapLibre error:', e.error?.message || e);
-    });
+    L.control.zoom({ position: 'topright' }).addTo(map);
+    L.control.scale({ metric: true, imperial: false, position: 'bottomleft' }).addTo(map);
 
-    const scheduleRedraw = () => {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(() => drawOverlays());
-    };
+    // Ctrl+drag box zoom
+    const adapter = new LeafletAdapter(map);
+    const cleanupBoxZoom = enableCtrlBoxZoom(adapter);
 
-    map.on('move', scheduleRedraw);
-    map.on('zoom', scheduleRedraw);
-    map.on('resize', scheduleRedraw);
-    map.on('load', () => drawOverlays());
+    // Create layer groups (ordered bottom to top)
+    const zoneGroup = L.layerGroup().addTo(map);
+    const coverageGroup = L.layerGroup().addTo(map);
+    const drawPreviewGroup = L.layerGroup().addTo(map);
+    const sensorGroup = L.layerGroup().addTo(map);
 
-    // Click handler for drawing modes
-    map.on('click', (e) => {
-      const dm = useDeploymentStore.getState().drawMode;
-      if (dm !== 'select') {
-        useDeploymentStore.getState().addDrawVertex({ lat: e.lngLat.lat, lon: e.lngLat.lng });
+    zoneGroupRef.current = zoneGroup;
+    coverageGroupRef.current = coverageGroup;
+    drawPreviewGroupRef.current = drawPreviewGroup;
+    sensorGroupRef.current = sensorGroup;
+
+    // Click handler for placing sensors and drawing polygons
+    map.on('click', (e: L.LeafletMouseEvent) => {
+      if (dragState.current) return;
+      const state = useDeploymentStore.getState();
+      const mode = state.drawMode;
+
+      if (mode === 'place-sensor') {
+        state.placeSensorAtPosition({ lat: e.latlng.lat, lon: e.latlng.lng });
+        return;
+      }
+
+      if (mode === 'draw-area' || mode === 'draw-exclusion' || mode === 'draw-threat') {
+        state.addDrawVertex({ lat: e.latlng.lat, lon: e.latlng.lng });
       }
     });
 
+    map.whenReady(() => map.invalidateSize());
     mapRef.current = map;
 
     return () => {
@@ -182,73 +117,187 @@ function DeploymentMap() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Redraw overlays when data changes
+  // Update zone polygons (scanned area, exclusion zones, threat corridors)
   useEffect(() => {
-    if (mapRef.current) drawOverlays();
-  }, [drawOverlays]);
+    if (!zoneGroupRef.current) return;
+    zoneGroupRef.current.clearLayers();
+
+    // Scanned area
+    if (scannedArea.length >= 3) {
+      L.polygon(geoToLatLngs(scannedArea), {
+        fillColor: colors.accent,
+        fillOpacity: 0.08,
+        color: colors.accent,
+        weight: 2,
+        dashArray: '8 4',
+        interactive: false,
+      }).addTo(zoneGroupRef.current);
+    }
+
+    // Threat corridors
+    for (const corridor of threatCorridors) {
+      if (corridor.length < 3) continue;
+      L.polygon(geoToLatLngs(corridor), {
+        fillColor: colors.warning,
+        fillOpacity: 0.12,
+        color: colors.warning,
+        weight: 1.5,
+        dashArray: '6 3',
+        interactive: false,
+      }).addTo(zoneGroupRef.current);
+    }
+
+    // Exclusion zones
+    for (const zone of exclusionZones) {
+      if (zone.length < 3) continue;
+      L.polygon(geoToLatLngs(zone), {
+        fillColor: colors.danger,
+        fillOpacity: 0.15,
+        color: colors.danger,
+        weight: 1.5,
+        interactive: false,
+      }).addTo(zoneGroupRef.current);
+    }
+  }, [scannedArea, exclusionZones, threatCorridors]);
+
+  // Update sensor coverage circles + markers
+  useEffect(() => {
+    const m = mapRef.current;
+    if (!m || !coverageGroupRef.current || !sensorGroupRef.current) return;
+    coverageGroupRef.current.clearLayers();
+    sensorGroupRef.current.clearLayers();
+
+    for (let idx = 0; idx < placedSensors.length; idx++) {
+      const ps = placedSensors[idx];
+      const sensorColor = ps.spec.type === 'eo' ? colors.eo : colors.radar;
+      const pos: [number, number] = [ps.position.lat, ps.position.lon];
+
+      // Coverage circle
+      L.circle(pos, {
+        radius: ps.spec.maxRangeM,
+        fillColor: sensorColor,
+        fillOpacity: 0.06,
+        color: sensorColor,
+        weight: 1.5,
+        opacity: 0.3,
+        interactive: false,
+      }).addTo(coverageGroupRef.current);
+
+      // Sensor marker (draggable)
+      const marker = L.circleMarker(pos, {
+        radius: 6,
+        fillColor: sensorColor,
+        fillOpacity: 1,
+        color: '#fff',
+        weight: 2,
+        interactive: true,
+      });
+
+      // Tooltip with sensor ID + score
+      marker.bindTooltip(
+        `${ps.spec.id} — ${(ps.scores.total * 100).toFixed(0)}%`,
+        { permanent: true, direction: 'right', offset: [8, -4], className: 'deploy-sensor-tooltip' },
+      );
+
+      // Drag sensor
+      const sensorIdx = idx;
+      marker.on('mousedown', (e) => {
+        L.DomEvent.stopPropagation(e);
+        L.DomEvent.preventDefault(e);
+        dragState.current = { index: sensorIdx };
+        m.dragging.disable();
+        m.getContainer().style.cursor = 'grabbing';
+
+        const onMove = (moveEvt: L.LeafletMouseEvent) => {
+          if (!dragState.current) return;
+          useDeploymentStore.getState().updatePlacedSensorPosition(dragState.current.index, {
+            lat: moveEvt.latlng.lat, lon: moveEvt.latlng.lng,
+          });
+        };
+
+        const onUp = () => {
+          dragState.current = null;
+          m.dragging.enable();
+          m.getContainer().style.cursor = '';
+          m.off('mousemove', onMove);
+          m.off('mouseup', onUp);
+        };
+
+        m.on('mousemove', onMove);
+        m.on('mouseup', onUp);
+      });
+
+      marker.addTo(sensorGroupRef.current);
+    }
+  }, [placedSensors]);
+
+  // Draw preview (in-progress polygon vertices)
+  useEffect(() => {
+    if (!drawPreviewGroupRef.current) return;
+    drawPreviewGroupRef.current.clearLayers();
+    if (drawVertices.length === 0) return;
+
+    // Vertex dots
+    for (const v of drawVertices) {
+      L.circleMarker([v.lat, v.lon], {
+        radius: 5,
+        fillColor: '#ffcc00',
+        fillOpacity: 1,
+        color: '#fff',
+        weight: 2,
+        interactive: false,
+      }).addTo(drawPreviewGroupRef.current);
+    }
+
+    // Connecting lines
+    if (drawVertices.length >= 2) {
+      const latlngs = drawVertices.map(v => [v.lat, v.lon] as [number, number]);
+      if (drawVertices.length >= 3) {
+        latlngs.push([drawVertices[0].lat, drawVertices[0].lon]);
+      }
+      L.polyline(latlngs, {
+        color: '#ffcc00',
+        weight: 2,
+        dashArray: '8 4',
+        interactive: false,
+      }).addTo(drawPreviewGroupRef.current);
+    }
+  }, [drawVertices]);
 
   // Update cursor for drawing modes
   useEffect(() => {
     const m = mapRef.current;
     if (!m) return;
-    m.getCanvas().style.cursor = drawMode !== 'select' ? 'crosshair' : '';
+    const container = m.getContainer();
+    container.style.cursor = drawMode !== 'select' ? 'crosshair' : '';
+    container.style.userSelect = 'none';
   }, [drawMode]);
-
-  // Draggable sensors
-  useEffect(() => {
-    const markerDiv = markersRef.current;
-    const m = mapRef.current;
-    if (!markerDiv || !m) return;
-
-    const onMouseDown = (e: MouseEvent) => {
-      const el = (e.target as HTMLElement).closest('[data-placed-sensor]') as HTMLElement | null;
-      if (!el) return;
-      dragState.current = { index: parseInt(el.dataset.placedSensor!, 10) };
-      e.preventDefault();
-      e.stopPropagation();
-    };
-
-    const onMouseMove = (e: MouseEvent) => {
-      if (!dragState.current) return;
-      const rect = m.getCanvas().getBoundingClientRect();
-      const lngLat = m.unproject([e.clientX - rect.left, e.clientY - rect.top]);
-      useDeploymentStore.getState().updatePlacedSensorPosition(dragState.current.index, {
-        lat: lngLat.lat, lon: lngLat.lng,
-      });
-      m.getCanvas().style.cursor = 'grabbing';
-    };
-
-    const onMouseUp = () => {
-      if (!dragState.current) return;
-      dragState.current = null;
-      if (m) m.getCanvas().style.cursor = '';
-    };
-
-    markerDiv.addEventListener('mousedown', onMouseDown);
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-
-    return () => {
-      markerDiv.removeEventListener('mousedown', onMouseDown);
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-    };
-  }, []);
 
   // Draw mode label
   const modeLabels: Record<string, string> = {
     'draw-area': 'Click to define scanned area',
     'draw-exclusion': 'Click to define exclusion zone',
     'draw-threat': 'Click to define threat corridor',
+    'place-sensor': 'Click map to place sensor',
   };
   const modeLabel = drawMode !== 'select' ? modeLabels[drawMode] : null;
 
   return (
     <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%' }}>
-      <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
+      <div ref={mapContainerRef} style={{ width: '100%', height: '100%', userSelect: 'none' }} />
 
-      <svg ref={svgRef} style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 14 }} />
-      <div ref={markersRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 15 }} />
+      {/* Tooltip styles */}
+      <style>{`
+        .deploy-sensor-tooltip {
+          background: #1a1a2eee !important;
+          color: #fff !important;
+          border: 1px solid #4a9eff44 !important;
+          font: bold 11px monospace !important;
+          padding: 2px 6px !important;
+          box-shadow: 0 0 6px #0008 !important;
+        }
+        .deploy-sensor-tooltip::before { display: none !important; }
+      `}</style>
 
       {/* Mode indicator */}
       {modeLabel && (
@@ -259,7 +308,7 @@ function DeploymentMap() {
           display: 'flex', alignItems: 'center', gap: '8px', pointerEvents: 'auto',
         }}>
           {modeLabel}
-          {drawVertices.length >= 3 && (
+          {drawMode !== 'place-sensor' && drawVertices.length >= 3 && (
             <button
               onClick={() => useDeploymentStore.getState().finishDraw()}
               style={{ background: '#00cc44', color: '#fff', border: 'none', borderRadius: '3px', padding: '2px 10px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
@@ -268,7 +317,13 @@ function DeploymentMap() {
             </button>
           )}
           <button
-            onClick={() => useDeploymentStore.getState().cancelDraw()}
+            onClick={() => {
+              if (drawMode === 'place-sensor') {
+                useDeploymentStore.getState().setDrawMode('select');
+              } else {
+                useDeploymentStore.getState().cancelDraw();
+              }
+            }}
             style={{ background: '#ff333344', color: '#ff6666', border: 'none', borderRadius: '3px', padding: '2px 8px', fontSize: '10px', cursor: 'pointer' }}
           >
             Cancel

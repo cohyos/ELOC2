@@ -3738,9 +3738,21 @@ export class LiveEngine {
         sensor.gimbal.currentTargetId = undefined;
         continue;
       }
+      // Predict track position forward by 1 tick to compensate for fusion lag
+      let tLat = track.state.lat;
+      let tLon = track.state.lon;
+      if (track.velocity) {
+        const dtSec = 1; // 1-tick prediction
+        const mPerDegLat = 111320;
+        const mPerDegLon = 111320 * Math.cos(tLat * Math.PI / 180);
+        if (mPerDegLon > 0) {
+          tLat += (track.velocity.vy * dtSec) / mPerDegLat;
+          tLon += (track.velocity.vx * dtSec) / mPerDegLon;
+        }
+      }
       sensor.gimbal.azimuthDeg = bearingDeg(
         sensor.position.lat, sensor.position.lon,
-        track.state.lat, track.state.lon,
+        tLat, tLon,
       );
     }
   }

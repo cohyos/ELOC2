@@ -1,37 +1,32 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import maplibregl from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
+import React, { useEffect, useRef, useState } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { useTrackStore } from '../stores/track-store';
 import { useSensorStore } from '../stores/sensor-store';
 import { useTaskStore } from '../stores/task-store';
 import { useUiStore } from '../stores/ui-store';
-import { initTrackLayer, updateTrackLayer, updateTrackTrailLayer, getTrackLayerId } from './layers/track-layer';
-import { initSensorLayer, updateSensorLayer, getSensorLayerId } from './layers/sensor-layer';
-import { initCoverageLayer, updateCoverageLayer } from './layers/coverage-layer';
-import { initEoRayLayer, updateEoRayLayer } from './layers/eo-ray-layer';
-import { initTriangulationLayer, updateTriangulationLayer } from './layers/triangulation-layer';
-import { initBearingLineLayer, updateBearingLineLayer, type BearingLine } from './layers/bearing-line-layer';
-import { initInvestigationRingLayer, updateInvestigationRingLayer } from './layers/investigation-ring-layer';
-import { initAmbiguityMarkerLayer, updateAmbiguityMarkerLayer, getAmbiguityMarkerLayerIds } from './layers/ambiguity-marker-layer';
-import { initSelectionRayLayer, updateSelectionRayLayer, clearSelectionRayLayer } from './layers/selection-ray-layer';
 import { DebugOverlay } from './DebugOverlay';
 import { LayerFilterPanel } from './LayerFilterPanel';
 import type { LayerVisibility, SelectionBearingRay } from '../stores/ui-store';
 import { useDemoStore } from '../stores/demo-store';
-import { applyBasicMode } from '../demo/BasicModeFilter';
 import { useGroundTruthStore } from '../stores/ground-truth-store';
 import { useCoverZoneStore } from '../stores/cover-zone-store';
 import { useFovOverlapStore } from '../stores/fov-overlap-store';
 import { useQualityStore } from '../stores/quality-store';
 import { DeckGlOverlay } from '../3d/DeckGlOverlay';
 import { enableCtrlBoxZoom } from './ctrl-box-zoom';
-import { useTaskStore as useTaskStoreForBallistic } from '../stores/task-store';
+import type { MapAdapter } from './map-adapter';
+import { MapLibreAdapter, LeafletAdapter } from './map-adapter';
+
+// Feature flag: 'leaflet' (default) or 'maplibre'
+const RENDERER = (import.meta.env.VITE_RASTER_RENDERER as string) || 'leaflet';
 
 export function MapView() {
   const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<maplibregl.Map | null>(null);
-  // Use state (not ref) so that when layers become ready, effects re-fire
+  const adapterRef = useRef<MapAdapter | null>(null);
   const [layersReady, setLayersReady] = useState(false);
+  const [mapAdapter, setMapAdapter] = useState<MapAdapter | null>(null);
+  const leafletMapRef = useRef<L.Map | null>(null);
 
   const tracks = useTrackStore(s => s.tracks);
   const trailHistory = useTrackStore(s => s.trailHistory);
@@ -40,17 +35,9 @@ export function MapView() {
   const selectTrack = useUiStore(s => s.selectTrack);
   const selectSensor = useUiStore(s => s.selectSensor);
   const selectGroundTruth = useUiStore(s => s.selectGroundTruth);
-  const selectCue = useUiStore(s => s.selectCue);
-  const selectGroup = useUiStore(s => s.selectGroup);
-  const selectGeometry = useUiStore(s => s.selectGeometry);
   const eoTracks = useTaskStore(s => s.eoTracks);
-  const geometryEstimates = useTaskStore(s => s.geometryEstimates);
-  const unresolvedGroups = useTaskStore(s => s.unresolvedGroups);
-  const registrationStates = useTaskStore(s => s.registrationStates);
   const selectedTrackId = useUiStore(s => s.selectedTrackId);
   const selectedGroundTruthId = useUiStore(s => s.selectedGroundTruthId);
-  const highlightedSensorIds = useUiStore(s => s.highlightedSensorIds);
-  const selectionBearingRays = useUiStore(s => s.selectionBearingRays);
   const setHighlightedSensors = useUiStore(s => s.setHighlightedSensors);
   const setSelectionBearingRays = useUiStore(s => s.setSelectionBearingRays);
   const clearSelectionHighlights = useUiStore(s => s.clearSelectionHighlights);
@@ -71,9 +58,8 @@ export function MapView() {
   const bearingAssociations = useFovOverlapStore(s => s.bearingAssociations);
   const multiSensorResolutions = useFovOverlapStore(s => s.multiSensorResolutions);
   const convergenceStates = useQualityStore(s => s.convergenceStates);
-  const ballisticEstimates = useTaskStoreForBallistic(s => s.ballisticEstimates);
+  const ballisticEstimates = useTaskStore(s => s.ballisticEstimates);
 
-  // Derive set of converged track IDs for DebugOverlay
   const convergedTrackIds = React.useMemo(() => {
     const ids = new Set<string>();
     for (const cs of convergenceStates) {
@@ -82,23 +68,86 @@ export function MapView() {
     return ids;
   }, [convergenceStates]);
 
-  // Initialize map
+  // ── Initialize map (Leaflet or MapLibre) ──────────────────────────────────
   useEffect(() => {
-    if (!mapContainer.current || map.current) return;
+    if (!mapContainer.current || adapterRef.current) return;
 
     const tileUrl = darkMode
       ? 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
       : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
-    map.current = new maplibregl.Map({
-      container: mapContainer.current,
+    let cleanup: (() => void) | undefined;
+    let cancelled = false;
+
+    if (RENDERER === 'leaflet') {
+      cleanup = initLeaflet(mapContainer.current, tileUrl);
+    } else {
+      // MapLibre loaded async to avoid bundling when not needed
+      initMapLibreAsync(mapContainer.current, tileUrl).then((c) => {
+        if (cancelled) { c(); return; }
+        cleanup = c;
+      });
+    }
+
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, []);
+
+  /** Initialize Leaflet map */
+  function initLeaflet(container: HTMLElement, tileUrl: string) {
+    const leafletMap = L.map(container, {
+      center: [31.5, 34.8],
+      zoom: 8,
+      zoomControl: false,
+      attributionControl: true,
+    });
+
+    // Add tile layer
+    const tileLayer = L.tileLayer(tileUrl, {
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+      maxZoom: 19,
+    }).addTo(leafletMap);
+
+    // Add controls
+    L.control.zoom({ position: 'topright' }).addTo(leafletMap);
+    L.control.scale({ metric: true, imperial: false, position: 'bottomleft' }).addTo(leafletMap);
+
+    const adapter = new LeafletAdapter(leafletMap);
+    adapterRef.current = adapter;
+    leafletMapRef.current = leafletMap;
+
+    // Store tileLayer for dark mode switching
+    (adapter as any)._tileLayer = tileLayer;
+
+    const cleanupBoxZoom = enableCtrlBoxZoom(adapter);
+
+    // Leaflet is ready immediately (no async WebGL init)
+    setLayersReady(true);
+    setMapAdapter(adapter);
+    console.log('[MapView] Leaflet initialized');
+
+    return () => {
+      cleanupBoxZoom();
+      leafletMap.remove();
+      adapterRef.current = null;
+      leafletMapRef.current = null;
+      setLayersReady(false);
+      setMapAdapter(null);
+    };
+  }
+
+  /** Initialize MapLibre GL JS map (fallback) — async to allow dynamic import */
+  async function initMapLibreAsync(container: HTMLElement, tileUrl: string): Promise<() => void> {
+    const maplibregl = (await import('maplibre-gl')).default;
+    // Load CSS via side-effect import
+    await import('maplibre-gl/dist/maplibre-gl.css');
+
+    const mlMap = new maplibregl.Map({
+      container,
       style: {
         version: 8,
-        // Glyphs URL removed: DebugOverlay handles all text labels.
-        // Having a glyphs URL causes MapLibre to fetch fonts on symbol layer
-        // visibility change, which can stall the entire WebGL pipeline in
-        // production (CDN timeouts, CORS, rate limiting). See post-mortem:
-        // Knowledge_Base_and_Agents_instructions/Blank_Map_Postmortem_and_Testing_Lessons.md
         sources: {
           osm: {
             type: 'raster',
@@ -107,249 +156,196 @@ export function MapView() {
             attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
           },
         },
-        layers: [
-          {
-            id: 'osm',
-            type: 'raster',
-            source: 'osm',
-          },
-        ],
+        layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
       },
       center: [34.8, 31.5],
       zoom: 8,
     });
 
-    // Log map errors for debugging
-    map.current.on('error', (e) => {
+    mlMap.on('error', (e: any) => {
       console.error('[MapView] MapLibre error:', e.error?.message || e);
     });
 
-    map.current.addControl(new maplibregl.NavigationControl(), 'top-right');
-    map.current.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+    mlMap.addControl(new maplibregl.NavigationControl(), 'top-right');
+    mlMap.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
-    // Ctrl+left-click+drag rectangle zoom
-    const cleanupBoxZoom = enableCtrlBoxZoom(map.current);
+    const adapter = new MapLibreAdapter(mlMap);
+    adapterRef.current = adapter;
 
-    /** Initialize all data layers on the map — idempotent (safe to call multiple times) */
-    const initAllLayers = (m: maplibregl.Map) => {
-      try { if (!m.getSource('radar-coverage')) initCoverageLayer(m); } catch (e) { console.warn('[MapView] Coverage layer init failed:', e); }
-      try { if (!m.getSource('triangulation-rays')) initTriangulationLayer(m); } catch (e) { console.warn('[MapView] Triangulation init failed:', e); }
-      try { if (!m.getSource('eo-rays')) initEoRayLayer(m); } catch (e) { console.warn('[MapView] EO ray init failed:', e); }
-      try { if (!m.getSource('sensors')) initSensorLayer(m); } catch (e) { console.warn('[MapView] Sensor init failed:', e); }
-      try { if (!m.getSource('investigation-rings')) initInvestigationRingLayer(m); } catch (e) { console.warn('[MapView] Investigation ring init failed:', e); }
-      try { if (!m.getSource('bearing-lines')) initBearingLineLayer(m); } catch (e) { console.warn('[MapView] Bearing line init failed:', e); }
-      try { if (!m.getSource('ambiguity-markers')) initAmbiguityMarkerLayer(m); } catch (e) { console.warn('[MapView] Ambiguity marker init failed:', e); }
-      try { if (!m.getSource('selection-rays-source')) initSelectionRayLayer(m); } catch (e) { console.warn('[MapView] Selection ray init failed:', e); }
-      try { if (!m.getSource('system-tracks')) initTrackLayer(m); } catch (e) { console.warn('[MapView] Track layer init failed:', e); }
-      try { m.resize(); } catch { /* ignore */ }
-    };
+    const cleanupBoxZoom = enableCtrlBoxZoom(adapter);
 
-    /** Register click handlers for interactive layers (safe to call once) */
-    const registerClickHandlers = (m: maplibregl.Map) => {
-      m.on('click', getTrackLayerId(), (e) => {
-        if (e.features && e.features.length > 0) {
-          const id = e.features[0].properties?.id;
-          if (id) selectTrack(id);
-        }
-      });
-
-      m.on('click', getSensorLayerId(), (e) => {
-        if (e.features && e.features.length > 0) {
-          const id = e.features[0].properties?.id;
-          if (id) selectSensor(id);
-        }
-      });
-
-      m.on('click', 'bearing-lines-layer', (e) => {
-        if (e.features && e.features.length > 0) {
-          const sensorId = e.features[0].properties?.sensorId;
-          if (sensorId) {
-            const cues = useTaskStore.getState().activeCues;
-            const eoTs = useTaskStore.getState().eoTracks;
-            const eoTrack = eoTs.find(t => t.sensorId === sensorId && t.bearing);
-            if (eoTrack?.associatedSystemTrackId) {
-              const cue = cues.find(c => c.systemTrackId === eoTrack.associatedSystemTrackId);
-              if (cue) { selectCue(cue.cueId); return; }
-            }
-            const anyCue = cues.find(c => eoTs.some(t => t.sensorId === sensorId && t.associatedSystemTrackId === c.systemTrackId));
-            if (anyCue) selectCue(anyCue.cueId);
-          }
-        }
-      });
-
-      m.on('click', 'ambiguity-markers-layer', (e) => {
-        if (e.features && e.features.length > 0) {
-          const groupId = e.features[0].properties?.groupId;
-          if (groupId) selectGroup(groupId);
-        }
-      });
-
-      m.on('click', 'triangulation-rays-layer', (e) => {
-        if (e.features && e.features.length > 0) {
-          const trackId = e.features[0].properties?.trackId;
-          if (trackId) selectGeometry(trackId);
-        }
-      });
-
-      const interactiveLayers = [
-        getTrackLayerId(), getSensorLayerId(),
-        'bearing-lines-layer', 'ambiguity-markers-layer', 'triangulation-rays-layer',
-      ];
-      for (const layerId of interactiveLayers) {
-        m.on('mouseenter', layerId, () => { if (map.current) map.current.getCanvas().style.cursor = 'pointer'; });
-        m.on('mouseleave', layerId, () => { if (map.current) map.current.getCanvas().style.cursor = ''; });
-      }
-    };
-
-    let initialized = false;
-
-    /** Try to initialize layers — called from multiple triggers for reliability */
-    const tryInit = (source: string) => {
-      if (initialized || !map.current) return;
+    // Initialize MapLibre data layers (fallback rendering path)
+    const initMapLibreLayers = async () => {
       try {
-        initAllLayers(map.current);
-        // Verify at least one source was created
-        if (map.current.getSource('system-tracks')) {
-          initialized = true;
-          console.log(`[MapView] Layers initialized via: ${source}`);
-          registerClickHandlers(map.current);
-          setLayersReady(true);
-        } else {
-          console.warn(`[MapView] Layer init via ${source} — sources not created yet, will retry`);
-        }
+        const { initTrackLayer } = await import('./layers/track-layer');
+        const { initSensorLayer } = await import('./layers/sensor-layer');
+        const { initCoverageLayer } = await import('./layers/coverage-layer');
+        const { initEoRayLayer } = await import('./layers/eo-ray-layer');
+        const { initTriangulationLayer } = await import('./layers/triangulation-layer');
+        const { initBearingLineLayer } = await import('./layers/bearing-line-layer');
+        const { initInvestigationRingLayer } = await import('./layers/investigation-ring-layer');
+        const { initAmbiguityMarkerLayer } = await import('./layers/ambiguity-marker-layer');
+        const { initSelectionRayLayer } = await import('./layers/selection-ray-layer');
+
+        const m = mlMap;
+        try { if (!m.getSource('radar-coverage')) initCoverageLayer(m); } catch { /* skip */ }
+        try { if (!m.getSource('triangulation-rays')) initTriangulationLayer(m); } catch { /* skip */ }
+        try { if (!m.getSource('eo-rays')) initEoRayLayer(m); } catch { /* skip */ }
+        try { if (!m.getSource('sensors')) initSensorLayer(m); } catch { /* skip */ }
+        try { if (!m.getSource('investigation-rings')) initInvestigationRingLayer(m); } catch { /* skip */ }
+        try { if (!m.getSource('bearing-lines')) initBearingLineLayer(m); } catch { /* skip */ }
+        try { if (!m.getSource('ambiguity-markers')) initAmbiguityMarkerLayer(m); } catch { /* skip */ }
+        try { if (!m.getSource('selection-rays-source')) initSelectionRayLayer(m); } catch { /* skip */ }
+        try { if (!m.getSource('system-tracks')) initTrackLayer(m); } catch { /* skip */ }
+        try { m.resize(); } catch { /* skip */ }
+
+        console.log('[MapView] MapLibre layers initialized');
+        setLayersReady(true);
+        setMapAdapter(adapter);
       } catch (e) {
-        console.warn(`[MapView] Layer init via ${source} failed:`, e);
+        console.warn('[MapView] MapLibre layer init failed:', e);
+        // Still make the adapter available for DebugOverlay
+        setLayersReady(true);
+        setMapAdapter(adapter);
       }
     };
 
-    // Strategy 1: on 'load' event (standard approach)
-    map.current.on('load', () => tryInit('load'));
-
-    // Strategy 2: on 'idle' event (fires after all rendering is complete)
-    map.current.once('idle', () => tryInit('idle'));
-
-    // Strategy 3: short timeout (1 second — covers most fast-loading cases)
-    const timer1 = setTimeout(() => tryInit('timeout-1s'), 1000);
-
-    // Strategy 4: medium timeout (3 seconds)
-    const timer2 = setTimeout(() => tryInit('timeout-3s'), 3000);
-
-    // Strategy 5: long timeout (8 seconds — last resort)
-    const timer3 = setTimeout(() => {
-      if (!initialized && map.current) {
-        console.error('[MapView] CRITICAL: Layers still not initialized after 8s — forcing init');
-        // Force it regardless of source existence checks
-        try {
-          initAllLayers(map.current);
-          initialized = true;
-          registerClickHandlers(map.current);
-          setLayersReady(true);
-        } catch (e) {
-          console.error('[MapView] Force init failed:', e);
-        }
-      }
-    }, 8000);
+    mlMap.on('load', () => initMapLibreLayers());
+    // Fallback timeout
+    const timer = setTimeout(() => {
+      if (!mapAdapter) initMapLibreLayers();
+    }, 5000);
 
     return () => {
       cleanupBoxZoom();
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-      clearTimeout(timer3);
-      map.current?.remove();
-      map.current = null;
+      clearTimeout(timer);
+      mlMap.remove();
+      adapterRef.current = null;
       setLayersReady(false);
+      setMapAdapter(null);
     };
-  }, []);
+  }
 
-  // Switch map tiles when dark mode toggles
+  // ── Switch tiles when dark mode toggles ───────────────────────────────────
   useEffect(() => {
-    if (!map.current) return;
-    const src = map.current.getSource('osm') as any;
-    if (!src) return;
+    const adapter = adapterRef.current;
+    if (!adapter) return;
+
     const tiles = darkMode
-      ? ['https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png']
-      : ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'];
-    src.setTiles(tiles);
+      ? 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
+      : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+    if (adapter.type === 'leaflet') {
+      const tileLayer = (adapter as any)._tileLayer;
+      if (tileLayer) {
+        tileLayer.setUrl(tiles);
+      }
+    } else {
+      const mlAdapter = adapter as MapLibreAdapter;
+      const src = mlAdapter.raw.getSource('osm') as any;
+      if (src) src.setTiles([tiles]);
+    }
   }, [darkMode]);
 
-  // Update track layer when tracks change OR when layers become ready
+  // ── MapLibre-only: update data layers ─────────────────────────────────────
   useEffect(() => {
-    if (!map.current || !layersReady) return;
-    const filteredTracks = tracks.filter(t =>
-      trackStatusFilter[t.status as keyof typeof trackStatusFilter] !== false
-    );
-    updateTrackLayer(map.current, filteredTracks, selectedTrackId);
-    updateTrackTrailLayer(map.current, trailHistory, filteredTracks);
-    updateTriangulationLayer(map.current, filteredTracks, sensors, geometryEstimates);
-    updateInvestigationRingLayer(map.current, filteredTracks);
-    updateAmbiguityMarkerLayer(map.current, unresolvedGroups, filteredTracks);
-  }, [tracks, sensors, trailHistory, layersReady, trackStatusFilter, geometryEstimates, unresolvedGroups, selectedTrackId]);
+    if (!adapterRef.current || adapterRef.current.type !== 'maplibre' || !layersReady) return;
+    const m = (adapterRef.current as MapLibreAdapter).raw;
 
-  // Update sensor layers when sensors change OR when layers become ready
-  useEffect(() => {
-    if (!map.current || !layersReady) return;
-    updateSensorLayer(map.current, sensors, registrationStates, highlightedSensorIds);
-    updateCoverageLayer(map.current, sensors);
-    updateEoRayLayer(map.current, sensors);
-  }, [sensors, layersReady, registrationStates, highlightedSensorIds]);
+    import('./layers/track-layer').then(({ updateTrackLayer, updateTrackTrailLayer }) => {
+      const filteredTracks = tracks.filter(t =>
+        trackStatusFilter[t.status as keyof typeof trackStatusFilter] !== false
+      );
+      updateTrackLayer(m, filteredTracks, selectedTrackId);
+      updateTrackTrailLayer(m, trailHistory, filteredTracks);
+    });
+    import('./layers/triangulation-layer').then(({ updateTriangulationLayer }) => {
+      const filteredTracks = tracks.filter(t =>
+        trackStatusFilter[t.status as keyof typeof trackStatusFilter] !== false
+      );
+      updateTriangulationLayer(m, filteredTracks, sensors, useTaskStore.getState().geometryEstimates);
+    });
+    import('./layers/investigation-ring-layer').then(({ updateInvestigationRingLayer }) => {
+      const filteredTracks = tracks.filter(t =>
+        trackStatusFilter[t.status as keyof typeof trackStatusFilter] !== false
+      );
+      updateInvestigationRingLayer(m, filteredTracks);
+    });
+    import('./layers/ambiguity-marker-layer').then(({ updateAmbiguityMarkerLayer }) => {
+      const filteredTracks = tracks.filter(t =>
+        trackStatusFilter[t.status as keyof typeof trackStatusFilter] !== false
+      );
+      updateAmbiguityMarkerLayer(m, useTaskStore.getState().unresolvedGroups, filteredTracks);
+    });
+  }, [tracks, sensors, trailHistory, layersReady, trackStatusFilter, selectedTrackId]);
 
-  // Update bearing line layer from EO tracks
   useEffect(() => {
-    if (!map.current || !layersReady) return;
-    const sensorMap = new Map(sensors.map(s => [s.sensorId, s]));
-    const bearingLines: BearingLine[] = eoTracks
-      .filter(t => t.bearing && sensorMap.has(t.sensorId))
-      .map(t => {
-        const sensor = sensorMap.get(t.sensorId)!;
-        return {
-          sensorId: t.sensorId,
-          azimuthDeg: t.bearing.azimuthDeg,
-          sensorLon: sensor.position.lon,
-          sensorLat: sensor.position.lat,
-          color: t.status === 'confirmed' ? '#00cc44' : '#ffaa33',
-        };
-      });
-    updateBearingLineLayer(map.current, bearingLines);
-  }, [eoTracks, sensors, layersReady]);
+    if (!adapterRef.current || adapterRef.current.type !== 'maplibre' || !layersReady) return;
+    const m = (adapterRef.current as MapLibreAdapter).raw;
 
-  // Track selection highlighting: compute contributing sensors, bearing rays, camera fit
+    import('./layers/sensor-layer').then(({ updateSensorLayer }) => {
+      updateSensorLayer(m, sensors, useTaskStore.getState().registrationStates, useUiStore.getState().highlightedSensorIds);
+    });
+    import('./layers/coverage-layer').then(({ updateCoverageLayer }) => updateCoverageLayer(m, sensors));
+    import('./layers/eo-ray-layer').then(({ updateEoRayLayer }) => updateEoRayLayer(m, sensors));
+  }, [sensors, layersReady]);
+
+  // ── MapLibre-only: sync layer visibility ──────────────────────────────────
   useEffect(() => {
-    if (!map.current || !layersReady) return;
+    if (!adapterRef.current || adapterRef.current.type !== 'maplibre' || !layersReady) return;
+    const m = (adapterRef.current as MapLibreAdapter).raw;
+
+    const layerMap: Array<[keyof LayerVisibility, string[]]> = [
+      ['tracks', ['system-tracks-layer', 'track-eo-badge', 'track-trails-layer', 'track-selection-pulse-layer', 'investigation-rings-layer', 'investigation-rings-outer']],
+      ['trackEllipses', ['track-ellipses-layer']],
+      ['sensors', ['sensors-layer', 'sensors-degraded', 'sensors-highlight-ring']],
+      ['radarCoverage', ['radar-coverage-layer', 'radar-coverage-outline']],
+      ['eoFor', ['eo-for-layer']],
+      ['eoFov', ['eo-fov-layer']],
+      ['eoRays', ['eo-rays-layer']],
+      ['triangulation', ['triangulation-rays-layer']],
+      ['bearingLines', ['bearing-lines-layer']],
+      ['ambiguityMarkers', ['ambiguity-markers-layer', 'ambiguity-markers-pulse']],
+    ];
+
+    for (const [key, layerIds] of layerMap) {
+      const vis = layerVisibility[key] ? 'visible' : 'none';
+      for (const id of layerIds) {
+        try { if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', vis); } catch { /* skip */ }
+      }
+    }
+
+    if (demoActive && viewMode === 'basic') {
+      import('../demo/BasicModeFilter').then(({ applyBasicMode }) => applyBasicMode(m));
+    }
+  }, [layerVisibility, layersReady, demoActive, viewMode]);
+
+  // ── Track selection: highlight sensors + camera fit ────────────────────────
+  useEffect(() => {
+    const adapter = adapterRef.current;
+    if (!adapter || !layersReady) return;
 
     if (!selectedTrackId) {
       clearSelectionHighlights();
-      clearSelectionRayLayer(map.current);
       return;
     }
 
-    // Find the selected track
     const track = tracks.find(t => t.systemTrackId === selectedTrackId);
     if (!track) {
       clearSelectionHighlights();
-      clearSelectionRayLayer(map.current);
       return;
     }
 
-    // Get contributing sensor IDs from track.sources
     const contributingSensorIds: string[] = (track.sources ?? []) as string[];
-
-    // Get EO bearings associated with this track
     const trackEoBearings = eoTracks.filter(
       et => et.associatedSystemTrackId === selectedTrackId && et.bearing
     );
 
-    // Add EO sensor IDs to the contributing set
     const allSensorIds = new Set(contributingSensorIds);
-    for (const et of trackEoBearings) {
-      allSensorIds.add(et.sensorId);
-    }
-
-    // Also check active cues for this track
-    const trackCues = activeCues.filter(c => c.systemTrackId === selectedTrackId);
+    for (const et of trackEoBearings) allSensorIds.add(et.sensorId);
 
     setHighlightedSensors(Array.from(allSensorIds));
 
-    // Build bearing rays from EO sensor positions + azimuth
     const sensorMap = new Map(sensors.map(s => [s.sensorId, s]));
     const rays: SelectionBearingRay[] = trackEoBearings
       .filter(et => sensorMap.has(et.sensorId))
@@ -362,17 +358,13 @@ export function MapView() {
           color: '#ffffff',
         };
       });
-
     setSelectionBearingRays(rays);
-    updateSelectionRayLayer(map.current, rays);
 
-    // Compute bounding box to fit selected track + contributing sensors, then fly to it
+    // Camera fit
     const points: [number, number][] = [[track.state.lon, track.state.lat]];
     for (const sId of allSensorIds) {
       const sensor = sensorMap.get(sId);
-      if (sensor) {
-        points.push([sensor.position.lon, sensor.position.lat]);
-      }
+      if (sensor) points.push([sensor.position.lon, sensor.position.lat]);
     }
 
     if (points.length >= 2) {
@@ -384,111 +376,76 @@ export function MapView() {
         if (lat > maxLat) maxLat = lat;
       }
       try {
-        map.current.fitBounds(
-          [[minLon, minLat], [maxLon, maxLat]],
-          { padding: 80, maxZoom: 12, duration: 1000 }
-        );
+        adapter.fitBounds([[minLon, minLat], [maxLon, maxLat]], { padding: 80, maxZoom: 12, duration: 1000 });
       } catch (e) {
         console.warn('[MapView] fitBounds failed:', e);
       }
     } else if (points.length === 1) {
       try {
-        map.current.flyTo({
-          center: points[0],
-          zoom: 10,
-          duration: 1000,
-        });
+        adapter.flyTo({ center: points[0], zoom: 10, duration: 1000 });
       } catch (e) {
         console.warn('[MapView] flyTo failed:', e);
       }
     }
   }, [selectedTrackId, tracks, sensors, eoTracks, activeCues, layersReady]);
 
-  // Sync MapLibre layer visibility with store + demo mode
-  useEffect(() => {
-    if (!map.current || !layersReady) return;
-    const m = map.current;
-
-    const layerMap: Array<[keyof LayerVisibility, string[]]> = [
-      ['tracks', ['system-tracks-layer', 'track-eo-badge', 'track-trails-layer', 'track-selection-pulse-layer', 'investigation-rings-layer', 'investigation-rings-outer']],
-      // trackLabels and sensorLabels are handled by DebugOverlay (HTML), not MapLibre.
-      // Symbol layers remain hidden to avoid glyph CDN loading.
-      ['trackEllipses', ['track-ellipses-layer']],
-      ['sensors', ['sensors-layer', 'sensors-degraded', 'sensors-highlight-ring']],
-      ['radarCoverage', ['radar-coverage-layer', 'radar-coverage-outline']],
-      ['eoFor', ['eo-for-layer']],
-      ['eoFov', ['eo-fov-layer']],
-      ['eoRays', ['eo-rays-layer']],
-      ['triangulation', ['triangulation-rays-layer']],
-      ['bearingLines', ['bearing-lines-layer']],
-      ['ambiguityMarkers', ['ambiguity-markers-layer', 'ambiguity-markers-pulse']],
-    ];
-
-    // First: apply layer filter visibility from store
-    for (const [key, layerIds] of layerMap) {
-      const vis = layerVisibility[key] ? 'visible' : 'none';
-      for (const id of layerIds) {
-        try {
-          if (m.getLayer(id)) {
-            m.setLayoutProperty(id, 'visibility', vis);
-          }
-        } catch { /* layer may not exist */ }
-      }
-    }
-
-    // Then: if demo is active in basic mode, force-hide EO/advanced layers on top
-    if (demoActive && viewMode === 'basic') {
-      applyBasicMode(m);
-    }
-  }, [layerVisibility, layersReady, demoActive, viewMode]);
-
-  // Spawn-target map click interception
-  const spawnMarkerRef = useRef<maplibregl.Marker | null>(null);
+  // ── Spawn-target click interception ───────────────────────────────────────
+  const spawnMarkerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!map.current || !layersReady) return;
+    const adapter = adapterRef.current;
+    if (!adapter || !layersReady) return;
+
     if (!spawnTargetActive) {
-      // Remove marker + restore cursor when deactivated
       if (spawnMarkerRef.current) {
         spawnMarkerRef.current.remove();
         spawnMarkerRef.current = null;
       }
-      map.current.getCanvas().style.cursor = '';
+      adapter.getCanvas().style.cursor = '';
       return;
     }
 
-    // Change cursor to crosshair while in spawn mode
-    map.current.getCanvas().style.cursor = 'crosshair';
+    adapter.getCanvas().style.cursor = 'crosshair';
 
-    const handler = (e: maplibregl.MapMouseEvent) => {
-      const { lng, lat } = e.lngLat;
+    const handler = (e: any) => {
+      // Normalize click event to get lngLat
+      let lng: number, lat: number;
+      if (adapter.type === 'leaflet') {
+        lng = e.latlng.lng;
+        lat = e.latlng.lat;
+      } else {
+        lng = e.lngLat.lng;
+        lat = e.lngLat.lat;
+      }
       setSpawnTargetPosition({ lat, lon: lng });
 
-      // Place / move a temporary marker
-      if (spawnMarkerRef.current) {
-        spawnMarkerRef.current.setLngLat([lng, lat]);
-      } else {
+      // Place / move a temporary HTML marker
+      const px = adapter.project([lng, lat]);
+      const container = adapter.getContainer();
+
+      if (!spawnMarkerRef.current) {
         const el = document.createElement('div');
-        el.style.width = '16px';
-        el.style.height = '16px';
-        el.style.borderRadius = '50%';
-        el.style.background = '#00cc44';
-        el.style.border = '2px solid #fff';
-        el.style.boxShadow = '0 0 8px rgba(0,204,68,0.6)';
-        spawnMarkerRef.current = new maplibregl.Marker({ element: el })
-          .setLngLat([lng, lat])
-          .addTo(map.current!);
+        el.style.cssText = `
+          position:absolute; width:16px; height:16px; border-radius:50%;
+          background:#00cc44; border:2px solid #fff;
+          box-shadow:0 0 8px rgba(0,204,68,0.6);
+          pointer-events:none; z-index:1000;
+          transform:translate(-50%,-50%);
+        `;
+        container.appendChild(el);
+        spawnMarkerRef.current = el;
       }
+      spawnMarkerRef.current.style.left = `${px.x}px`;
+      spawnMarkerRef.current.style.top = `${px.y}px`;
     };
 
-    map.current.on('click', handler);
+    adapter.on('click', handler);
     return () => {
-      map.current?.off('click', handler);
-      map.current && (map.current.getCanvas().style.cursor = '');
+      adapter.off('click', handler);
+      adapter.getCanvas().style.cursor = '';
     };
   }, [spawnTargetActive, layersReady, setSpawnTargetPosition]);
 
-  // Clean up spawn marker when position is cleared (after submit)
   useEffect(() => {
     if (!spawnTargetPosition && spawnMarkerRef.current) {
       spawnMarkerRef.current.remove();
@@ -496,25 +453,15 @@ export function MapView() {
     }
   }, [spawnTargetPosition]);
 
-  // DebugOverlay: always show HTML markers (bypasses GL layers entirely)
-  // This verifies data flow independently of MapLibre layer init.
-  // DebugOverlay: HTML-based track/sensor rendering (primary reliable renderer).
-  // MapLibre circle layers may fail due to glyph CDN / WebGL issues in production.
-  // Gate behind ?nodebug to disable if needed for testing MapLibre-only rendering.
+  // ── Render ────────────────────────────────────────────────────────────────
   const hideOverlay = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('nodebug');
-  const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
 
-  // Set map instance as soon as the map exists (don't wait for layersReady)
-  useEffect(() => {
-    if (map.current && !mapInstance) {
-      setMapInstance(map.current);
-    }
-  }, [layersReady, mapInstance]);
-
-  // Track status filtered tracks for the overlay (same filter as MapLibre layers)
   const filteredTracksForOverlay = tracks.filter(t =>
     trackStatusFilter[t.status as keyof typeof trackStatusFilter] !== false
   );
+
+  // DeckGlOverlay only works with MapLibre (uses MapboxOverlay which requires MapLibre's WebGL context)
+  const showDeck = layerVisibility.show3DOverlay && mapAdapter?.type === 'maplibre';
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -527,9 +474,9 @@ export function MapView() {
         }}
       />
       <LayerFilterPanel />
-      {!hideOverlay && (
+      {!hideOverlay && mapAdapter && leafletMapRef.current && (
         <DebugOverlay
-          map={mapInstance}
+          map={leafletMapRef.current}
           tracks={filteredTracksForOverlay}
           sensors={sensors}
           trailHistory={trailHistory}
@@ -551,9 +498,9 @@ export function MapView() {
           ballisticEstimates={layerVisibility.ballisticEstimates ? ballisticEstimates : []}
         />
       )}
-      {layerVisibility.show3DOverlay && mapInstance && (
+      {showDeck && mapAdapter && (
         <DeckGlOverlay
-          map={mapInstance}
+          map={(mapAdapter as MapLibreAdapter).raw}
           tracks={filteredTracksForOverlay}
           trailHistory={trailHistory}
         />
