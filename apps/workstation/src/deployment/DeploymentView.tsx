@@ -35,7 +35,7 @@ function geoToLatLngs(polygon: GeoPolygon): [number, number][] {
 // DeploymentMap — Native Leaflet layers (matches EditorMap pattern)
 // ---------------------------------------------------------------------------
 
-function DeploymentMap() {
+export function DeploymentMap() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
 

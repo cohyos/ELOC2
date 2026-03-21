@@ -379,7 +379,7 @@ export function EditorHeader({ onBack }: EditorHeaderProps) {
           color: colors.textDim,
         }}
       >
-        Scenario Editor
+        Scenario Editor &amp; Deployment
       </span>
 
       {/* Toast notification */}
