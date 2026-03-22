@@ -189,7 +189,9 @@ function applyParams(
       }
       break;
     }
-    case 'radar_level': {
+    case 'radar_level':
+    case 'bm_radar_level':
+    case 'abt_radar_level': {
       // Apply correlator and track manager config
       if (params.gateThreshold !== undefined || params.velocityGateThreshold !== undefined) {
         engine.trackManager.setCorrelatorConfig({
@@ -232,11 +234,15 @@ function evaluateScenario(
   seekToSec: number,
 ): number {
   try {
-    // Sample at 3 time points: 60%, 80%, 100% of seekToSec
+    // Cap seek time to scenario duration
+    const maxDuration = SCENARIO_DURATIONS[scenarioId] ?? seekToSec;
+    const effectiveSeek = Math.min(seekToSec, maxDuration);
+
+    // Sample at 3 time points: 60%, 80%, 100% of effective seek time
     const timePoints = [
-      Math.floor(seekToSec * 0.6),
-      Math.floor(seekToSec * 0.8),
-      seekToSec,
+      Math.floor(effectiveSeek * 0.6),
+      Math.floor(effectiveSeek * 0.8),
+      effectiveSeek,
     ];
 
     let bestScore = 0;
@@ -277,9 +283,29 @@ function evaluateScenario(
   }
 }
 
+// Scenario weights: primary complex scenarios have higher weight,
+// EO-only and saturation scenarios have lower weight since they test
+// edge cases rather than typical operating conditions.
+const SCENARIO_WEIGHTS: Record<string, number> = {
+  'central-israel': 3.0,        // Primary reference scenario
+  'fusion-demo': 2.0,           // Rich mixed scenario
+  'ballistic': 2.0,             // BM reference
+  'combined': 1.5,              // Complex multi-threat
+  'drone-swarm': 1.5,           // Formation tracking
+  'single-target-confirm': 1.0, // Basic confirmation test
+  'crossed-tracks': 1.5,        // Correlation stress test
+  'low-altitude-clutter': 1.0,  // Clutter resilience
+  'one-cue-two-eo': 1.0,        // Multi-EO assignment
+  'operator-override': 1.0,     // Operator control
+  'sensor-fault': 1.0,          // Degradation handling
+  'grad-barrage': 0.5,          // Saturation attack — edge case
+  'good-triangulation': 0.5,    // EO-only — limited by sensor type
+  'bad-triangulation': 0.3,     // EO-only with poor geometry — extreme edge
+};
+
 /**
  * Evaluate a parameter set across multiple scenarios.
- * Returns average best picture accuracy [0-100].
+ * Returns weighted average best picture accuracy [0-100].
  */
 function evaluateFitness(
   level: string,
@@ -287,16 +313,17 @@ function evaluateFitness(
   scenarioIds: string[],
   seekToSec: number,
 ): number {
-  let totalScore = 0;
-  let count = 0;
+  let totalWeightedScore = 0;
+  let totalWeight = 0;
 
   for (const scenarioId of scenarioIds) {
     const score = evaluateScenario(scenarioId, level, params, seekToSec);
-    totalScore += score;
-    count++;
+    const weight = SCENARIO_WEIGHTS[scenarioId] ?? 1.0;
+    totalWeightedScore += score * weight;
+    totalWeight += weight;
   }
 
-  return count > 0 ? totalScore / count : 0;
+  return totalWeight > 0 ? totalWeightedScore / totalWeight : 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -539,7 +566,8 @@ const TEST_OPTIMIZER_CONFIG: OptimizerConfig = {
   asymptoticWindow: 6,
 };
 
-// Longer evaluation seek times for better accuracy measurement
+// Evaluation seek time per level (seconds of simulation).
+// For multi-scenario runs, capped to the scenario's durationSec.
 const SEEK_TIMES: Record<string, number> = {
   eo_level: 90,
   radar_level: 60,
@@ -549,19 +577,62 @@ const SEEK_TIMES: Record<string, number> = {
   system_level: 120,
 };
 
+// All predefined scenarios in the system, grouped by type
+const ALL_SCENARIOS = [
+  // Primary complex scenarios
+  'central-israel',   // 8 targets, mixed: civilian, fighter, UAV, heli (900s)
+  'ballistic',        // 1 BM target (120s)
+  'fusion-demo',      // 6 targets, mixed: civilian, fighter, UAV (600s)
+  'drone-swarm',      // 4 UAVs in formation (300s)
+  'grad-barrage',     // 10 rockets (60s)
+  'combined',         // 14 targets: drones + rockets (300s)
+  // Simple focused test scenarios
+  'single-target-confirm',  // 1 target, clean cue (300s)
+  'crossed-tracks',         // 2 crossing targets (300s)
+  'low-altitude-clutter',   // 1 target in clutter (300s)
+  'one-cue-two-eo',         // 1 target, multi-EO (300s)
+  'good-triangulation',     // 1 target, 90° EO intersection (300s)
+  'bad-triangulation',      // 1 target, 5° shallow angle (300s)
+  'sensor-fault',           // 1 target, sensor degradation (300s)
+  'operator-override',      // 2 targets, operator veto (300s)
+];
+
+// Scenario durations (max seek time in seconds)
+const SCENARIO_DURATIONS: Record<string, number> = {
+  'central-israel': 900,
+  'ballistic': 120,
+  'fusion-demo': 600,
+  'drone-swarm': 300,
+  'grad-barrage': 60,
+  'combined': 300,
+  'single-target-confirm': 300,
+  'crossed-tracks': 300,
+  'low-altitude-clutter': 300,
+  'one-cue-two-eo': 300,
+  'good-triangulation': 300,
+  'bad-triangulation': 300,
+  'sensor-fault': 300,
+  'operator-override': 300,
+};
+
 describe('Parameter Optimization', () => {
   const config = loadParamConfig();
   const allResults: OptimizationResult[] = [];
 
-  // Level 1: EO — staring sensors + core
+  // Scenario subsets by target type
+  const BM_SCENARIOS = ['ballistic', 'grad-barrage', 'combined']; // BM/rocket targets
+  const ABT_SCENARIOS = ['central-israel', 'fusion-demo', 'drone-swarm',
+    'single-target-confirm', 'crossed-tracks', 'low-altitude-clutter',
+    'one-cue-two-eo', 'operator-override']; // ABT targets
+
+  // Level 1: EO — staring sensors + core (all scenarios with EO sensors)
   it('Level 1: optimizes EO core parameters', () => {
     const paramDefs = getParamDefs(config, 'eo_level');
-    const scenarios = ['central-israel']; // has EO sensors + targets
 
     const result = runOptimization(
       'eo_level',
       paramDefs,
-      scenarios,
+      ALL_SCENARIOS,
       SEEK_TIMES.eo_level,
       TEST_OPTIMIZER_CONFIG,
     );
@@ -571,17 +642,16 @@ describe('Parameter Optimization', () => {
 
     expect(result.bestFitness).toBeGreaterThan(0);
     expect(result.generations.length).toBeGreaterThanOrEqual(2);
-  }, 300_000);
+  }, 600_000);
 
-  // Level 2: Individual radar
+  // Level 2: Individual radar (all scenarios)
   it('Level 2: optimizes radar track building parameters', () => {
     const paramDefs = getParamDefs(config, 'radar_level');
-    const scenarios = ['central-israel'];
 
     const result = runOptimization(
       'radar_level',
       paramDefs,
-      scenarios,
+      ALL_SCENARIOS,
       SEEK_TIMES.radar_level,
       TEST_OPTIMIZER_CONFIG,
     );
@@ -591,19 +661,18 @@ describe('Parameter Optimization', () => {
 
     expect(result.bestFitness).toBeGreaterThan(0);
     expect(result.generations.length).toBeGreaterThanOrEqual(2);
-  }, 300_000);
+  }, 600_000);
 
-  // Level 2a: BM-specific radar profile
+  // Level 2a: BM-specific radar profile (BM/rocket scenarios only)
   it('Level 2a: optimizes BM radar profile parameters', () => {
     const bmRadarDefs = getParamDefs(config, 'bm_radar_level');
     const bmConsistencyDefs = getParamDefs(config, 'bm_consistency_level');
     const paramDefs = { ...bmRadarDefs, ...bmConsistencyDefs };
-    const scenarios = ['central-israel']; // contains mixed targets including BM-speed
 
     const result = runOptimization(
       'bm_radar_level',
       paramDefs,
-      scenarios,
+      BM_SCENARIOS,
       SEEK_TIMES.bm_radar_level,
       TEST_OPTIMIZER_CONFIG,
     );
@@ -613,19 +682,18 @@ describe('Parameter Optimization', () => {
 
     expect(result.bestFitness).toBeGreaterThan(0);
     expect(result.generations.length).toBeGreaterThanOrEqual(2);
-  }, 300_000);
+  }, 600_000);
 
-  // Level 2b: ABT-specific radar profile
+  // Level 2b: ABT-specific radar profile (ABT scenarios only)
   it('Level 2b: optimizes ABT radar profile parameters', () => {
     const abtRadarDefs = getParamDefs(config, 'abt_radar_level');
     const abtConsistencyDefs = getParamDefs(config, 'abt_consistency_level');
     const paramDefs = { ...abtRadarDefs, ...abtConsistencyDefs };
-    const scenarios = ['central-israel'];
 
     const result = runOptimization(
       'abt_radar_level',
       paramDefs,
-      scenarios,
+      ABT_SCENARIOS,
       SEEK_TIMES.abt_radar_level,
       TEST_OPTIMIZER_CONFIG,
     );
@@ -635,20 +703,18 @@ describe('Parameter Optimization', () => {
 
     expect(result.bestFitness).toBeGreaterThan(0);
     expect(result.generations.length).toBeGreaterThanOrEqual(2);
-  }, 300_000);
+  }, 600_000);
 
-  // Level 3: Radar collection (multiple radars + consistency)
+  // Level 3: Radar collection — all scenarios
   it('Level 3: optimizes radar collection parameters', () => {
-    // Combine radar + consistency params
     const radarDefs = getParamDefs(config, 'radar_level');
     const consistencyDefs = getParamDefs(config, 'consistency_level');
     const paramDefs = { ...radarDefs, ...consistencyDefs };
-    const scenarios = ['central-israel'];
 
     const result = runOptimization(
       'collection_level',
       paramDefs,
-      scenarios,
+      ALL_SCENARIOS,
       SEEK_TIMES.collection_level,
       TEST_OPTIMIZER_CONFIG,
     );
@@ -658,17 +724,15 @@ describe('Parameter Optimization', () => {
 
     expect(result.bestFitness).toBeGreaterThan(0);
     expect(result.generations.length).toBeGreaterThanOrEqual(2);
-  }, 300_000);
+  }, 600_000);
 
-  // Level 4: Full system (EO core + radars + C2)
+  // Level 4: Full system — all scenarios
   it('Level 4: optimizes full system parameters', () => {
-    // All param levels combined — larger population for 33-param search space
     const eoDefs = getParamDefs(config, 'eo_level');
     const radarDefs = getParamDefs(config, 'radar_level');
     const consistencyDefs = getParamDefs(config, 'consistency_level');
     const systemDefs = getParamDefs(config, 'system_level');
     const paramDefs = { ...eoDefs, ...radarDefs, ...consistencyDefs, ...systemDefs };
-    const scenarios = ['central-israel'];
 
     // Seed with best params from lower levels
     const seeds = allResults
@@ -678,7 +742,7 @@ describe('Parameter Optimization', () => {
     const result = runOptimization(
       'system_level',
       paramDefs,
-      scenarios,
+      ALL_SCENARIOS,
       SEEK_TIMES.system_level,
       { ...TEST_OPTIMIZER_CONFIG, populationSize: 24, maxGenerations: 40 },
       seeds,
@@ -690,6 +754,43 @@ describe('Parameter Optimization', () => {
     expect(result.bestFitness).toBeGreaterThan(0);
     expect(result.generations.length).toBeGreaterThanOrEqual(2);
   }, 600_000);
+
+  // Diagnostic: per-scenario breakdown with current best params
+  it('Per-scenario accuracy breakdown', () => {
+    console.log('\n' + '═'.repeat(70));
+    console.log('  PER-SCENARIO ACCURACY BREAKDOWN (default params)');
+    console.log('═'.repeat(70));
+    console.log('  Scenario'.padEnd(30) + 'Score'.padStart(8) + '  Seek(s)');
+    console.log('  ' + '─'.repeat(48));
+
+    const scenarioScores: Array<{ id: string; score: number }> = [];
+
+    for (const scenarioId of ALL_SCENARIOS) {
+      const seekSec = Math.min(90, SCENARIO_DURATIONS[scenarioId] ?? 90);
+      const score = evaluateScenario(scenarioId, 'radar_level', {}, seekSec);
+      scenarioScores.push({ id: scenarioId, score });
+      const bar = '█'.repeat(Math.round(score / 5)) + '░'.repeat(20 - Math.round(score / 5));
+      console.log(`  ${scenarioId.padEnd(28)} ${score.toFixed(1).padStart(6)}%  ${seekSec}s  ${bar}`);
+    }
+
+    const avg = scenarioScores.reduce((s, x) => s + x.score, 0) / scenarioScores.length;
+    const min = Math.min(...scenarioScores.map(x => x.score));
+    const max = Math.max(...scenarioScores.map(x => x.score));
+    console.log('  ' + '─'.repeat(48));
+    console.log(`  ${'Average'.padEnd(28)} ${avg.toFixed(1).padStart(6)}%`);
+    console.log(`  ${'Min'.padEnd(28)} ${min.toFixed(1).padStart(6)}%`);
+    console.log(`  ${'Max'.padEnd(28)} ${max.toFixed(1).padStart(6)}%`);
+    console.log('═'.repeat(70));
+
+    // Identify problem scenarios (< 70%)
+    const problems = scenarioScores.filter(x => x.score < 70);
+    if (problems.length > 0) {
+      console.log('\n  ⚠ LOW-SCORING SCENARIOS (< 70%):');
+      for (const p of problems) {
+        console.log(`    - ${p.id}: ${p.score.toFixed(1)}%`);
+      }
+    }
+  }, 120_000);
 
   // Save all results
   it('saves optimization results to file', () => {
