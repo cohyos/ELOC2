@@ -366,9 +366,6 @@ export class LiveEngine {
   private registrationService: RegistrationHealthService;
   private state: LiveState;
   private stateMachine = new SimulationStateMachine();
-  /** Throttle broadcastRap: minimum ms between broadcasts */
-  private lastBroadcastTime = 0;
-  private static readonly MIN_BROADCAST_INTERVAL_MS = 250;
   private timer: ReturnType<typeof setInterval> | null = null;
   private wsClients = new Set<WsClient>();
   private wsClientInfos = new Map<WsClient, WsClientInfo>();
@@ -5421,13 +5418,10 @@ export class LiveEngine {
     };
   }
 
-  private broadcastRap(force = false): void {
-    // Throttle: at high speeds, cap broadcasts to ~4/sec (250ms interval)
-    const now = Date.now();
-    if (!force && this.state.speed > 2 && (now - this.lastBroadcastTime) < LiveEngine.MIN_BROADCAST_INTERVAL_MS) {
-      return;
-    }
-    this.lastBroadcastTime = now;
+  private broadcastRap(_force = false): void {
+    // No throttling — every tick broadcasts to frontend regardless of speed.
+    // Speed compresses wall-clock time but must not skip pipeline steps or outputs.
+    // The frontend ReplayController already coalesces via requestAnimationFrame.
 
     const tracks = this.state.tracks;
     // Strip lineage from broadcast to reduce WS payload size
