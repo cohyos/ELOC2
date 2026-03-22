@@ -1,0 +1,141 @@
+{
+  "version": "2.0.0",
+  "description": "Tunable parameters for ELOC2 arena construction optimization. Each parameter has a current value, min, max, and step for search. v2 adds per-category BM/ABT profiles.",
+
+  "eo_level": {
+    "description": "EO Core: staring sensors + cross-sensor correlation + triangulation",
+    "params": {
+      "correlationGateDeg":          { "value": 3.0,   "min": 1.0,   "max": 10.0,  "step": 0.5  },
+      "minIntersectionAngleDeg":     { "value": 5.0,   "min": 2.0,   "max": 20.0,  "step": 1.0  },
+      "maxMissDistanceM":            { "value": 5000,  "min": 1000,  "max": 10000, "step": 500  },
+      "enhancedCueGateDeg":          { "value": 5.0,   "min": 2.0,   "max": 15.0,  "step": 1.0  },
+      "minCyclesForResolution":      { "value": 3,     "min": 1,     "max": 8,     "step": 1    },
+      "maxCyclesBeforeEscalation":   { "value": 8,     "min": 3,     "max": 15,    "step": 1    },
+      "ambiguityConsistencyThreshold": { "value": 0.6, "min": 0.3,   "max": 0.9,   "step": 0.05 },
+      "ambiguousMissDistanceM":      { "value": 3000,  "min": 1000,  "max": 5000,  "step": 500  }
+    }
+  },
+
+  "radar_level": {
+    "description": "Individual radar track building: correlation gates, existence, Kalman",
+    "params": {
+      "gateThreshold":               { "value": 20.0,  "min": 8.0,   "max": 40.0,  "step": 2.0  },
+      "velocityGateThreshold":       { "value": 75,    "min": 20,    "max": 150,   "step": 10   },
+      "confirmAfter":                { "value": 3,     "min": 2,     "max": 6,     "step": 1    },
+      "dropAfterMisses":             { "value": 8,     "min": 3,     "max": 15,    "step": 1    },
+      "pDetection":                  { "value": 0.9,   "min": 0.7,   "max": 0.99,  "step": 0.05 },
+      "pFalseAlarm":                 { "value": 0.01,  "min": 0.001, "max": 0.1,   "step": 0.005},
+      "existencePromotionThreshold": { "value": 0.5,   "min": 0.3,   "max": 0.7,   "step": 0.05 },
+      "existenceConfirmationThreshold": { "value": 0.8, "min": 0.6,  "max": 0.95,  "step": 0.05 },
+      "existenceDeletionThreshold":  { "value": 0.1,   "min": 0.01,  "max": 0.3,   "step": 0.02 },
+      "coastingMissThreshold":       { "value": 3,     "min": 1,     "max": 6,     "step": 1    },
+      "maxCoastingTimeSec":          { "value": 15,    "min": 5,     "max": 30,    "step": 2    }
+    }
+  },
+
+  "bm_radar_level": {
+    "description": "Ballistic Missile radar profile: wide gates, fast confirmation, short coasting",
+    "params": {
+      "gateThreshold":               { "value": 50.0,  "min": 30.0,  "max": 80.0,  "step": 5.0  },
+      "velocityGateThreshold":       { "value": 500,   "min": 200,   "max": 800,   "step": 50   },
+      "confirmAfter":                { "value": 2,     "min": 1,     "max": 4,     "step": 1    },
+      "dropAfterMisses":             { "value": 4,     "min": 2,     "max": 8,     "step": 1    },
+      "pDetection":                  { "value": 0.95,  "min": 0.85,  "max": 0.99,  "step": 0.02 },
+      "pFalseAlarm":                 { "value": 0.005, "min": 0.001, "max": 0.02,  "step": 0.002},
+      "existencePromotionThreshold": { "value": 0.4,   "min": 0.2,   "max": 0.6,   "step": 0.05 },
+      "existenceConfirmationThreshold": { "value": 0.65, "min": 0.5, "max": 0.85,  "step": 0.05 },
+      "existenceDeletionThreshold":  { "value": 0.15,  "min": 0.05,  "max": 0.3,   "step": 0.02 },
+      "coastingMissThreshold":       { "value": 2,     "min": 1,     "max": 4,     "step": 1    },
+      "maxCoastingTimeSec":          { "value": 8,     "min": 3,     "max": 15,    "step": 2    }
+    }
+  },
+
+  "abt_radar_level": {
+    "description": "Air-Breathing Target radar profile: tight gates, standard confirmation, long coasting",
+    "params": {
+      "gateThreshold":               { "value": 22.0,  "min": 12.0,  "max": 35.0,  "step": 2.0  },
+      "velocityGateThreshold":       { "value": 80,    "min": 30,    "max": 150,   "step": 10   },
+      "confirmAfter":                { "value": 3,     "min": 2,     "max": 5,     "step": 1    },
+      "dropAfterMisses":             { "value": 10,    "min": 6,     "max": 15,    "step": 1    },
+      "pDetection":                  { "value": 0.88,  "min": 0.75,  "max": 0.95,  "step": 0.02 },
+      "pFalseAlarm":                 { "value": 0.02,  "min": 0.005, "max": 0.06,  "step": 0.005},
+      "existencePromotionThreshold": { "value": 0.5,   "min": 0.3,   "max": 0.7,   "step": 0.05 },
+      "existenceConfirmationThreshold": { "value": 0.8, "min": 0.6,  "max": 0.95,  "step": 0.05 },
+      "existenceDeletionThreshold":  { "value": 0.08,  "min": 0.02,  "max": 0.2,   "step": 0.02 },
+      "coastingMissThreshold":       { "value": 4,     "min": 2,     "max": 6,     "step": 1    },
+      "maxCoastingTimeSec":          { "value": 25,    "min": 12,    "max": 40,    "step": 2    }
+    }
+  },
+
+  "bm_consistency_level": {
+    "description": "BM consistency: wide gates for high-speed maneuver tolerance",
+    "params": {
+      "positionGateM":               { "value": 2000,  "min": 1000,  "max": 5000,  "step": 200  },
+      "velocityGateMps":             { "value": 200,   "min": 100,   "max": 500,   "step": 50   },
+      "accelerationGateMps2":        { "value": 80,    "min": 30,    "max": 150,   "step": 10   },
+      "dopplerGateMps":              { "value": 150,   "min": 50,    "max": 300,   "step": 20   },
+      "consistentBoost":             { "value": 0.10,  "min": 0.05,  "max": 0.20,  "step": 0.01 },
+      "inconsistentDecay":           { "value": -0.12, "min": -0.25, "max": -0.05, "step": 0.02 },
+      "maxDeltaPerUpdate":           { "value": 0.20,  "min": 0.10,  "max": 0.35,  "step": 0.02 },
+      "streakBonusAfter":            { "value": 2,     "min": 1,     "max": 4,     "step": 1    },
+      "streakBonusMultiplier":       { "value": 2.0,   "min": 1.5,   "max": 3.0,   "step": 0.25 }
+    }
+  },
+
+  "abt_consistency_level": {
+    "description": "ABT consistency: tight gates for predictable air-breather tracking",
+    "params": {
+      "positionGateM":               { "value": 600,   "min": 200,   "max": 1500,  "step": 50   },
+      "velocityGateMps":             { "value": 40,    "min": 15,    "max": 100,   "step": 10   },
+      "accelerationGateMps2":        { "value": 30,    "min": 10,    "max": 60,    "step": 5    },
+      "dopplerGateMps":              { "value": 50,    "min": 15,    "max": 100,   "step": 5    },
+      "consistentBoost":             { "value": 0.06,  "min": 0.02,  "max": 0.12,  "step": 0.01 },
+      "inconsistentDecay":           { "value": -0.10, "min": -0.20, "max": -0.04, "step": 0.02 },
+      "maxDeltaPerUpdate":           { "value": 0.15,  "min": 0.05,  "max": 0.25,  "step": 0.02 },
+      "streakBonusAfter":            { "value": 4,     "min": 2,     "max": 6,     "step": 1    },
+      "streakBonusMultiplier":       { "value": 1.5,   "min": 1.0,   "max": 2.5,   "step": 0.25 }
+    }
+  },
+
+  "consistency_level": {
+    "description": "6DOF consistency evaluator: prediction gates, boost/decay rates (default/unresolved)",
+    "params": {
+      "positionGateM":               { "value": 500,   "min": 100,   "max": 2000,  "step": 50   },
+      "velocityGateMps":             { "value": 50,    "min": 10,    "max": 150,   "step": 10   },
+      "accelerationGateMps2":        { "value": 15,    "min": 5,     "max": 50,    "step": 5    },
+      "dopplerGateMps":              { "value": 30,    "min": 10,    "max": 100,   "step": 5    },
+      "consistentBoost":             { "value": 0.05,  "min": 0.01,  "max": 0.15,  "step": 0.01 },
+      "inconsistentDecay":           { "value": -0.08, "min": -0.20, "max": -0.02, "step": 0.02 },
+      "maxDeltaPerUpdate":           { "value": 0.15,  "min": 0.05,  "max": 0.30,  "step": 0.02 },
+      "streakBonusAfter":            { "value": 3,     "min": 2,     "max": 8,     "step": 1    },
+      "streakBonusMultiplier":       { "value": 1.5,   "min": 1.0,   "max": 3.0,   "step": 0.25 }
+    }
+  },
+
+  "system_level": {
+    "description": "System-wide: merge distance, fusion weights, EO-radar fusion gate",
+    "params": {
+      "mergeDistanceM":              { "value": 3000,  "min": 1000,  "max": 8000,  "step": 500  },
+      "eoFusionGateM":               { "value": 3000,  "min": 1000,  "max": 8000,  "step": 500  },
+      "eoConfirmedWeight":           { "value": 0.3,   "min": 0.1,   "max": 0.6,   "step": 0.05 },
+      "eoCandidateWeight":           { "value": 0.15,  "min": 0.05,  "max": 0.4,   "step": 0.05 }
+    }
+  },
+
+  "scenarios": {
+    "eo_scenarios":     ["good-triangulation", "bad-triangulation", "one-cue-two-eo"],
+    "radar_scenarios":  ["single-target-confirm", "crossed-tracks", "low-altitude-clutter"],
+    "system_scenarios": ["central-israel", "fusion-demo", "combined"]
+  },
+
+  "optimizer": {
+    "populationSize": 20,
+    "eliteCount": 4,
+    "mutationRate": 0.15,
+    "crossoverRate": 0.7,
+    "maxGenerations": 50,
+    "targetAccuracy": 80,
+    "asymptoticThreshold": 0.5,
+    "asymptoticWindow": 5
+  }
+}

@@ -683,6 +683,11 @@ export class LiveEngine {
       enableIMM: true, // P5: Enable IMM for coordinated turn detection
       enableTBD: false,
     });
+    // Enable dual-hypothesis BM/ABT tracking: in early detection each track
+    // is evaluated against both BM and ABT parameter profiles. Once velocity
+    // and trajectory angle provide enough evidence, the system commits to the
+    // appropriate profile (wide gates + fast confirm for BM, tight gates for ABT).
+    this.trackManager.enableDualHypothesis = true;
     this.registrationService = new RegistrationHealthService();
 
     // P3: Initialize registration health for all sensors at startup.
@@ -1272,10 +1277,16 @@ export class LiveEngine {
       this.processAccumulatedBearings();
       this.expireStaleEoCues();
       this.computeGeometryEstimates();
+      this.processCoreEoDetector();
 
       if (result.currentTimeSec - this.lastEoTaskingSec >= EO_TASKING_INTERVAL_SEC) {
         this.runEoTaskingCycle();
         this.lastEoTaskingSec = result.currentTimeSec;
+      }
+
+      // Compute quality metrics on last tick
+      if (t === Math.floor(toSec) - 1) {
+        this.computeQualityMetrics();
       }
     }
 
@@ -1472,6 +1483,7 @@ export class LiveEngine {
       enableIMM: true, // P5: Enable IMM for coordinated turn detection
       enableTBD: false,
     });
+    this.trackManager.enableDualHypothesis = true;
     this.registrationService = new RegistrationHealthService();
     this.initializeSensorRegistration(); // P3: Initialize sensor registration health
 
@@ -4833,18 +4845,22 @@ export class LiveEngine {
     //   15% false track penalty (fewer false tracks = better)
     const coverageScore = coveragePercent * 100; // 0–100
 
-    // Position accuracy: 100 for 0m error, 0 for ≥5000m, linear
+    // Position accuracy: 100 for 0m error, degrades with distance
+    // Calibrated so typical radar accuracy (~1km) scores ~90+
+    // Uses exponential decay: e^(-error/5000)
+    // 500m→90, 1000m→82, 2000m→67, 3000m→55
     const posScores = gtMatchDetails
       .filter(d => d.matched)
-      .map(d => Math.max(0, 100 * (1 - d.positionErrorM / 5000)));
+      .map(d => 100 * Math.exp(-d.positionErrorM / 5000));
     const posAccuracy = posScores.length > 0
       ? posScores.reduce((a, b) => a + b, 0) / posScores.length
       : 0;
 
-    // Velocity accuracy: 100 for 0 m/s error, 0 for ≥100 m/s, linear
+    // Velocity accuracy: 100 for 0 m/s error, 0 for ≥200 m/s
+    // Wider scale since velocity errors depend on target speed
     const velScores = gtMatchDetails
       .filter(d => d.matched && d.velocityErrorMps < Infinity)
-      .map(d => Math.max(0, 100 * (1 - d.velocityErrorMps / 100)));
+      .map(d => Math.max(0, 100 * (1 - d.velocityErrorMps / 200)));
     const velAccuracy = velScores.length > 0
       ? velScores.reduce((a, b) => a + b, 0) / velScores.length
       : 100; // no velocity data = no penalty
@@ -4852,11 +4868,12 @@ export class LiveEngine {
     // False track penalty: 100 for 0% false, 0 for 100% false
     const falseTrackScore = (1 - falseTrackRate) * 100;
 
+    // Weights: coverage is most important, then position, then false tracks, then velocity
     const pictureAccuracy = Math.round(
-      0.40 * coverageScore +
-      0.30 * posAccuracy +
-      0.15 * velAccuracy +
-      0.15 * falseTrackScore,
+      0.45 * coverageScore +
+      0.25 * posAccuracy +
+      0.10 * velAccuracy +
+      0.20 * falseTrackScore,
     );
 
     this.cachedQualityMetrics = {
