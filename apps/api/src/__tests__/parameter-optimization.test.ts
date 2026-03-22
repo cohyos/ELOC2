@@ -1,17 +1,23 @@
 /**
  * Parameter Optimization Test
  *
- * Searches for optimal parameter sets at 4 arena construction levels:
+ * Searches for optimal parameter sets at 6 arena construction levels:
  *   1. EO level (staring sensors + core)
- *   2. Individual radar level
+ *   2. Individual radar level (generic)
+ *   2a. BM radar level (ballistic missile profile)
+ *   2b. ABT radar level (air-breathing target profile)
  *   3. Radar collection level (multiple radars + merge)
- *   4. System level (EO core + radars + C2)
+ *   4. System level (EO core + radars + C2 + dual-hypothesis)
  *
  * Uses a genetic algorithm to evolve parameter sets. Scenarios are run
  * headlessly (no WebSocket) at high speed. Each candidate is evaluated
  * by running pre-prepared scenarios and measuring picture accuracy vs GT.
  *
- * Continues until 80% accuracy or improvement asymptotes.
+ * Levels 2a and 2b optimize per-target-category parameters separately.
+ * During early detection the system evaluates both BM and ABT hypotheses;
+ * once velocity/trajectory resolves, it commits to the appropriate profile.
+ *
+ * Continues until 97% accuracy or improvement asymptotes.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -537,6 +543,8 @@ const TEST_OPTIMIZER_CONFIG: OptimizerConfig = {
 const SEEK_TIMES: Record<string, number> = {
   eo_level: 90,
   radar_level: 60,
+  bm_radar_level: 45,     // BM tracks are short-lived, evaluate early
+  abt_radar_level: 75,    // ABT tracks need more time to establish
   collection_level: 90,
   system_level: 120,
 };
@@ -575,6 +583,50 @@ describe('Parameter Optimization', () => {
       paramDefs,
       scenarios,
       SEEK_TIMES.radar_level,
+      TEST_OPTIMIZER_CONFIG,
+    );
+
+    allResults.push(result);
+    console.log(formatResults(result));
+
+    expect(result.bestFitness).toBeGreaterThan(0);
+    expect(result.generations.length).toBeGreaterThanOrEqual(2);
+  }, 300_000);
+
+  // Level 2a: BM-specific radar profile
+  it('Level 2a: optimizes BM radar profile parameters', () => {
+    const bmRadarDefs = getParamDefs(config, 'bm_radar_level');
+    const bmConsistencyDefs = getParamDefs(config, 'bm_consistency_level');
+    const paramDefs = { ...bmRadarDefs, ...bmConsistencyDefs };
+    const scenarios = ['central-israel']; // contains mixed targets including BM-speed
+
+    const result = runOptimization(
+      'bm_radar_level',
+      paramDefs,
+      scenarios,
+      SEEK_TIMES.bm_radar_level,
+      TEST_OPTIMIZER_CONFIG,
+    );
+
+    allResults.push(result);
+    console.log(formatResults(result));
+
+    expect(result.bestFitness).toBeGreaterThan(0);
+    expect(result.generations.length).toBeGreaterThanOrEqual(2);
+  }, 300_000);
+
+  // Level 2b: ABT-specific radar profile
+  it('Level 2b: optimizes ABT radar profile parameters', () => {
+    const abtRadarDefs = getParamDefs(config, 'abt_radar_level');
+    const abtConsistencyDefs = getParamDefs(config, 'abt_consistency_level');
+    const paramDefs = { ...abtRadarDefs, ...abtConsistencyDefs };
+    const scenarios = ['central-israel'];
+
+    const result = runOptimization(
+      'abt_radar_level',
+      paramDefs,
+      scenarios,
+      SEEK_TIMES.abt_radar_level,
       TEST_OPTIMIZER_CONFIG,
     );
 

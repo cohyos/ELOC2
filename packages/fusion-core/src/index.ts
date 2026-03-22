@@ -112,3 +112,18 @@ export type { CovariancePrediction } from './scheduler/covariance-predictor.js';
 // 6DOF Consistency evaluator
 export { ConsistencyEvaluator } from './track-management/consistency-evaluator.js';
 export type { ConsistencyConfig, ConsistencyResult, TrackStateSnapshot } from './track-management/consistency-evaluator.js';
+
+// Target category profiles (dual-hypothesis BM/ABT)
+export {
+  BM_PROFILE,
+  ABT_PROFILE,
+  DEFAULT_PROFILE,
+  getProfile,
+  createClassifierState,
+  updateClassifier,
+} from './track-management/target-category-profiles.js';
+export type {
+  TargetCategory,
+  ClassifierState,
+  CategoryProfile,
+} from './track-management/target-category-profiles.js';

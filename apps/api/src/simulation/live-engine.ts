@@ -683,6 +683,11 @@ export class LiveEngine {
       enableIMM: true, // P5: Enable IMM for coordinated turn detection
       enableTBD: false,
     });
+    // Enable dual-hypothesis BM/ABT tracking: in early detection each track
+    // is evaluated against both BM and ABT parameter profiles. Once velocity
+    // and trajectory angle provide enough evidence, the system commits to the
+    // appropriate profile (wide gates + fast confirm for BM, tight gates for ABT).
+    this.trackManager.enableDualHypothesis = true;
     this.registrationService = new RegistrationHealthService();
 
     // P3: Initialize registration health for all sensors at startup.
@@ -1478,6 +1483,7 @@ export class LiveEngine {
       enableIMM: true, // P5: Enable IMM for coordinated turn detection
       enableTBD: false,
     });
+    this.trackManager.enableDualHypothesis = true;
     this.registrationService = new RegistrationHealthService();
     this.initializeSensorRegistration(); // P3: Initialize sensor registration health
 
