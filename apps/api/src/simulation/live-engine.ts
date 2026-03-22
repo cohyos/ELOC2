@@ -1272,10 +1272,16 @@ export class LiveEngine {
       this.processAccumulatedBearings();
       this.expireStaleEoCues();
       this.computeGeometryEstimates();
+      this.processCoreEoDetector();
 
       if (result.currentTimeSec - this.lastEoTaskingSec >= EO_TASKING_INTERVAL_SEC) {
         this.runEoTaskingCycle();
         this.lastEoTaskingSec = result.currentTimeSec;
+      }
+
+      // Compute quality metrics on last tick
+      if (t === Math.floor(toSec) - 1) {
+        this.computeQualityMetrics();
       }
     }
 
