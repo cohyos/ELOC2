@@ -64,6 +64,7 @@ export function correlate(
   observation: SourceObservation,
   existingTracks: SystemTrack[],
   config: CorrelatorConfig = DEFAULT_CONFIG,
+  perTrackConfig?: Map<string, CorrelatorConfig>,
 ): CorrelationResult {
   const method = 'mahalanobis_enu';
 
@@ -151,10 +152,13 @@ export function correlate(
     // Mahalanobis distance (not squared — the utility returns sqrt)
     const dist = mahalanobisDistance(dx, invCombinedCov);
 
-    // Compare squared distance against the gate threshold
+    // Compare squared distance against the gate threshold.
+    // Use per-track config if available (allows BM tracks to have wider gates
+    // without inflating the gate for ABT tracks).
     const distSquared = dist * dist;
+    const trackConfig = perTrackConfig?.get(track.systemTrackId as string) ?? config;
 
-    if (distSquared <= config.gateThreshold) {
+    if (distSquared <= trackConfig.gateThreshold) {
       // Velocity consistency gate: reject if Doppler radial velocity
       // disagrees with the predicted radial velocity from the track state.
       if (
@@ -170,7 +174,7 @@ export function correlate(
           const uy = dlat / dist2d;
           const predictedVr = track.velocity.vx * ux + track.velocity.vy * uy;
           const vrDiff = Math.abs(observation.radialVelocity - predictedVr);
-          if (vrDiff > config.velocityGateThreshold) continue;
+          if (vrDiff > trackConfig.velocityGateThreshold) continue;
         }
       }
 

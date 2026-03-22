@@ -119,6 +119,8 @@ interface TrackMeta {
   classifierState: ClassifierState;
   /** Resolved target category (drives parameter profile). */
   targetCategory: TargetCategory;
+  /** Tick counter when track was last updated (for tick-based stale detection). */
+  lastUpdateTick: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -140,8 +142,8 @@ export class TrackManager {
 
   private readonly meta: Map<string, TrackMeta> = new Map();
   private readonly config: TrackManagerConfig;
-  private correlatorConfig: CorrelatorConfig = { gateThreshold: 16.27, velocityGateThreshold: 50 };
-  private mergeDistanceM: number = 3000;
+  private correlatorConfig: CorrelatorConfig = { gateThreshold: 20.0, velocityGateThreshold: 75 };
+  private mergeDistanceM: number = 8000;
 
   /** 6DOF consistency evaluator — tracks position/velocity/acceleration/Doppler consistency. */
   readonly consistencyEvaluator = new ConsistencyEvaluator();
@@ -341,6 +343,7 @@ export class TrackManager {
       motionModelStatus: 'unknown',
       classifierState: createClassifierState(),
       targetCategory: 'unresolved',
+      lastUpdateTick: 0,
     });
 
     // If existence tracking is enabled, set initial existence probability on track
@@ -582,6 +585,7 @@ export class TrackManager {
       motionModelStatus: meta1?.motionModelStatus ?? 'unknown',
       classifierState: primaryMeta?.classifierState ?? createClassifierState(),
       targetCategory: primaryMeta?.targetCategory ?? 'unresolved',
+      lastUpdateTick: Math.max(meta1?.lastUpdateTick ?? 0, meta2?.lastUpdateTick ?? 0),
     });
 
     return mergedTrack;
@@ -612,6 +616,7 @@ export class TrackManager {
       motionModelStatus: 'unknown',
       classifierState: createClassifierState(),
       targetCategory: 'unresolved',
+      lastUpdateTick: 0,
     });
   }
 
@@ -738,13 +743,18 @@ export class TrackManager {
     const normalized = normalizeObservation(observation);
 
     // 2. Correlate against non-dropped tracks
-    // When dual-hypothesis is enabled, use the effective correlator config
-    // that accounts for per-track target category profiles.
+    // When dual-hypothesis is enabled, build per-track gate configs so each
+    // track uses its own category-specific gate (BM=wide, ABT=tight) instead
+    // of inflating all tracks to the widest gate.
     const activeTracks = this.getAllTracks().filter((t) => t.status !== 'dropped');
-    const effectiveCorrelatorConfig = this.enableDualHypothesis
-      ? this.computeEffectiveCorrelatorConfig(activeTracks)
-      : this.correlatorConfig;
-    const correlationResult = correlate(normalized, activeTracks, effectiveCorrelatorConfig);
+    let perTrackConfig: Map<string, CorrelatorConfig> | undefined;
+    if (this.enableDualHypothesis) {
+      perTrackConfig = new Map();
+      for (const track of activeTracks) {
+        perTrackConfig.set(track.systemTrackId as string, this.getEffectiveCorrelatorConfig(track));
+      }
+    }
+    const correlationResult = correlate(normalized, activeTracks, this.correlatorConfig, perTrackConfig);
 
     // 3. Build correlation event
     const correlationEnvelope = createEventEnvelope(
@@ -857,7 +867,14 @@ export class TrackManager {
       // Try to correlate the cluster against existing tracks using the first member
       const firstNormalized = normalizeObservation(cluster[0]);
       const activeTracks = this.getAllTracks().filter(t => t.status !== 'dropped');
-      const correlationResult = correlate(firstNormalized, activeTracks, this.correlatorConfig);
+      let batchPerTrackConfig: Map<string, CorrelatorConfig> | undefined;
+      if (this.enableDualHypothesis) {
+        batchPerTrackConfig = new Map();
+        for (const track of activeTracks) {
+          batchPerTrackConfig.set(track.systemTrackId as string, this.getEffectiveCorrelatorConfig(track));
+        }
+      }
+      const correlationResult = correlate(firstNormalized, activeTracks, this.correlatorConfig, batchPerTrackConfig);
 
       if (correlationResult.decision === 'associated') {
         // Match found: fuse ALL cluster members into the matched track sequentially
@@ -913,6 +930,44 @@ export class TrackManager {
     }
 
     return clusters;
+  }
+
+  // ── Tick-based stale detection ────────────────────────────────────────
+
+  /**
+   * Mark all active tracks that were NOT updated in the current tick as missed.
+   * This is playback-speed-independent (unlike timestamp-based approaches where
+   * Date.now() diverges from simulation timestamps at >1x speed).
+   *
+   * Call this once per tick AFTER processing all observations.
+   * @param currentTick — monotonic tick counter (e.g., elapsedSec).
+   * @param graceTicksCount — number of ticks a track can miss before getting
+   *   a missedUpdate call. Default 2 (allows intermittent radar misses).
+   */
+  markStaleTracksAsMissed(currentTick: number, graceTicksCount: number = 2): void {
+    const active = this.getAllTracks().filter(t => t.status !== 'dropped');
+    for (const track of active) {
+      const meta = this.meta.get(track.systemTrackId as string);
+      if (!meta) continue;
+      const ticksSinceUpdate = currentTick - meta.lastUpdateTick;
+      if (ticksSinceUpdate > graceTicksCount) {
+        try {
+          this.missedUpdate(track.systemTrackId);
+        } catch (_) {
+          // Track may have been dropped or merged
+        }
+      }
+    }
+  }
+
+  /**
+   * Record that a track was updated in the given tick.
+   */
+  setTrackUpdateTick(trackId: SystemTrackId | string, tick: number): void {
+    const meta = this.meta.get(trackId as string);
+    if (meta) {
+      meta.lastUpdateTick = tick;
+    }
   }
 
   // ── Post-tick merge sweep ───────────────────────────────────────────────
