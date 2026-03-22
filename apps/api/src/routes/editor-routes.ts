@@ -25,7 +25,7 @@ export function validateScenario(def: ScenarioDefinition): { errors: string[]; w
   const warnings: string[] = [];
 
   if (!def.sensors || def.sensors.length === 0) errors.push('At least one sensor required');
-  if (!def.targets || def.targets.length === 0) errors.push('At least one target required');
+  if (!def.targets || def.targets.length === 0) warnings.push('No targets defined — scenario will run without ground truth');
   if (!def.durationSec || def.durationSec <= 0) errors.push('Duration must be positive');
 
   // Check for duplicate sensor IDs

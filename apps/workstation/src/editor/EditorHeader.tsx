@@ -113,7 +113,9 @@ export function EditorHeader({ onBack, onLibraries }: EditorHeaderProps) {
       if (res.ok) {
         showToast('Scenario saved successfully.', 'success');
       } else {
-        showToast('Save failed: ' + (await res.text()), 'error');
+        const body = await res.json().catch(() => null);
+        const errMsg = body?.errors?.join(', ') || body?.error || 'Unknown error';
+        showToast('Save failed: ' + errMsg, 'error');
       }
     } catch (err) {
       showToast('Save error: ' + (err as Error).message, 'error');

@@ -3638,6 +3638,9 @@ export class LiveEngine {
       if (sensor.sensorType !== 'eo' || !sensor.online || !sensor.gimbal) continue;
       const sId = sensor.sensorId as string;
 
+      // Fixed/staring sensors do not scan — skip search mode entirely
+      if (sensor.gimbal.slewRateDegPerSec === 0) continue;
+
       // Operator-locked sensors skip search mode
       if (this.operatorLockedSensors.has(sId)) continue;
 
@@ -3803,6 +3806,9 @@ export class LiveEngine {
     const trackMap = new Map(this.state.tracks.map(t => [t.systemTrackId, t]));
     for (const sensor of this.state.sensors) {
       if (!sensor.gimbal || !sensor.online) continue;
+
+      // Fixed/staring sensors do not slew — skip gimbal tracking
+      if (sensor.gimbal.slewRateDegPerSec === 0) continue;
 
       // Operator-locked sensors: continuously point at locked target/position
       const lockInfo = this.operatorLockedSensors.get(sensor.sensorId as string);
