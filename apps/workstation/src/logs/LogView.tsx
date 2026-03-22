@@ -161,7 +161,7 @@ interface LogViewProps {
 
 export function LogView({ onBack }: LogViewProps) {
   const chains = useDecisionChainStore((s) => s.chains);
-  const events = useUiStore((s) => s.events);
+  const events = useUiStore((s) => s.eventLog);
   const [selectedChainId, setSelectedChainId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'chains' | 'events'>('chains');
   const [sortBy, setSortBy] = useState<'quality' | 'name'>('quality');
