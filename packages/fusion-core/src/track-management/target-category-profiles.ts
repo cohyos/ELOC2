@@ -53,45 +53,49 @@ export interface CategoryProfile {
 export const BM_PROFILE: CategoryProfile = {
   correlator: {
     // Wide spatial gate: BMs move 1000–2500 m between observations,
-    // need large gate to prevent ghost track creation
-    gateThreshold: 50.0,
-    // Very high velocity gate: BM speeds are 700–2500 m/s,
-    // standard 75 m/s gate would reject all BM correlations
-    velocityGateThreshold: 500,
+    // need large gate to prevent ghost track creation.
+    // Multi-scenario optimized: 35 (from 50) — tighter prevents ghost tracks
+    // in saturation scenarios while still wide enough for single BM.
+    gateThreshold: 35.0,
+    // Very high velocity gate: BM speeds are 700–2500 m/s.
+    // Optimized to 450 across ballistic + grad-barrage + combined scenarios.
+    velocityGateThreshold: 450,
   },
 
-  // Fast confirmation: BM transits are short (30–120s),
-  // need to confirm quickly before target exits coverage
-  confirmAfter: 2,
-  // Quick drop: if we lose a BM for 4 consecutive misses,
-  // it's likely left the engagement zone
-  dropAfterMisses: 4,
-  // High pDetection: radar reliably detects BMs (large IR/thermal signature)
-  pDetection: 0.95,
+  // Immediate confirmation: BM/rocket transits are very short (10–120s),
+  // even 2 updates can be too slow for 60s grad barrage.
+  // Multi-scenario optimized: 1 (from 2).
+  confirmAfter: 1,
+  // Quick drop: if we lose a BM for 7 consecutive misses,
+  // it's likely left the engagement zone.
+  // Optimized: 7 (from 4) — grad-barrage rockets can briefly be occluded.
+  dropAfterMisses: 7,
+  // Very high pDetection + very low false alarm (BMs are strong returns)
+  pDetection: 0.99,
   pFalseAlarm: 0.005,
   // Fast existence promotion/confirmation
-  existencePromotionThreshold: 0.4,
-  existenceConfirmationThreshold: 0.65,
-  existenceDeletionThreshold: 0.15,
+  existencePromotionThreshold: 0.3,
+  existenceConfirmationThreshold: 0.7,
+  existenceDeletionThreshold: 0.23,
   // Short coasting: BMs don't loiter; missing means gone
   coastingMissThreshold: 2,
-  maxCoastingTimeSec: 8,
+  maxCoastingTimeSec: 9,
 
   consistency: {
-    // Wide position gate: BMs traverse 1–2 km per second,
-    // prediction errors are proportionally larger
-    positionGateM: 2000,
-    // Wide velocity gate: BM acceleration during boost phase
-    // causes large velocity changes between observations
-    velocityGateMps: 200,
+    // Very wide position gate: rockets traverse km/s, prediction errors
+    // are proportionally larger. Optimized: 4400m across BM scenarios.
+    positionGateM: 4400,
+    // Very wide velocity gate: BM acceleration during boost phase
+    // causes large velocity changes. Optimized: 450 m/s.
+    velocityGateMps: 450,
     // Wide acceleration gate: boost/burnout/reentry cause high accel
     accelerationGateMps2: 80,
-    // Doppler gate: large radial velocity changes expected
-    dopplerGateMps: 150,
+    // Doppler gate: large radial velocity changes expected. Optimized: 290.
+    dopplerGateMps: 290,
     // Aggressive boost: fast confirmation is critical for threat response
-    consistentBoost: 0.10,
-    inconsistentDecay: -0.12,
-    maxDeltaPerUpdate: 0.20,
+    consistentBoost: 0.14,
+    inconsistentDecay: -0.13,
+    maxDeltaPerUpdate: 0.22,
     // Quick streak: fewer consistent updates needed for bonus
     streakBonusAfter: 2,
     streakBonusMultiplier: 2.0,
@@ -104,40 +108,45 @@ export const BM_PROFILE: CategoryProfile = {
 
 export const ABT_PROFILE: CategoryProfile = {
   correlator: {
-    // Standard spatial gate: ABTs move slowly enough for tight gating
-    gateThreshold: 22.0,
+    // Tight spatial gate: ABTs move slowly, tight gating prevents ghost tracks.
+    // Multi-scenario optimized: 14 (from 22) — tighter works well across
+    // 8 ABT scenarios including crossed-tracks and drone-swarm.
+    gateThreshold: 14.0,
     // Standard velocity gate: ABT speeds are 44–260 m/s
     velocityGateThreshold: 80,
   },
 
-  // Standard confirmation: ABTs are in coverage longer, can afford more updates
-  confirmAfter: 3,
-  // Generous drop: slow ABTs may temporarily exit coverage and return
-  dropAfterMisses: 10,
-  pDetection: 0.88,
-  pFalseAlarm: 0.02,
-  existencePromotionThreshold: 0.5,
-  existenceConfirmationThreshold: 0.8,
-  existenceDeletionThreshold: 0.08,
+  // Moderate confirmation: ABTs are in coverage longer, can afford more updates.
+  // Optimized: 4 (from 3) — reduces false confirmations in clutter.
+  confirmAfter: 4,
+  // Generous drop: slow ABTs may temporarily exit coverage and return.
+  // Optimized: 11 (from 10).
+  dropAfterMisses: 11,
+  pDetection: 0.91,
+  pFalseAlarm: 0.035,
+  existencePromotionThreshold: 0.7,
+  existenceConfirmationThreshold: 0.95,
+  existenceDeletionThreshold: 0.12,
   // Longer coasting: ABTs loiter, may have intermittent radar returns
-  coastingMissThreshold: 4,
-  maxCoastingTimeSec: 25,
+  coastingMissThreshold: 3,
+  maxCoastingTimeSec: 28,
 
   consistency: {
-    // Tight position gate: ABTs are predictable, position errors should be small
-    positionGateM: 600,
+    // Moderate position gate: optimized across 8 ABT scenarios.
+    // 1150m (from 600m) — drone-swarm and crossed-tracks need more room.
+    positionGateM: 1150,
     // Tight velocity gate: ABT speed changes are gradual (turns, not thrust)
-    velocityGateMps: 40,
-    // Moderate acceleration gate: coordinated turns ~2–3g
-    accelerationGateMps2: 30,
+    velocityGateMps: 45,
+    // Tight acceleration gate: coordinated turns only ~1g
+    accelerationGateMps2: 10,
     // Standard Doppler gate
-    dopplerGateMps: 50,
+    dopplerGateMps: 45,
     // Standard boost/decay rates
-    consistentBoost: 0.06,
+    consistentBoost: 0.02,
     inconsistentDecay: -0.10,
-    maxDeltaPerUpdate: 0.15,
+    maxDeltaPerUpdate: 0.23,
     streakBonusAfter: 4,
-    streakBonusMultiplier: 1.5,
+    streakBonusMultiplier: 2.0,
   },
 };
 
@@ -147,31 +156,32 @@ export const ABT_PROFILE: CategoryProfile = {
 
 export const DEFAULT_PROFILE: CategoryProfile = {
   correlator: {
-    // Moderate gate: wide enough for both BM and ABT initial detection
-    gateThreshold: 30.0,
-    velocityGateThreshold: 150,
+    // Moderate gate: wide enough for both BM and ABT initial detection.
+    // Multi-scenario system-level optimized: 16 gateThreshold, 50 velocity.
+    gateThreshold: 16.0,
+    velocityGateThreshold: 50,
   },
 
-  confirmAfter: 3,
-  dropAfterMisses: 8,
-  pDetection: 0.9,
-  pFalseAlarm: 0.01,
-  existencePromotionThreshold: 0.5,
-  existenceConfirmationThreshold: 0.8,
-  existenceDeletionThreshold: 0.1,
-  coastingMissThreshold: 3,
-  maxCoastingTimeSec: 15,
+  confirmAfter: 4,
+  dropAfterMisses: 13,
+  pDetection: 0.95,
+  pFalseAlarm: 0.061,
+  existencePromotionThreshold: 0.35,
+  existenceConfirmationThreshold: 0.85,
+  existenceDeletionThreshold: 0.17,
+  coastingMissThreshold: 4,
+  maxCoastingTimeSec: 25,
 
   consistency: {
     positionGateM: 1000,
-    velocityGateMps: 100,
-    accelerationGateMps2: 50,
-    dopplerGateMps: 80,
-    consistentBoost: 0.07,
+    velocityGateMps: 50,
+    accelerationGateMps2: 15,
+    dopplerGateMps: 45,
+    consistentBoost: 0.03,
     inconsistentDecay: -0.10,
-    maxDeltaPerUpdate: 0.18,
+    maxDeltaPerUpdate: 0.15,
     streakBonusAfter: 3,
-    streakBonusMultiplier: 1.75,
+    streakBonusMultiplier: 2.0,
   },
 };
 
