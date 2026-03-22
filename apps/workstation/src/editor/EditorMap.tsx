@@ -313,12 +313,27 @@ export function EditorMap() {
           });
         };
 
-        const onUp = () => {
+        const onUp = (upEvt: L.LeafletMouseEvent) => {
+          const draggedSensorId = dragState.current?.type === 'sensor' ? dragState.current.sensorId : null;
           dragState.current = null;
           m.dragging.enable();
           m.getContainer().style.cursor = '';
           m.off('mousemove', onMove);
           m.off('mouseup', onUp);
+
+          // Fetch terrain elevation at drop location
+          if (draggedSensorId && upEvt?.latlng) {
+            fetch(`/api/terrain/elevation?lat=${upEvt.latlng.lat}&lon=${upEvt.latlng.lng}`)
+              .then(r => r.json())
+              .then((data: any) => {
+                if (data?.elevationM != null) {
+                  useEditorStore.getState().updateSensor(draggedSensorId, {
+                    alt: Math.round(data.elevationM),
+                  });
+                }
+              })
+              .catch(() => {/* terrain API unavailable */});
+          }
         };
 
         m.on('mousemove', onMove);

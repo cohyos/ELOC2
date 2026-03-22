@@ -1972,7 +1972,16 @@ export class LiveEngine {
         const sensorId = bearingObs.sensorId;
 
         // Try to match bearing to an active cue for this sensor
-        const matchedCueId = this.matchBearingToCue(bearingObs);
+        let matchedCueId = this.matchBearingToCue(bearingObs);
+
+        // Staring sensors: auto-create cue for unmatched bearings so they
+        // process all targets in FOV simultaneously (not one-at-a-time via tasking)
+        if (!matchedCueId) {
+          const sensor = this.state.sensors.find(s => (s.sensorId as string) === sensorId);
+          if (sensor?.gimbal?.slewRateDegPerSec === 0) {
+            matchedCueId = this.autoCreateCueForBearing(bearingObs, sensor);
+          }
+        }
 
         if (matchedCueId) {
           // Accumulate for batch processing
@@ -2118,6 +2127,66 @@ export class LiveEngine {
     }
 
     return null;
+  }
+
+  /**
+   * For staring sensors: auto-create a cue + task when a bearing has no
+   * matching cue. This allows staring sensors to process ALL targets in
+   * their FOV simultaneously without waiting for the tasking engine.
+   */
+  private autoCreateCueForBearing(bearingObs: EoBearingObservation, sensor: SensorState): string | null {
+    // Find nearest system track by comparing bearing azimuth to sensor→track azimuth
+    const bearingAz = bearingObs.bearing.azimuthDeg;
+    let bestTrack: SystemTrack | undefined;
+    let bestAngularDiff = Infinity;
+    for (const track of this.state.tracks) {
+      if (track.status === 'dropped') continue;
+      const trackAz = bearingDeg(
+        sensor.position.lat, sensor.position.lon,
+        track.state.lat, track.state.lon,
+      );
+      let diff = Math.abs(bearingAz - trackAz);
+      if (diff > 180) diff = 360 - diff;
+      if (diff < bestAngularDiff) {
+        bestAngularDiff = diff;
+        bestTrack = track;
+      }
+    }
+
+    // Only auto-cue if angular match is close enough (within 5°)
+    if (!bestTrack || bestAngularDiff > 5) return null;
+
+    const trackId = bestTrack.systemTrackId as string;
+
+    // Check if there's already a cue for this track on this sensor
+    for (const [cueId, _cue] of this.activeCuesById) {
+      if (this.cueToTrack.get(cueId) === trackId) {
+        const task = this.state.tasks.find(
+          t => t.cueId === cueId && t.sensorId === (sensor.sensorId as string),
+        );
+        if (task) return cueId;
+      }
+    }
+
+    // Auto-issue cue
+    const health = this.registrationService.getHealth(sensor.sensorId);
+    const qualityLevel = health?.spatialQuality ?? 'good';
+    const cue = issueCue(bestTrack, sensor, qualityLevel);
+    this.activeCuesById.set(cue.cueId, cue);
+    this.cueToTrack.set(cue.cueId, trackId);
+
+    // Create a virtual task for this cue
+    this.state.tasks.push({
+      taskId: generateId(),
+      cueId: cue.cueId,
+      sensorId: sensor.sensorId as string,
+      targetTrackId: trackId,
+      status: 'executing',
+      priority: 5,
+      assignedAt: Date.now(),
+    } as any);
+
+    return cue.cueId;
   }
 
   /**

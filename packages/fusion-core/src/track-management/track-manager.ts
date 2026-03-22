@@ -168,7 +168,6 @@ export class TrackManager {
     correlationResult: CorrelationResult,
   ): SystemTrack {
     const id = generateId() as SystemTrackId;
-    const now = Date.now() as Timestamp;
 
     const track: SystemTrack = {
       systemTrackId: id,
@@ -183,7 +182,10 @@ export class TrackManager {
           `New track from observation ${observation.observationId} (${correlationResult.method})`,
         ),
       ],
-      lastUpdated: now,
+      // Use observation timestamp (simulation time) for consistent prediction in correlator.
+      // Date.now() diverges from simulation time at >1x playback speed, causing
+      // prediction dt overflow and correlation gate failures (track proliferation).
+      lastUpdated: observation.timestamp,
       sources: [observation.sensorId],
       eoInvestigationStatus: 'none',
       radialVelocity: observation.radialVelocity,
@@ -228,7 +230,8 @@ export class TrackManager {
     track.state = { ...fusedState.state };
     track.covariance = fusedState.covariance.map((row) => [...row]) as Covariance3x3;
     track.confidence = fusedState.confidence;
-    track.lastUpdated = Date.now() as Timestamp;
+    // Use observation timestamp for consistent prediction at any playback speed
+    track.lastUpdated = observation.timestamp;
 
     // Propagate Doppler from fused state
     if (fusedState.radialVelocity !== undefined) {
