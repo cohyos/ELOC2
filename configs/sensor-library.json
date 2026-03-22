@@ -167,6 +167,63 @@
         "channels": ["CCD-TV", "thermal-SWIR"]
       },
       "description": "Distributed Sensor Station, gimbal-mounted, 35km range, 4° FOV, autonomous cueing with fast slew"
+    },
+    {
+      "id": "eo-staring-mwir-20x90",
+      "name": "MWIR Staring Sensor (20°×90°)",
+      "type": "eo",
+      "coverage": { "minAzDeg": 0, "maxAzDeg": 20, "maxRangeM": 30000 },
+      "fov": { "halfAngleHDeg": 10, "halfAngleVDeg": 45, "depthM": 30000 },
+      "eoParams": {
+        "mountType": "fixed",
+        "slewRateDegSec": 0,
+        "spectrum": "thermal-MWIR",
+        "mode": "staring",
+        "frameRateHz": 24,
+        "resolutionMpx": 1.0,
+        "elevationSettingDeg": -3,
+        "elevationOverridable": true
+      },
+      "description": "Fixed MWIR staring sensor, 20°H×90°V FOV, 24 Hz, 1 Mpixel, default -3° below horizon (overridable)"
+    },
+    {
+      "id": "eo-staring-mwir-360-quad",
+      "name": "MWIR 360° Quad-Head Staring",
+      "type": "eo",
+      "coverage": { "minAzDeg": 0, "maxAzDeg": 360, "maxRangeM": 30000 },
+      "fov": { "halfAngleHDeg": 10, "halfAngleVDeg": 45, "depthM": 30000 },
+      "eoParams": {
+        "mountType": "fixed",
+        "slewRateDegSec": 0,
+        "spectrum": "thermal-MWIR",
+        "mode": "staring",
+        "frameRateHz": 24,
+        "resolutionMpx": 1.0,
+        "elevationSettingDeg": -3,
+        "elevationOverridable": true,
+        "headCount": 4,
+        "headFovHDeg": 90,
+        "configuration": "4× 20°×90° heads on single mast, 360° azimuth coverage"
+      },
+      "description": "360° staring array: 4× MWIR heads (each 20°H×90°V) on single mast, 24 Hz, 1 Mpixel per head, -3° below horizon (overridable)"
+    },
+    {
+      "id": "eo-staring-mwir-45x45",
+      "name": "MWIR Staring Sensor (45°×45°)",
+      "type": "eo",
+      "coverage": { "minAzDeg": 0, "maxAzDeg": 45, "maxRangeM": 30000 },
+      "fov": { "halfAngleHDeg": 22.5, "halfAngleVDeg": 22.5, "depthM": 30000 },
+      "eoParams": {
+        "mountType": "fixed",
+        "slewRateDegSec": 0,
+        "spectrum": "thermal-MWIR",
+        "mode": "staring",
+        "frameRateHz": 24,
+        "resolutionMpx": 1.0,
+        "elevationSettingDeg": 0,
+        "elevationOverridable": true
+      },
+      "description": "Fixed MWIR staring sensor, 45°H×45°V FOV, 24 Hz, 1 Mpixel, 0° horizon setting (overridable)"
     }
   ]
 }

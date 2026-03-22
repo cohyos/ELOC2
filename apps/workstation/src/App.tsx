@@ -540,7 +540,7 @@ export function App() {
   const basicHiddenPanels = demoActive && viewMode === 'basic' ? getBasicModeHiddenPanels() : [];
 
   if (view === 'editor') {
-    return <ScenarioEditor onBack={() => setView('workstation')} />;
+    return <ScenarioEditor onBack={() => setView('workstation')} onLibraries={() => setView('libraries')} />;
   }
 
   if (view === 'logs') {
@@ -676,9 +676,6 @@ export function App() {
 
           {/* Editor (includes deployment planner) */}
           <InstructorButton isInstructor={isInstructor} style={{ ...btn, background: '#2a2a4e', color: '#aa88ff', border: '1px solid #aa88ff44' }} onClick={() => setView('editor')}>Editor</InstructorButton>
-
-          {/* Libraries */}
-          <InstructorButton isInstructor={isInstructor} style={{ ...btn, background: '#2a2a4e', color: '#ffaa44', border: '1px solid #ffaa4444' }} onClick={() => setView('libraries')}>Libraries</InstructorButton>
 
           {/* Users */}
           <InstructorButton isInstructor={isInstructor} style={{ ...btn, background: '#2a2a4e', color: '#ff88cc', border: '1px solid #ff88cc44' }} onClick={() => setView('users')}>Users</InstructorButton>
