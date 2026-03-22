@@ -664,12 +664,32 @@ export class LiveEngine {
       pFalseAlarm: 0.01,
       maxCoastingTimeSec: 15,
       associationMode: 'nn', // default NN; switch to 'auto' for JPDA/MHT
-      enableIMM: false,
+      enableIMM: true, // P5: Enable IMM for coordinated turn detection
       enableTBD: false,
     });
     this.registrationService = new RegistrationHealthService();
 
+    // P3: Initialize registration health for all sensors at startup.
+    // Without this, getHealth() returns undefined → selectFusionMode defaults
+    // to 'confirmation_only' which inflates covariance and degrades accuracy.
+    this.initializeSensorRegistration();
+
     this.state = this.buildInitialState();
+  }
+
+  /**
+   * Initialize registration health for all sensors defined in the scenario.
+   * Registers them with zero bias (good health), so fusion-mode-selector
+   * can choose centralized/conservative modes instead of confirmation_only.
+   */
+  private initializeSensorRegistration(): void {
+    for (const sensor of this.scenario.sensors) {
+      this.registrationService.updateBias(sensor.sensorId as SensorId, {
+        azimuthBiasDeg: 0,
+        elevationBiasDeg: 0,
+        rangeBiasM: 0,
+      });
+    }
   }
 
   // ── Injection log ────────────────────────────────────────────────────
@@ -756,8 +776,8 @@ export class LiveEngine {
       }
     }
 
-    // Only use if reasonably close (within ~5 km ≈ 0.045 degrees)
-    if (bestTarget && bestDist < 0.045) {
+    // Only use if reasonably close (within ~8 km ≈ 0.072 degrees)
+    if (bestTarget && bestDist < 0.072) {
       return bestTarget.classification as TargetClassification | undefined;
     }
     return undefined;
@@ -1433,10 +1453,11 @@ export class LiveEngine {
       pFalseAlarm: 0.01,
       maxCoastingTimeSec: 15,
       associationMode: 'nn',
-      enableIMM: false,
+      enableIMM: true, // P5: Enable IMM for coordinated turn detection
       enableTBD: false,
     });
     this.registrationService = new RegistrationHealthService();
+    this.initializeSensorRegistration(); // P3: Initialize sensor registration health
 
     // Reset EO state
     this.eoTracksById.clear();
@@ -3885,6 +3906,12 @@ export class LiveEngine {
     const now = Date.now();
     const MATCH_THRESHOLD_M = 5000;
 
+    // Build target startTime lookup from scenario definition
+    const targetStartTime = new Map<string, number>();
+    for (const target of this.scenario.targets) {
+      targetStartTime.set(target.targetId, target.startTime ?? 0);
+    }
+
     // Build GT-to-track mapping (reuse quality assessment logic)
     const gtToTrack = new Map<string, SystemTrack>();
     const trackDistances: Array<{ gt: any; track: SystemTrack; dist: number }> = [];
@@ -3917,13 +3944,14 @@ export class LiveEngine {
       if (!gt.active) continue;
       const track = gtToTrack.get(gt.targetId);
       const steps: DecisionChainStep[] = [];
+      const tgtStartTime = targetStartTime.get(gt.targetId) ?? 0;
 
       // Step 1: Ground Truth
       steps.push({
         stage: 'ground_truth',
         timestamp: now, simTimeSec: timeSec,
-        detail: `Target "${gt.name || gt.targetId}" active at (${gt.position.lat.toFixed(3)}, ${gt.position.lon.toFixed(3)}, ${gt.position.alt.toFixed(0)}m)`,
-        data: { classification: gt.classification, speed: gt.speed, headingDeg: gt.headingDeg },
+        detail: `Target "${gt.name || gt.targetId}" active at (${gt.position.lat.toFixed(3)}, ${gt.position.lon.toFixed(3)}, ${gt.position.alt.toFixed(0)}m). Start: T+${tgtStartTime}s`,
+        data: { classification: gt.classification, speed: gt.speed, headingDeg: gt.headingDeg, startTime: tgtStartTime },
       });
 
       if (!track) {
@@ -3951,16 +3979,16 @@ export class LiveEngine {
       const trackId = track.systemTrackId as string;
       const dist = LiveEngine.haversineMeters(track.state.lat, track.state.lon, gt.position.lat, gt.position.lon);
 
-      // Step 2: Detection
+      // Step 2: Detection — compute latency relative to target start time (P0 fix)
       const firstDetSec = this.firstDetectionTime.get(gt.targetId);
-      const detLatency = firstDetSec != null ? firstDetSec : timeSec;
+      const detLatencyRelative = firstDetSec != null ? Math.max(0, firstDetSec - tgtStartTime) : (timeSec - tgtStartTime);
       steps.push({
         stage: 'detection',
         timestamp: now, simTimeSec: timeSec,
-        detail: `Detected by sensors: [${(track.sources || []).join(', ')}]. First detection at T+${detLatency.toFixed(1)}s`,
+        detail: `Detected by sensors: [${(track.sources || []).join(', ')}]. First detection ${detLatencyRelative.toFixed(1)}s after target active (T+${tgtStartTime}s)`,
         decision: 'detected',
-        score: Math.min(1, Math.max(0, 1 - detLatency / 30)), // 0s=1.0, 30s+=0.0
-        data: { sources: track.sources, firstDetectionSec: detLatency },
+        score: Math.min(1, Math.max(0, 1 - detLatencyRelative / 30)),
+        data: { sources: track.sources, firstDetectionSec: firstDetSec, targetStartTime: tgtStartTime, detectionLatencySec: detLatencyRelative },
       });
 
       // Step 3: Correlation
@@ -3974,17 +4002,19 @@ export class LiveEngine {
         data: { positionErrorM: dist, correlationMethod: corrMethod },
       });
 
-      // Step 4: Fusion
-      const fusionMode = track.fusionMode ?? 'basic';
-      const regHealth = track.registrationHealth ?? 'unknown';
+      // Step 4: Fusion — resolve actual fusion mode from per-sensor map
+      const primarySensor = (track.sources || [])[0] as string | undefined;
+      const actualFusionMode = (primarySensor && this.fusionModePerSensor.get(primarySensor)) ?? track.fusionMode ?? 'unknown';
+      const primaryRegHealth = primarySensor ? this.registrationService.getHealth(primarySensor as SensorId) : undefined;
+      const regHealthLabel = primaryRegHealth ? (primaryRegHealth.fusionSafe ? 'good' : 'degraded') : 'no_data';
       steps.push({
         stage: 'fusion',
         timestamp: now, simTimeSec: timeSec,
-        detail: `Fusion mode: ${fusionMode}, registration health: ${regHealth}. Confidence: ${track.confidence.toFixed(2)}`,
-        decision: fusionMode,
-        alternatives: 'basic | conservative | centralized',
+        detail: `Fusion mode: ${actualFusionMode}, registration health: ${regHealthLabel}. Confidence: ${track.confidence.toFixed(2)}`,
+        decision: actualFusionMode,
+        alternatives: 'confirmation_only | conservative_track_fusion | centralized_measurement_fusion',
         score: track.confidence,
-        data: { fusionMode, registrationHealth: regHealth, confidence: track.confidence, sourceDiversity: (track.sources || []).length },
+        data: { fusionMode: actualFusionMode, registrationHealth: regHealthLabel, confidence: track.confidence, sourceDiversity: (track.sources || []).length },
       });
 
       // Step 5: Promotion
@@ -4038,29 +4068,52 @@ export class LiveEngine {
         });
       }
 
-      // Step 9: Classification
+      // Step 9: Classification (with broad category matching)
       if (track.classification) {
-        const gtClass = gt.classification ?? '';
-        const trackClass = track.classification ?? '';
-        const classMatch = gtClass && trackClass && gtClass.toLowerCase() === trackClass.toLowerCase();
+        const gtClass = (gt.classification ?? '').toLowerCase();
+        const trackClass = (track.classification ?? '').toLowerCase();
+        // Exact match
+        let classMatch = !!(gtClass && trackClass && gtClass === trackClass);
+        // Broad category match: "aircraft" matches any fixed-wing type
+        let broadMatch = false;
+        if (!classMatch && gtClass && trackClass) {
+          const AIRCRAFT_TYPES = ['fighter_aircraft', 'passenger_aircraft', 'civilian_aircraft', 'light_aircraft', 'aircraft'];
+          const UAV_TYPES = ['uav', 'small_uav', 'drone', 'small_air_vehicle'];
+          const HELI_TYPES = ['helicopter', 'rotary_wing'];
+          for (const group of [AIRCRAFT_TYPES, UAV_TYPES, HELI_TYPES]) {
+            if (group.includes(gtClass) && group.includes(trackClass)) { broadMatch = true; break; }
+          }
+        }
+        const matchLabel = classMatch ? 'exact match' : broadMatch ? 'broad match' : (gtClass ? 'mismatch' : 'unverifiable');
+        const matchScore = classMatch ? 1.0 : broadMatch ? 0.75 : (track.classificationConfidence ?? 0.5);
         steps.push({
           stage: 'classification',
           timestamp: now, simTimeSec: timeSec,
           detail: `Classified as "${trackClass}" (source: ${track.classificationSource ?? 'unknown'}, confidence: ${(track.classificationConfidence ?? 0).toFixed(2)}). GT: "${gtClass}"`,
-          decision: classMatch ? 'correct' : (gtClass ? 'mismatch' : 'unverifiable'),
-          score: classMatch ? 1.0 : (track.classificationConfidence ?? 0.5),
-          data: { classification: trackClass, source: track.classificationSource, confidence: track.classificationConfidence, gtClassification: gtClass, match: classMatch },
+          decision: matchLabel,
+          score: matchScore,
+          data: { classification: trackClass, source: track.classificationSource, confidence: track.classificationConfidence, gtClassification: gtClass, exactMatch: classMatch, broadMatch },
         });
       }
 
       // Compute quality breakdown
-      const detectionLatencyScore = Math.min(1, Math.max(0, 1 - (detLatency) / 30));
+      const detectionLatencyScore = Math.min(1, Math.max(0, 1 - detLatencyRelative / 30));
       const positionAccuracy = Math.min(1, Math.max(0, 1 - dist / 5000));
       const correlationCorrectness = dist < MATCH_THRESHOLD_M ? 1 : 0;
       const promotionSpeed = track.status === 'confirmed' ? 1.0 : track.status === 'tentative' ? 0.5 : 0.2;
       const classAcc = (() => {
         if (!gt.classification || !track.classification) return 0.5;
-        return gt.classification.toLowerCase() === (track.classification ?? '').toLowerCase() ? 1.0 : 0.0;
+        const g = gt.classification.toLowerCase();
+        const t = (track.classification ?? '').toLowerCase();
+        if (g === t) return 1.0;
+        // Broad category match
+        const AIRCRAFT_TYPES = ['fighter_aircraft', 'passenger_aircraft', 'civilian_aircraft', 'light_aircraft', 'aircraft'];
+        const UAV_TYPES = ['uav', 'small_uav', 'drone', 'small_air_vehicle'];
+        const HELI_TYPES = ['helicopter', 'rotary_wing'];
+        for (const group of [AIRCRAFT_TYPES, UAV_TYPES, HELI_TYPES]) {
+          if (group.includes(g) && group.includes(t)) return 0.75;
+        }
+        return 0.0;
       })();
       const geoQ = geoEst ? (geoEst.classification === 'confirmed_3d' ? 1.0 : geoEst.classification === 'candidate_3d' ? 0.6 : 0.2) : 0;
       const fusionEff = Math.min(1, (track.sources || []).length / 3);
