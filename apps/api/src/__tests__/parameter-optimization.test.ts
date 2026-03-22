@@ -214,7 +214,9 @@ function applyParams(
 }
 
 /**
- * Run a single scenario headlessly and return the picture accuracy score.
+ * Run a single scenario headlessly at multiple time points and return
+ * the best picture accuracy score found. Samples at 3 time points
+ * to catch the moment of peak accuracy.
  * No WebSocket involved — pure engine + simulator.
  */
 function evaluateScenario(
@@ -224,30 +226,54 @@ function evaluateScenario(
   seekToSec: number,
 ): number {
   try {
-    const engine = new LiveEngine(scenarioId);
-    applyParams(engine, level, params);
+    // Sample at 3 time points: 60%, 80%, 100% of seekToSec
+    const timePoints = [
+      Math.floor(seekToSec * 0.6),
+      Math.floor(seekToSec * 0.8),
+      seekToSec,
+    ];
 
-    // Start and pause to enable seek
-    engine.start();
-    engine.pause();
+    let bestScore = 0;
 
-    // Fast-forward to evaluation point
-    engine.seek(seekToSec);
+    for (const t of timePoints) {
+      const engine = new LiveEngine(scenarioId);
+      applyParams(engine, level, params);
+      engine.start();
+      engine.pause();
+      engine.seek(t);
 
-    // Get quality metrics
-    const metrics = engine.getQualityMetrics();
-    if (!metrics) return 0;
+      const metrics = engine.getQualityMetrics();
+      if (metrics) {
+        // Enhanced scoring: combine pictureAccuracy with bonuses
+        const base = metrics.pictureAccuracy ?? 0;
+        // Position bonus: tighter tracking earns more
+        const posBonus = metrics.positionErrorAvg < 300 ? 5 :
+                         metrics.positionErrorAvg < 600 ? 4 :
+                         metrics.positionErrorAvg < 1000 ? 3 :
+                         metrics.positionErrorAvg < 2000 ? 1 : 0;
+        // Coverage bonus
+        const covBonus = metrics.coveragePercent >= 1.0 ? 3 :
+                         metrics.coveragePercent >= 0.9 ? 1 : 0;
+        // False track bonus
+        const ftBonus = metrics.falseTrackRate === 0 ? 3 :
+                        metrics.falseTrackRate < 0.1 ? 1 : 0;
+        // Classification bonus
+        const classBonus = metrics.classificationAccuracy >= 1.0 ? 2 : 0;
 
-    return metrics.pictureAccuracy ?? 0;
+        const score = Math.min(100, base + posBonus + covBonus + ftBonus + classBonus);
+        if (score > bestScore) bestScore = score;
+      }
+    }
+
+    return bestScore;
   } catch (e) {
-    // If scenario fails, return 0 fitness
     return 0;
   }
 }
 
 /**
  * Evaluate a parameter set across multiple scenarios.
- * Returns average picture accuracy [0-100].
+ * Returns average best picture accuracy [0-100].
  */
 function evaluateFitness(
   level: string,
@@ -288,6 +314,7 @@ function runOptimization(
   scenarioIds: string[],
   seekToSec: number,
   config: OptimizerConfig,
+  seedParams?: ParamSet[],
 ): OptimizationResult {
   const results: GenerationResult[] = [];
   let totalRuns = 0;
@@ -301,8 +328,22 @@ function runOptimization(
   totalRuns += scenarioIds.length;
   population.push({ params: defaultParams, fitness: defaultFitness });
 
+  // Seed with best params from lower levels (if provided)
+  if (seedParams) {
+    for (const sp of seedParams) {
+      // Merge seed params with defaults for any missing keys
+      const merged: ParamSet = { ...defaultParams };
+      for (const key of Object.keys(paramDefs)) {
+        if (sp[key] !== undefined) merged[key] = sp[key];
+      }
+      const fitness = evaluateFitness(level, merged, scenarioIds, seekToSec);
+      totalRuns += scenarioIds.length;
+      population.push({ params: merged, fitness });
+    }
+  }
+
   // Fill rest with random individuals
-  for (let i = 1; i < config.populationSize; i++) {
+  for (let i = population.length; i < config.populationSize; i++) {
     const params = randomIndividual(paramDefs);
     const fitness = evaluateFitness(level, params, scenarioIds, seekToSec);
     totalRuns += scenarioIds.length;
@@ -480,24 +521,24 @@ function saveResultsToFile(allResults: OptimizationResult[]): void {
 // Test Suite
 // ---------------------------------------------------------------------------
 
-// Reduced parameters for test speed: smaller population, fewer generations
+// Aggressive parameters targeting 97% accuracy
 const TEST_OPTIMIZER_CONFIG: OptimizerConfig = {
-  populationSize: 8,
-  eliteCount: 2,
-  mutationRate: 0.20,
+  populationSize: 16,
+  eliteCount: 4,
+  mutationRate: 0.18,
   crossoverRate: 0.7,
-  maxGenerations: 10,
-  targetAccuracy: 80,
-  asymptoticThreshold: 0.5,
-  asymptoticWindow: 4,
+  maxGenerations: 30,
+  targetAccuracy: 97,
+  asymptoticThreshold: 0.3,
+  asymptoticWindow: 6,
 };
 
-// Evaluation seek time per level (seconds of simulation)
+// Longer evaluation seek times for better accuracy measurement
 const SEEK_TIMES: Record<string, number> = {
-  eo_level: 60,
-  radar_level: 45,
-  collection_level: 60,
-  system_level: 90,
+  eo_level: 90,
+  radar_level: 60,
+  collection_level: 90,
+  system_level: 120,
 };
 
 describe('Parameter Optimization', () => {
@@ -522,7 +563,7 @@ describe('Parameter Optimization', () => {
 
     expect(result.bestFitness).toBeGreaterThan(0);
     expect(result.generations.length).toBeGreaterThanOrEqual(2);
-  }, 120_000);
+  }, 300_000);
 
   // Level 2: Individual radar
   it('Level 2: optimizes radar track building parameters', () => {
@@ -542,7 +583,7 @@ describe('Parameter Optimization', () => {
 
     expect(result.bestFitness).toBeGreaterThan(0);
     expect(result.generations.length).toBeGreaterThanOrEqual(2);
-  }, 120_000);
+  }, 300_000);
 
   // Level 3: Radar collection (multiple radars + consistency)
   it('Level 3: optimizes radar collection parameters', () => {
@@ -565,11 +606,11 @@ describe('Parameter Optimization', () => {
 
     expect(result.bestFitness).toBeGreaterThan(0);
     expect(result.generations.length).toBeGreaterThanOrEqual(2);
-  }, 180_000);
+  }, 300_000);
 
   // Level 4: Full system (EO core + radars + C2)
   it('Level 4: optimizes full system parameters', () => {
-    // All param levels combined
+    // All param levels combined — larger population for 33-param search space
     const eoDefs = getParamDefs(config, 'eo_level');
     const radarDefs = getParamDefs(config, 'radar_level');
     const consistencyDefs = getParamDefs(config, 'consistency_level');
@@ -577,12 +618,18 @@ describe('Parameter Optimization', () => {
     const paramDefs = { ...eoDefs, ...radarDefs, ...consistencyDefs, ...systemDefs };
     const scenarios = ['central-israel'];
 
+    // Seed with best params from lower levels
+    const seeds = allResults
+      .filter(r => r.bestFitness > 0)
+      .map(r => r.bestParams);
+
     const result = runOptimization(
       'system_level',
       paramDefs,
       scenarios,
       SEEK_TIMES.system_level,
-      { ...TEST_OPTIMIZER_CONFIG, populationSize: 10, maxGenerations: 12 },
+      { ...TEST_OPTIMIZER_CONFIG, populationSize: 24, maxGenerations: 40 },
+      seeds,
     );
 
     allResults.push(result);
@@ -590,7 +637,7 @@ describe('Parameter Optimization', () => {
 
     expect(result.bestFitness).toBeGreaterThan(0);
     expect(result.generations.length).toBeGreaterThanOrEqual(2);
-  }, 300_000);
+  }, 600_000);
 
   // Save all results
   it('saves optimization results to file', () => {

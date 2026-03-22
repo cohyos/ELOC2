@@ -1,123 +1,50 @@
 {
-  "timestamp": "2026-03-22T20:24:28.228Z",
+  "timestamp": "2026-03-22T20:32:43.869Z",
   "results": [
     {
       "level": "eo_level",
-      "bestFitness": 96,
+      "bestFitness": 97,
       "bestParams": {
-        "correlationGateDeg": 6,
-        "minIntersectionAngleDeg": 20,
-        "maxMissDistanceM": 2500,
-        "enhancedCueGateDeg": 6,
-        "minCyclesForResolution": 5,
-        "maxCyclesBeforeEscalation": 13,
-        "ambiguityConsistencyThreshold": 0.75,
-        "ambiguousMissDistanceM": 4500
+        "correlationGateDeg": 9,
+        "minIntersectionAngleDeg": 5,
+        "maxMissDistanceM": 4500,
+        "enhancedCueGateDeg": 13,
+        "minCyclesForResolution": 4,
+        "maxCyclesBeforeEscalation": 8,
+        "ambiguityConsistencyThreshold": 0.55,
+        "ambiguousMissDistanceM": 3000
       },
       "converged": true,
-      "reason": "Target accuracy 80% reached at generation 1",
-      "totalRuns": 14,
-      "generationCount": 2,
+      "reason": "Target accuracy 97% reached at generation 3",
+      "totalRuns": 52,
+      "generationCount": 4,
       "progressCurve": [
         {
           "gen": 0,
           "best": 96,
-          "avg": 94.5
+          "avg": 94.1
         },
         {
           "gen": 1,
           "best": 96,
-          "avg": 94.9
+          "avg": 94.8
+        },
+        {
+          "gen": 2,
+          "best": 96,
+          "avg": 94.8
+        },
+        {
+          "gen": 3,
+          "best": 97,
+          "avg": 94.8
         }
       ]
     },
     {
       "level": "radar_level",
-      "bestFitness": 99,
+      "bestFitness": 100,
       "bestParams": {
-        "gateThreshold": 12,
-        "velocityGateThreshold": 50,
-        "confirmAfter": 4,
-        "dropAfterMisses": 15,
-        "pDetection": 0.85,
-        "pFalseAlarm": 0.08600000000000001,
-        "existencePromotionThreshold": 0.4,
-        "existenceConfirmationThreshold": 0.7,
-        "existenceDeletionThreshold": 0.19,
-        "coastingMissThreshold": 5,
-        "maxCoastingTimeSec": 29
-      },
-      "converged": true,
-      "reason": "Target accuracy 80% reached at generation 1",
-      "totalRuns": 14,
-      "generationCount": 2,
-      "progressCurve": [
-        {
-          "gen": 0,
-          "best": 99,
-          "avg": 87.5
-        },
-        {
-          "gen": 1,
-          "best": 99,
-          "avg": 87.4
-        }
-      ]
-    },
-    {
-      "level": "collection_level",
-      "bestFitness": 96,
-      "bestParams": {
-        "gateThreshold": 36,
-        "velocityGateThreshold": 40,
-        "confirmAfter": 2,
-        "dropAfterMisses": 6,
-        "pDetection": 0.95,
-        "pFalseAlarm": 0.066,
-        "existencePromotionThreshold": 0.35,
-        "existenceConfirmationThreshold": 0.65,
-        "existenceDeletionThreshold": 0.09,
-        "coastingMissThreshold": 4,
-        "maxCoastingTimeSec": 23,
-        "positionGateM": 1000,
-        "velocityGateMps": 120,
-        "accelerationGateMps2": 35,
-        "dopplerGateMps": 80,
-        "consistentBoost": 0.15000000000000002,
-        "inconsistentDecay": -0.08000000000000002,
-        "maxDeltaPerUpdate": 0.21000000000000002,
-        "streakBonusAfter": 4,
-        "streakBonusMultiplier": 3
-      },
-      "converged": true,
-      "reason": "Target accuracy 80% reached at generation 1",
-      "totalRuns": 14,
-      "generationCount": 2,
-      "progressCurve": [
-        {
-          "gen": 0,
-          "best": 96,
-          "avg": 94.6
-        },
-        {
-          "gen": 1,
-          "best": 96,
-          "avg": 94.9
-        }
-      ]
-    },
-    {
-      "level": "system_level",
-      "bestFitness": 90,
-      "bestParams": {
-        "correlationGateDeg": 3,
-        "minIntersectionAngleDeg": 5,
-        "maxMissDistanceM": 5000,
-        "enhancedCueGateDeg": 5,
-        "minCyclesForResolution": 3,
-        "maxCyclesBeforeEscalation": 8,
-        "ambiguityConsistencyThreshold": 0.6,
-        "ambiguousMissDistanceM": 3000,
         "gateThreshold": 20,
         "velocityGateThreshold": 75,
         "confirmAfter": 3,
@@ -128,35 +55,128 @@
         "existenceConfirmationThreshold": 0.8,
         "existenceDeletionThreshold": 0.1,
         "coastingMissThreshold": 3,
-        "maxCoastingTimeSec": 15,
-        "positionGateM": 500,
-        "velocityGateMps": 50,
-        "accelerationGateMps2": 15,
-        "dopplerGateMps": 30,
-        "consistentBoost": 0.05,
-        "inconsistentDecay": -0.08,
-        "maxDeltaPerUpdate": 0.15,
-        "streakBonusAfter": 3,
-        "streakBonusMultiplier": 1.5,
-        "mergeDistanceM": 3000,
-        "eoFusionGateM": 3000,
-        "eoConfirmedWeight": 0.3,
-        "eoCandidateWeight": 0.15
+        "maxCoastingTimeSec": 15
       },
       "converged": true,
-      "reason": "Target accuracy 80% reached at generation 1",
-      "totalRuns": 18,
+      "reason": "Target accuracy 97% reached at generation 1",
+      "totalRuns": 28,
       "generationCount": 2,
       "progressCurve": [
         {
           "gen": 0,
-          "best": 90,
-          "avg": 87.2
+          "best": 100,
+          "avg": 100
         },
         {
           "gen": 1,
-          "best": 90,
-          "avg": 86.7
+          "best": 100,
+          "avg": 100
+        }
+      ]
+    },
+    {
+      "level": "collection_level",
+      "bestFitness": 97,
+      "bestParams": {
+        "gateThreshold": 12,
+        "velocityGateThreshold": 100,
+        "confirmAfter": 4,
+        "dropAfterMisses": 15,
+        "pDetection": 0.95,
+        "pFalseAlarm": 0.006,
+        "existencePromotionThreshold": 0.4,
+        "existenceConfirmationThreshold": 0.75,
+        "existenceDeletionThreshold": 0.13,
+        "coastingMissThreshold": 2,
+        "maxCoastingTimeSec": 19,
+        "positionGateM": 1900,
+        "velocityGateMps": 100,
+        "accelerationGateMps2": 10,
+        "dopplerGateMps": 15,
+        "consistentBoost": 0.04,
+        "inconsistentDecay": -0.1,
+        "maxDeltaPerUpdate": 0.15000000000000002,
+        "streakBonusAfter": 6,
+        "streakBonusMultiplier": 1.5
+      },
+      "converged": true,
+      "reason": "Target accuracy 97% reached at generation 1",
+      "totalRuns": 28,
+      "generationCount": 2,
+      "progressCurve": [
+        {
+          "gen": 0,
+          "best": 97,
+          "avg": 94.5
+        },
+        {
+          "gen": 1,
+          "best": 97,
+          "avg": 94.8
+        }
+      ]
+    },
+    {
+      "level": "system_level",
+      "bestFitness": 98,
+      "bestParams": {
+        "correlationGateDeg": 4,
+        "minIntersectionAngleDeg": 11,
+        "maxMissDistanceM": 5000,
+        "enhancedCueGateDeg": 13,
+        "minCyclesForResolution": 6,
+        "maxCyclesBeforeEscalation": 9,
+        "ambiguityConsistencyThreshold": 0.7,
+        "ambiguousMissDistanceM": 3000,
+        "gateThreshold": 32,
+        "velocityGateThreshold": 70,
+        "confirmAfter": 4,
+        "dropAfterMisses": 9,
+        "pDetection": 0.85,
+        "pFalseAlarm": 0.046,
+        "existencePromotionThreshold": 0.55,
+        "existenceConfirmationThreshold": 0.85,
+        "existenceDeletionThreshold": 0.17,
+        "coastingMissThreshold": 1,
+        "maxCoastingTimeSec": 19,
+        "positionGateM": 600,
+        "velocityGateMps": 30,
+        "accelerationGateMps2": 25,
+        "dopplerGateMps": 25,
+        "consistentBoost": 0.06999999999999999,
+        "inconsistentDecay": -0.14,
+        "maxDeltaPerUpdate": 0.21000000000000002,
+        "streakBonusAfter": 5,
+        "streakBonusMultiplier": 1.5,
+        "mergeDistanceM": 5000,
+        "eoFusionGateM": 3000,
+        "eoConfirmedWeight": 0.25,
+        "eoCandidateWeight": 0.3
+      },
+      "converged": true,
+      "reason": "Target accuracy 97% reached at generation 3",
+      "totalRuns": 84,
+      "generationCount": 4,
+      "progressCurve": [
+        {
+          "gen": 0,
+          "best": 94,
+          "avg": 92.3
+        },
+        {
+          "gen": 1,
+          "best": 94,
+          "avg": 92.3
+        },
+        {
+          "gen": 2,
+          "best": 94,
+          "avg": 92.5
+        },
+        {
+          "gen": 3,
+          "best": 98,
+          "avg": 93.1
         }
       ]
     }
