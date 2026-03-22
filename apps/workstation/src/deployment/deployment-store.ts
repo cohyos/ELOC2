@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useEditorStore } from '../stores/editor-store';
 
 /** A geographic point with optional elevation. */
 export interface GeoPoint {
@@ -160,6 +161,20 @@ export const useDeploymentStore = create<DeploymentState>((set, get) => ({
     const state = get();
     set({ optimizing: true, error: null });
 
+    // Derive deployment constraints from editor zones
+    const editorZones = useEditorStore.getState().operationalZones;
+    const exclusionZones = editorZones
+      .filter((z) => z.zoneType === 'exclusion')
+      .map((z) => z.polygon);
+    const threatCorridors = editorZones
+      .filter((z) => z.zoneType === 'threat_corridor')
+      .map((z) => z.polygon);
+    // Use engagement zone as scanned area if no explicit scanned area is set
+    const engagementZones = editorZones
+      .filter((z) => z.zoneType === 'engagement')
+      .map((z) => z.polygon);
+    const scannedArea = engagementZones.length > 0 ? engagementZones[0] : state.scannedArea;
+
     try {
       const res = await fetch('/api/deployment/optimize', {
         method: 'POST',
@@ -167,10 +182,10 @@ export const useDeploymentStore = create<DeploymentState>((set, get) => ({
         body: JSON.stringify({
           sensors: state.sensorInventory,
           constraints: {
-            scannedArea: state.scannedArea,
+            scannedArea,
             inclusionZones: state.inclusionZones,
-            exclusionZones: state.exclusionZones,
-            threatCorridors: state.threatCorridors,
+            exclusionZones: [...state.exclusionZones, ...exclusionZones],
+            threatCorridors: [...state.threatCorridors, ...threatCorridors],
             minCoveragePercent: 70,
             gridResolutionM: 2000,
           },

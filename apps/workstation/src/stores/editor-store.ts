@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { OperationalZone, ZoneType } from '@eloc2/domain';
 
 // ---------------------------------------------------------------------------
 // Editor types
@@ -85,7 +86,15 @@ export interface GeoVertex {
   lon: number;
 }
 
-export type ZoneDrawMode = 'operational-area' | 'exclusion-zone' | 'threat-zone';
+export type ZoneDrawMode = ZoneType; // 'threat_corridor' | 'exclusion' | 'engagement' | 'safe_passage'
+
+/** Human-readable labels for zone types */
+export const ZONE_TYPE_LABELS: Record<ZoneType, string> = {
+  threat_corridor: 'Threat Corridor',
+  exclusion: 'Exclusion Zone',
+  engagement: 'Engagement Zone',
+  safe_passage: 'Safe Passage',
+};
 
 // ---------------------------------------------------------------------------
 // Ballistic helpers
@@ -137,10 +146,8 @@ export interface EditorState {
   validationResult: { errors: string[]; warnings: string[] } | null;
   activeTargetId: string | null;
 
-  // Zones (ED-2)
-  operationalArea: GeoVertex[];
-  exclusionZones: GeoVertex[][];
-  threatZones: GeoVertex[][];
+  // Zones (unified OperationalZone[])
+  operationalZones: OperationalZone[];
   zoneDrawMode: ZoneDrawMode | null;
   zoneDrawVertices: GeoVertex[];
 
@@ -175,10 +182,10 @@ export interface EditorState {
   buildScenarioDefinition: () => ScenarioExport;
   loadFromScenarioDefinition: (def: ScenarioExport) => void;
 
-  // Zone actions (ED-2)
-  setOperationalArea: (vertices: GeoVertex[]) => void;
-  addExclusionZone: (vertices: GeoVertex[]) => void;
-  addThreatZone: (vertices: GeoVertex[]) => void;
+  // Zone actions
+  addZone: (zone: OperationalZone) => void;
+  removeZone: (id: string) => void;
+  updateZone: (id: string, updates: Partial<OperationalZone>) => void;
   clearZones: () => void;
   startZoneDraw: (mode: ZoneDrawMode) => void;
   addZoneVertex: (vertex: GeoVertex) => void;
@@ -251,6 +258,7 @@ export interface ScenarioExport {
     targetId?: string;
     durationSec?: number;
   }>;
+  operationalZones?: OperationalZone[];
 }
 
 // ---------------------------------------------------------------------------
@@ -271,9 +279,7 @@ const initialState = {
   editMode: 'select' as EditorState['editMode'],
   validationResult: null as EditorState['validationResult'],
   activeTargetId: null as string | null,
-  operationalArea: [] as GeoVertex[],
-  exclusionZones: [] as GeoVertex[][],
-  threatZones: [] as GeoVertex[][],
+  operationalZones: [] as OperationalZone[],
   zoneDrawMode: null as ZoneDrawMode | null,
   zoneDrawVertices: [] as GeoVertex[],
 };
@@ -426,17 +432,22 @@ export const useEditorStore = create<EditorState>((set) => ({
       ),
     })),
 
-  // Zone actions (ED-2)
-  setOperationalArea: (vertices) => set({ operationalArea: vertices }),
+  // Zone actions
+  addZone: (zone) =>
+    set((s) => ({ operationalZones: [...s.operationalZones, zone] })),
 
-  addExclusionZone: (vertices) =>
-    set((s) => ({ exclusionZones: [...s.exclusionZones, vertices] })),
+  removeZone: (id) =>
+    set((s) => ({ operationalZones: s.operationalZones.filter((z) => z.id !== id) })),
 
-  addThreatZone: (vertices) =>
-    set((s) => ({ threatZones: [...s.threatZones, vertices] })),
+  updateZone: (id, updates) =>
+    set((s) => ({
+      operationalZones: s.operationalZones.map((z) =>
+        z.id === id ? { ...z, ...updates } : z
+      ),
+    })),
 
   clearZones: () =>
-    set({ operationalArea: [], exclusionZones: [], threatZones: [] }),
+    set({ operationalZones: [] }),
 
   startZoneDraw: (mode) =>
     set({ editMode: 'draw-zone', zoneDrawMode: mode, zoneDrawVertices: [] }),
@@ -446,28 +457,26 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   finishZoneDraw: () => {
     const s = useEditorStore.getState();
-    if (s.zoneDrawVertices.length < 3) {
+    if (s.zoneDrawVertices.length < 3 || !s.zoneDrawMode) {
       set({ editMode: 'select', zoneDrawMode: null, zoneDrawVertices: [] });
       return;
     }
-    const vertices = [...s.zoneDrawVertices];
-    if (s.zoneDrawMode === 'operational-area') {
-      set({ operationalArea: vertices, editMode: 'select', zoneDrawMode: null, zoneDrawVertices: [] });
-    } else if (s.zoneDrawMode === 'exclusion-zone') {
-      set((prev) => ({
-        exclusionZones: [...prev.exclusionZones, vertices],
-        editMode: 'select',
-        zoneDrawMode: null,
-        zoneDrawVertices: [],
-      }));
-    } else if (s.zoneDrawMode === 'threat-zone') {
-      set((prev) => ({
-        threatZones: [...prev.threatZones, vertices],
-        editMode: 'select',
-        zoneDrawMode: null,
-        zoneDrawVertices: [],
-      }));
-    }
+    const zoneType = s.zoneDrawMode;
+    const existing = s.operationalZones.filter((z) => z.zoneType === zoneType);
+    const label = ZONE_TYPE_LABELS[zoneType];
+    const name = `${label} ${existing.length + 1}`;
+    const zone: OperationalZone = {
+      id: crypto.randomUUID(),
+      name,
+      zoneType,
+      polygon: s.zoneDrawVertices.map((v) => ({ lat: v.lat, lon: v.lon })),
+    };
+    set((prev) => ({
+      operationalZones: [...prev.operationalZones, zone],
+      editMode: 'select',
+      zoneDrawMode: null,
+      zoneDrawVertices: [],
+    }));
   },
 
   cancelZoneDraw: () =>
@@ -552,6 +561,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         targetId: a.targetId,
         durationSec: a.durationSec,
       })),
+      operationalZones: s.operationalZones.length > 0 ? s.operationalZones : undefined,
     };
   },
 
@@ -643,6 +653,18 @@ export const useEditorStore = create<EditorState>((set) => ({
           sensorId: a.sensorId,
           targetId: a.targetId,
           durationSec: a.durationSec,
+        });
+      }
+    }
+
+    if (Array.isArray(def.operationalZones)) {
+      for (const z of def.operationalZones) {
+        store.addZone({
+          id: z.id || crypto.randomUUID(),
+          name: z.name || 'Zone',
+          zoneType: z.zoneType,
+          polygon: z.polygon,
+          color: z.color,
         });
       }
     }

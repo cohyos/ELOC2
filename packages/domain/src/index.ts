@@ -94,3 +94,13 @@ export type {
 // Lineage
 export type { LineageChain } from './lineage.js';
 export { createLineageEntry } from './lineage.js';
+
+// Track quality & enhanced types
+export type {
+  DetectionQualityFlags,
+  BeamMetadata,
+  MotionModelStatus,
+  TrackQuality,
+  ClassificationHypothesis,
+} from './track-quality.js';
+export { createDefaultTrackQuality } from './track-quality.js';
