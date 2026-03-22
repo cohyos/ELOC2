@@ -24,9 +24,10 @@ const btnStyle: React.CSSProperties = {
 
 interface EditorHeaderProps {
   onBack: () => void;
+  onLibraries?: () => void;
 }
 
-export function EditorHeader({ onBack }: EditorHeaderProps) {
+export function EditorHeader({ onBack, onLibraries }: EditorHeaderProps) {
   const scenarioName = useEditorStore((s) => s.scenarioName);
   const setScenarioName = useEditorStore((s) => s.setScenarioName);
   const validationResult = useEditorStore((s) => s.validationResult);
@@ -320,6 +321,12 @@ export function EditorHeader({ onBack }: EditorHeaderProps) {
           </div>
         )}
       </div>
+      <button
+        style={{ ...btnStyle, background: '#2a2a4e', color: '#ffaa44', border: '1px solid #ffaa4444' }}
+        onClick={onLibraries}
+      >
+        Libraries
+      </button>
       <button style={btnStyle} onClick={handleValidate}>
         Validate
       </button>
