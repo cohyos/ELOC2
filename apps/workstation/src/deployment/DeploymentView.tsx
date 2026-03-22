@@ -5,6 +5,7 @@ import { DeploymentPanel } from './DeploymentPanel';
 import { DeploymentMetrics } from './DeploymentMetrics';
 import { useDeploymentStore } from './deployment-store';
 import type { GeoPolygon } from './deployment-store';
+import { useEditorStore } from '../stores/editor-store';
 import { enableCtrlBoxZoom } from '../map/ctrl-box-zoom';
 import { LeafletAdapter } from '../map/map-adapter';
 
@@ -51,6 +52,7 @@ export function DeploymentMap() {
   const exclusionZones = useDeploymentStore(s => s.exclusionZones);
   const threatCorridors = useDeploymentStore(s => s.threatCorridors);
   const placedSensors = useDeploymentStore(s => s.placedSensors);
+  const editorZones = useEditorStore(s => s.operationalZones);
   const drawMode = useDeploymentStore(s => s.drawMode);
   const drawVertices = useDeploymentStore(s => s.drawVertices);
 
@@ -158,7 +160,41 @@ export function DeploymentMap() {
         interactive: false,
       }).addTo(zoneGroupRef.current);
     }
-  }, [scannedArea, exclusionZones, threatCorridors]);
+
+    // Editor operational zones (unified rendering)
+    const editorZoneStyles: Record<string, { fill: string; stroke: string; dash: string }> = {
+      threat_corridor: { fill: 'rgba(255,50,50,0.12)', stroke: 'rgba(255,50,50,0.7)', dash: '8,4' },
+      exclusion: { fill: 'rgba(255,0,0,0.08)', stroke: 'rgba(255,0,0,0.6)', dash: '12,4,4,4' },
+      engagement: { fill: 'rgba(0,200,100,0.08)', stroke: 'rgba(0,200,100,0.5)', dash: '6,3' },
+      safe_passage: { fill: 'rgba(0,150,255,0.08)', stroke: 'rgba(0,150,255,0.5)', dash: '4,4' },
+    };
+    for (const zone of editorZones) {
+      if (!zone.polygon || zone.polygon.length < 3) continue;
+      const latlngs = zone.polygon
+        .filter(v => Number.isFinite(v.lat) && Number.isFinite(v.lon))
+        .map(v => [v.lat, v.lon] as [number, number]);
+      if (latlngs.length < 3) continue;
+      const style = editorZoneStyles[zone.zoneType] ?? editorZoneStyles.engagement;
+      const fillColor = zone.color ? `${zone.color}20` : style.fill;
+      const strokeColor = zone.color ?? style.stroke;
+      L.polygon(latlngs, {
+        fillColor, fillOpacity: 1, color: strokeColor,
+        weight: 2, dashArray: style.dash, interactive: false,
+      }).addTo(zoneGroupRef.current);
+      // Label
+      if (zone.name) {
+        const centLat = latlngs.reduce((s, p) => s + p[0], 0) / latlngs.length;
+        const centLon = latlngs.reduce((s, p) => s + p[1], 0) / latlngs.length;
+        const icon = L.divIcon({
+          className: '',
+          html: `<span style="font:bold 10px monospace;color:${strokeColor};white-space:nowrap;text-shadow:0 0 3px #000,0 0 6px #000;">${zone.name}</span>`,
+          iconSize: [100, 14],
+          iconAnchor: [50, 7],
+        });
+        L.marker([centLat, centLon], { icon, interactive: false }).addTo(zoneGroupRef.current);
+      }
+    }
+  }, [scannedArea, exclusionZones, threatCorridors, editorZones]);
 
   // Update sensor coverage circles + markers
   useEffect(() => {

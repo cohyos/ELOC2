@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useEditorStore } from '../stores/editor-store';
+import { useEditorStore, ZONE_TYPE_LABELS } from '../stores/editor-store';
 import type { EditorSensor, EditorTarget, EditorWaypoint, GeoVertex } from '../stores/editor-store';
+import type { OperationalZone } from '@eloc2/domain';
 import { SENSOR_TEMPLATES } from './sensor-templates';
 import { enableCtrlBoxZoom } from '../map/ctrl-box-zoom';
 import { LeafletAdapter } from '../map/map-adapter';
@@ -18,14 +19,22 @@ const SENSOR_COLORS: Record<string, string> = {
 };
 
 const ZONE_COLORS: Record<string, string> = {
-  operational: '#00cc4466',
-  exclusion: '#ff333366',
-  threat: '#ff880066',
+  threat_corridor: 'rgba(255,50,50,0.12)',
+  exclusion: 'rgba(255,0,0,0.08)',
+  engagement: 'rgba(0,200,100,0.08)',
+  safe_passage: 'rgba(0,150,255,0.08)',
 };
 const ZONE_OUTLINE_COLORS: Record<string, string> = {
-  operational: '#00cc44',
-  exclusion: '#ff3333',
-  threat: '#ff8800',
+  threat_corridor: 'rgba(255,50,50,0.7)',
+  exclusion: 'rgba(255,0,0,0.6)',
+  engagement: 'rgba(0,200,100,0.5)',
+  safe_passage: 'rgba(0,150,255,0.5)',
+};
+const ZONE_DASH: Record<string, string> = {
+  threat_corridor: '8,4',
+  exclusion: '12,4,4,4',
+  engagement: '6,3',
+  safe_passage: '4,4',
 };
 
 // ---------------------------------------------------------------------------
@@ -91,9 +100,7 @@ export function EditorMap() {
   const editMode = useEditorStore((s) => s.editMode);
   const activeTargetId = useEditorStore((s) => s.activeTargetId);
   const selectedItemId = useEditorStore((s) => s.selectedItemId);
-  const operationalArea = useEditorStore((s) => s.operationalArea);
-  const exclusionZones = useEditorStore((s) => s.exclusionZones);
-  const threatZones = useEditorStore((s) => s.threatZones);
+  const operationalZones = useEditorStore((s) => s.operationalZones);
   const zoneDrawVertices = useEditorStore((s) => s.zoneDrawVertices);
   const zoneDrawMode = useEditorStore((s) => s.zoneDrawMode);
 
@@ -418,24 +425,41 @@ export function EditorMap() {
     if (!layersReady || !zoneGroupRef.current) return;
     zoneGroupRef.current.clearLayers();
 
-    const drawZonePolygon = (vertices: GeoVertex[], zoneType: string) => {
-      if (vertices.length < 3) return;
-      const latlngs = vertices.map((v) => [v.lat, v.lon] as [number, number]);
+    for (const zone of operationalZones) {
+      if (!zone.polygon || zone.polygon.length < 3) continue;
+      const latlngs = zone.polygon
+        .filter((v) => Number.isFinite(v.lat) && Number.isFinite(v.lon))
+        .map((v) => [v.lat, v.lon] as [number, number]);
+      if (latlngs.length < 3) continue;
+
+      const fillColor = zone.color ? `${zone.color}20` : ZONE_COLORS[zone.zoneType] ?? ZONE_COLORS.engagement;
+      const strokeColor = zone.color ?? ZONE_OUTLINE_COLORS[zone.zoneType] ?? ZONE_OUTLINE_COLORS.engagement;
+      const dash = ZONE_DASH[zone.zoneType] ?? '6,3';
+
       const polygon = L.polygon(latlngs, {
-        fillColor: ZONE_COLORS[zoneType],
-        fillOpacity: 0.3,
-        color: ZONE_OUTLINE_COLORS[zoneType],
+        fillColor,
+        fillOpacity: 1,
+        color: strokeColor,
         weight: 2,
-        dashArray: '8 4',
+        dashArray: dash,
         interactive: false,
       });
       zoneGroupRef.current!.addLayer(polygon);
-    };
 
-    if (operationalArea.length >= 3) drawZonePolygon(operationalArea, 'operational');
-    for (const zone of exclusionZones) drawZonePolygon(zone, 'exclusion');
-    for (const zone of threatZones) drawZonePolygon(zone, 'threat');
-  }, [operationalArea, exclusionZones, threatZones, layersReady]);
+      // Zone name label at centroid
+      if (zone.name) {
+        const centLat = latlngs.reduce((s, p) => s + p[0], 0) / latlngs.length;
+        const centLon = latlngs.reduce((s, p) => s + p[1], 0) / latlngs.length;
+        const icon = L.divIcon({
+          className: '',
+          html: `<span style="font:bold 10px monospace;color:${strokeColor};white-space:nowrap;text-shadow:0 0 3px #000,0 0 6px #000;">${zone.name}</span>`,
+          iconSize: [100, 14],
+          iconAnchor: [50, 7],
+        });
+        L.marker([centLat, centLon], { icon, interactive: false }).addTo(zoneGroupRef.current!);
+      }
+    }
+  }, [operationalZones, layersReady]);
 
   // Update cursor based on edit mode
   useEffect(() => {
@@ -475,9 +499,10 @@ export function EditorMap() {
 
   // Mode indicator overlay
   const zoneModeLabels: Record<string, string> = {
-    'operational-area': 'Click to define operational area vertices',
-    'exclusion-zone': 'Click to define exclusion zone vertices',
-    'threat-zone': 'Click to define threat zone vertices',
+    threat_corridor: 'Click to define threat corridor vertices',
+    exclusion: 'Click to define exclusion zone vertices',
+    engagement: 'Click to define engagement zone vertices',
+    safe_passage: 'Click to define safe passage vertices',
   };
 
   const modeLabel =
@@ -577,20 +602,29 @@ export function EditorMap() {
           }}
         >
           <button
-            onClick={() => useEditorStore.getState().startZoneDraw('operational-area')}
-            style={{ background: '#1a1a2ecc', color: '#00cc44', border: '1px solid #00cc4466', borderRadius: '3px', padding: '4px 8px', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}
-          >+ Op Area</button>
+            onClick={() => useEditorStore.getState().startZoneDraw('threat_corridor')}
+            title="Threat Corridor — Deployment optimizer prioritizes sensor coverage of this area (20% scoring weight)"
+            style={{ background: '#1a1a2ecc', color: '#ff3232', border: '1px solid #ff323266', borderRadius: '3px', padding: '4px 8px', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}
+          >+ Threat</button>
           <button
-            onClick={() => useEditorStore.getState().startZoneDraw('exclusion-zone')}
-            style={{ background: '#1a1a2ecc', color: '#ff3333', border: '1px solid #ff333366', borderRadius: '3px', padding: '4px 8px', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}
+            onClick={() => useEditorStore.getState().startZoneDraw('exclusion')}
+            title="Exclusion Zone — Sensors cannot be placed inside this area during deployment optimization"
+            style={{ background: '#1a1a2ecc', color: '#ff0000', border: '1px solid #ff000066', borderRadius: '3px', padding: '4px 8px', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}
           >+ Exclusion</button>
           <button
-            onClick={() => useEditorStore.getState().startZoneDraw('threat-zone')}
-            style={{ background: '#1a1a2ecc', color: '#ff8800', border: '1px solid #ff880066', borderRadius: '3px', padding: '4px 8px', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}
-          >+ Threat</button>
-          {(operationalArea.length > 0 || exclusionZones.length > 0 || threatZones.length > 0) && (
+            onClick={() => useEditorStore.getState().startZoneDraw('engagement')}
+            title="Engagement Zone — Marks the primary engagement area on the map (visual reference)"
+            style={{ background: '#1a1a2ecc', color: '#00c864', border: '1px solid #00c86466', borderRadius: '3px', padding: '4px 8px', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}
+          >+ Engage</button>
+          <button
+            onClick={() => useEditorStore.getState().startZoneDraw('safe_passage')}
+            title="Safe Passage — Marks safe transit corridors on the map (visual reference)"
+            style={{ background: '#1a1a2ecc', color: '#0096ff', border: '1px solid #0096ff66', borderRadius: '3px', padding: '4px 8px', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}
+          >+ Safe</button>
+          {operationalZones.length > 0 && (
             <button
               onClick={() => useEditorStore.getState().clearZones()}
+              title="Remove all zones"
               style={{ background: '#1a1a2ecc', color: '#888', border: '1px solid #44444466', borderRadius: '3px', padding: '4px 8px', fontSize: '10px', fontWeight: 600, cursor: 'pointer' }}
             >Clear Zones</button>
           )}

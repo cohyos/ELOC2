@@ -105,6 +105,40 @@ export interface LiveEvent {
   data?: Record<string, unknown>;
 }
 
+// ---------------------------------------------------------------------------
+// Decision Chain — traces GT target through the full pipeline
+// ---------------------------------------------------------------------------
+
+export interface DecisionChainStep {
+  stage: 'ground_truth' | 'detection' | 'cover_zone' | 'correlation' | 'fusion' | 'promotion' | 'eo_tasking' | 'eo_investigation' | 'geometry' | 'classification';
+  timestamp: number;
+  simTimeSec: number;
+  detail: string;
+  decision?: string;      // what was decided
+  alternatives?: string;  // what else was considered
+  score?: number;         // scoring metric for this step (0-1)
+  data?: Record<string, unknown>;
+}
+
+export interface DecisionChainEntry {
+  id: string;
+  targetId: string;       // GT target ID
+  targetName: string;
+  trackId: string;        // associated SystemTrack ID
+  simTimeSec: number;
+  steps: DecisionChainStep[];
+  chainQuality: number;   // overall quality score 0-1
+  qualityBreakdown: {
+    detectionLatency: number;     // seconds from target active to first detection
+    positionAccuracy: number;     // 0-1, based on error vs threshold
+    correlationCorrectness: number; // 1 if track matches GT, 0 if false
+    promotionSpeed: number;       // 0-1, how fast tentative→confirmed
+    classificationAccuracy: number; // 0-1
+    geometryQuality: number;      // 0-1, based on triangulation quality
+    fusionEfficiency: number;     // 0-1, based on source diversity
+  };
+}
+
 type WsClient = { send: (data: string) => void };
 
 export interface ConnectedUsers {
@@ -436,6 +470,10 @@ export class LiveEngine {
     scanDirection: 1 | -1;     // 1 = clockwise, -1 = counter-clockwise
     idleTickCount: number;      // ticks with no candidates (activate after 3)
   }>();
+
+  // ── Decision Chain Log ───────────────────────────────────────────────
+  private decisionChains: DecisionChainEntry[] = [];
+  private readonly MAX_DECISION_CHAINS = 200;
 
   // ── Quality Assessment state ──────────────────────────────────────────
   /** Time (sim seconds) when each target was first associated with a system track */
@@ -816,6 +854,7 @@ export class LiveEngine {
       ),
       qualityMetrics: this.cachedQualityMetrics ?? undefined,
       eoAllocationQuality: this.cachedEoAllocationQuality ?? undefined,
+      decisionChains: this.decisionChains.length > 0 ? this.decisionChains : undefined,
       beforeAfterComparison: this.getBeforeAfterComparison(),
       fovOverlaps: this.fovOverlaps,
       bearingAssociations: this.bearingAssociations.filter(a => a.ambiguous || a.confidence < 1.0),
@@ -1737,6 +1776,11 @@ export class LiveEngine {
 
     // Quality assessment: compute metrics comparing tracks vs ground truth
     this.computeQualityMetrics();
+
+    // Decision chain log: build every 5 seconds
+    if (Math.floor(result.currentTimeSec) % 5 === 0) {
+      this.buildDecisionChains();
+    }
 
     // EO allocation quality (REQ-10)
     this.computeEoAllocationQuality();
@@ -3822,6 +3866,240 @@ export class LiveEngine {
     });
   }
 
+  // ── Decision Chain Builder ─────────────────────────────────────────
+
+  getDecisionChains(): DecisionChainEntry[] {
+    return this.decisionChains;
+  }
+
+  /**
+   * Build decision chain entries that trace each GT target through the pipeline.
+   * Called periodically (every 5 seconds) to avoid overhead.
+   */
+  private buildDecisionChains(): void {
+    const groundTruth = this.getGroundTruth();
+    if (groundTruth.length === 0) return;
+
+    const tracks = this.state.tracks.filter(t => t.status !== 'dropped');
+    const timeSec = this.state.elapsedSec;
+    const now = Date.now();
+    const MATCH_THRESHOLD_M = 5000;
+
+    // Build GT-to-track mapping (reuse quality assessment logic)
+    const gtToTrack = new Map<string, SystemTrack>();
+    const trackDistances: Array<{ gt: any; track: SystemTrack; dist: number }> = [];
+
+    for (const gt of groundTruth) {
+      if (!gt.active) continue;
+      for (const track of tracks) {
+        const dist = LiveEngine.haversineMeters(
+          track.state.lat, track.state.lon,
+          gt.position.lat, gt.position.lon,
+        );
+        if (dist < MATCH_THRESHOLD_M) {
+          trackDistances.push({ gt, track, dist });
+        }
+      }
+    }
+    trackDistances.sort((a, b) => a.dist - b.dist);
+    const assignedTargets = new Set<string>();
+    const assignedTracks = new Set<string>();
+    for (const entry of trackDistances) {
+      if (assignedTargets.has(entry.gt.targetId) || assignedTracks.has(entry.track.systemTrackId as string)) continue;
+      gtToTrack.set(entry.gt.targetId, entry.track);
+      assignedTargets.add(entry.gt.targetId);
+      assignedTracks.add(entry.track.systemTrackId as string);
+    }
+
+    const chains: DecisionChainEntry[] = [];
+
+    for (const gt of groundTruth) {
+      if (!gt.active) continue;
+      const track = gtToTrack.get(gt.targetId);
+      const steps: DecisionChainStep[] = [];
+
+      // Step 1: Ground Truth
+      steps.push({
+        stage: 'ground_truth',
+        timestamp: now, simTimeSec: timeSec,
+        detail: `Target "${gt.name || gt.targetId}" active at (${gt.position.lat.toFixed(3)}, ${gt.position.lon.toFixed(3)}, ${gt.position.alt.toFixed(0)}m)`,
+        data: { classification: gt.classification, speed: gt.speed, headingDeg: gt.headingDeg },
+      });
+
+      if (!track) {
+        // No track associated — detection failed
+        steps.push({
+          stage: 'detection',
+          timestamp: now, simTimeSec: timeSec,
+          detail: 'No system track associated — target not yet detected or track dropped',
+          decision: 'undetected',
+          score: 0,
+        });
+        chains.push({
+          id: `chain-${gt.targetId}-${timeSec}`,
+          targetId: gt.targetId,
+          targetName: gt.name || gt.targetId,
+          trackId: '',
+          simTimeSec: timeSec,
+          steps,
+          chainQuality: 0,
+          qualityBreakdown: { detectionLatency: 0, positionAccuracy: 0, correlationCorrectness: 0, promotionSpeed: 0, classificationAccuracy: 0, geometryQuality: 0, fusionEfficiency: 0 },
+        });
+        continue;
+      }
+
+      const trackId = track.systemTrackId as string;
+      const dist = LiveEngine.haversineMeters(track.state.lat, track.state.lon, gt.position.lat, gt.position.lon);
+
+      // Step 2: Detection
+      const firstDetSec = this.firstDetectionTime.get(gt.targetId);
+      const detLatency = firstDetSec != null ? firstDetSec : timeSec;
+      steps.push({
+        stage: 'detection',
+        timestamp: now, simTimeSec: timeSec,
+        detail: `Detected by sensors: [${(track.sources || []).join(', ')}]. First detection at T+${detLatency.toFixed(1)}s`,
+        decision: 'detected',
+        score: Math.min(1, Math.max(0, 1 - detLatency / 30)), // 0s=1.0, 30s+=0.0
+        data: { sources: track.sources, firstDetectionSec: detLatency },
+      });
+
+      // Step 3: Correlation
+      const corrMethod = track.lineage?.find(l => l.description?.includes('correlation'))?.description ?? 'nearest-neighbor gating';
+      steps.push({
+        stage: 'correlation',
+        timestamp: now, simTimeSec: timeSec,
+        detail: `Track ${trackId} associated via ${corrMethod}. Position error: ${dist.toFixed(0)}m`,
+        decision: dist < 1000 ? 'good match' : dist < 3000 ? 'marginal match' : 'poor match',
+        score: Math.min(1, Math.max(0, 1 - dist / 5000)),
+        data: { positionErrorM: dist, correlationMethod: corrMethod },
+      });
+
+      // Step 4: Fusion
+      const fusionMode = track.fusionMode ?? 'basic';
+      const regHealth = track.registrationHealth ?? 'unknown';
+      steps.push({
+        stage: 'fusion',
+        timestamp: now, simTimeSec: timeSec,
+        detail: `Fusion mode: ${fusionMode}, registration health: ${regHealth}. Confidence: ${track.confidence.toFixed(2)}`,
+        decision: fusionMode,
+        alternatives: 'basic | conservative | centralized',
+        score: track.confidence,
+        data: { fusionMode, registrationHealth: regHealth, confidence: track.confidence, sourceDiversity: (track.sources || []).length },
+      });
+
+      // Step 5: Promotion
+      const statusScore = track.status === 'confirmed' ? 1.0 : track.status === 'tentative' ? 0.5 : track.status === 'coasting' ? 0.3 : 0;
+      steps.push({
+        stage: 'promotion',
+        timestamp: now, simTimeSec: timeSec,
+        detail: `Track status: ${track.status}. Existence probability: ${(track.existenceProbability ?? track.confidence).toFixed(2)}`,
+        decision: track.status,
+        score: statusScore,
+        data: { status: track.status, existenceProbability: track.existenceProbability },
+      });
+
+      // Step 6: EO Tasking (if applicable)
+      const trackTasks = this.state.tasks.filter(t => t.systemTrackId === track.systemTrackId);
+      if (trackTasks.length > 0) {
+        const bestTask = trackTasks.reduce((a, b) => (a.scoreBreakdown?.total ?? 0) > (b.scoreBreakdown?.total ?? 0) ? a : b);
+        steps.push({
+          stage: 'eo_tasking',
+          timestamp: now, simTimeSec: timeSec,
+          detail: `EO tasked: sensor ${bestTask.sensorId}, score ${(bestTask.scoreBreakdown?.total ?? 0).toFixed(2)}`,
+          decision: `assigned to ${bestTask.sensorId}`,
+          score: Math.min(1, (bestTask.scoreBreakdown?.total ?? 0) / 10),
+          data: { taskId: bestTask.taskId, sensorId: bestTask.sensorId, scoreBreakdown: bestTask.scoreBreakdown },
+        });
+      }
+
+      // Step 7: EO Investigation
+      if (track.eoInvestigationStatus && track.eoInvestigationStatus !== 'none') {
+        const invScore = track.eoInvestigationStatus === 'confirmed' ? 1.0 : track.eoInvestigationStatus === 'in_progress' ? 0.6 : 0.3;
+        steps.push({
+          stage: 'eo_investigation',
+          timestamp: now, simTimeSec: timeSec,
+          detail: `EO investigation status: ${track.eoInvestigationStatus}`,
+          decision: track.eoInvestigationStatus,
+          score: invScore,
+        });
+      }
+
+      // Step 8: Geometry
+      const geoEst = this.state.geometryEstimates.get(trackId);
+      if (geoEst) {
+        const geoScore = geoEst.classification === 'confirmed_3d' ? 1.0 : geoEst.classification === 'candidate_3d' ? 0.6 : 0.2;
+        steps.push({
+          stage: 'geometry',
+          timestamp: now, simTimeSec: timeSec,
+          detail: `Geometry: ${geoEst.classification}, quality: ${geoEst.quality ?? 'unknown'}, intersection angle: ${(geoEst.intersectionAngleDeg ?? 0).toFixed(1)}°`,
+          decision: geoEst.classification,
+          score: geoScore,
+          data: { classification: geoEst.classification, quality: geoEst.quality, intersectionAngleDeg: geoEst.intersectionAngleDeg },
+        });
+      }
+
+      // Step 9: Classification
+      if (track.classification) {
+        const gtClass = gt.classification ?? '';
+        const trackClass = track.classification ?? '';
+        const classMatch = gtClass && trackClass && gtClass.toLowerCase() === trackClass.toLowerCase();
+        steps.push({
+          stage: 'classification',
+          timestamp: now, simTimeSec: timeSec,
+          detail: `Classified as "${trackClass}" (source: ${track.classificationSource ?? 'unknown'}, confidence: ${(track.classificationConfidence ?? 0).toFixed(2)}). GT: "${gtClass}"`,
+          decision: classMatch ? 'correct' : (gtClass ? 'mismatch' : 'unverifiable'),
+          score: classMatch ? 1.0 : (track.classificationConfidence ?? 0.5),
+          data: { classification: trackClass, source: track.classificationSource, confidence: track.classificationConfidence, gtClassification: gtClass, match: classMatch },
+        });
+      }
+
+      // Compute quality breakdown
+      const detectionLatencyScore = Math.min(1, Math.max(0, 1 - (detLatency) / 30));
+      const positionAccuracy = Math.min(1, Math.max(0, 1 - dist / 5000));
+      const correlationCorrectness = dist < MATCH_THRESHOLD_M ? 1 : 0;
+      const promotionSpeed = track.status === 'confirmed' ? 1.0 : track.status === 'tentative' ? 0.5 : 0.2;
+      const classAcc = (() => {
+        if (!gt.classification || !track.classification) return 0.5;
+        return gt.classification.toLowerCase() === (track.classification ?? '').toLowerCase() ? 1.0 : 0.0;
+      })();
+      const geoQ = geoEst ? (geoEst.classification === 'confirmed_3d' ? 1.0 : geoEst.classification === 'candidate_3d' ? 0.6 : 0.2) : 0;
+      const fusionEff = Math.min(1, (track.sources || []).length / 3);
+
+      const chainQuality = (
+        detectionLatencyScore * 0.15 +
+        positionAccuracy * 0.20 +
+        correlationCorrectness * 0.15 +
+        promotionSpeed * 0.15 +
+        classAcc * 0.10 +
+        geoQ * 0.15 +
+        fusionEff * 0.10
+      );
+
+      chains.push({
+        id: `chain-${gt.targetId}-${timeSec}`,
+        targetId: gt.targetId,
+        targetName: gt.name || gt.targetId,
+        trackId,
+        simTimeSec: timeSec,
+        steps,
+        chainQuality,
+        qualityBreakdown: {
+          detectionLatency: detectionLatencyScore,
+          positionAccuracy,
+          correlationCorrectness,
+          promotionSpeed,
+          classificationAccuracy: classAcc,
+          geometryQuality: geoQ,
+          fusionEfficiency: fusionEff,
+        },
+      });
+    }
+
+    this.decisionChains = chains;
+    // Also archive to event log (sampled — keep last MAX)
+    // Decision chains are computed on-demand, not accumulated
+  }
+
   // ── Quality Assessment ─────────────────────────────────────────────
 
   /**
@@ -4644,6 +4922,8 @@ export class LiveEngine {
       operationalZones: (this.scenario as any).operationalZones ?? [],
       // Quality metrics (REQ-8)
       qualityMetrics: this.cachedQualityMetrics ?? undefined,
+      // Decision chain log
+      decisionChains: this.decisionChains.length > 0 ? this.decisionChains : undefined,
       // EO allocation quality (REQ-10)
       eoAllocationQuality: this.cachedEoAllocationQuality ?? undefined,
       // Before/after EO comparison aggregate (REQ-9)

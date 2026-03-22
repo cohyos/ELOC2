@@ -6,6 +6,7 @@ const sections = [
   { id: 'algorithms', title: 'Algorithmic Reference' },
   { id: 'eo-management', title: 'EO Management' },
   { id: 'fusion', title: 'Fusion & Correlation' },
+  { id: 'zones', title: 'Operational Zones' },
   { id: 'demo-guide', title: 'Demo Guide' },
   { id: 'roles', title: 'Roles & Permissions' },
   { id: 'reports', title: 'Reports' },
@@ -213,6 +214,41 @@ Monitors sensor alignment quality:
 - Clock drift detection
 - Spatial and timing quality grades: 'nominal', 'degraded'
 - fusionSafe flag gates fusion mode selection`,
+
+  zones: `# Operational Zones
+
+Operational zones define tactical areas on the map that affect sensor deployment and provide visual context during operations. All 4 zone types can be drawn and named in the Editor → Zones tab.
+
+## Zone Types
+
+### Threat Corridor (Red)
+**System Effect**: The deployment optimizer gives 20% additional weight to sensor placements that cover threat corridors. This steers the optimizer toward maximizing coverage in expected threat approach paths. Rendered with a red dashed outline.
+
+### Exclusion Zone (Red, double-dash)
+**System Effect**: Hard constraint in the deployment optimizer — sensors CANNOT be placed inside exclusion zones. Use for no-go areas, civilian zones, or terrain that prevents sensor placement. Rendered with a red double-dashed outline.
+
+### Engagement Zone (Green)
+**System Effect**: Visual reference only. Marks the primary engagement area where targets are expected to be intercepted. No algorithmic effect on fusion, tasking, or deployment. Rendered with a green dashed outline.
+
+### Safe Passage (Blue)
+**System Effect**: Visual reference only. Marks safe transit corridors for friendly forces. No algorithmic effect. Rendered with a blue dashed outline.
+
+## Drawing Zones
+1. Open the Editor and select the **Zones** tab in the right panel
+2. Click one of the zone type buttons (Threat, Exclusion, Engagement, Safe Passage)
+3. Click on the map to place polygon vertices (minimum 3 required)
+4. Click **Finish** to complete the zone polygon
+5. The zone appears in the list with an auto-generated name — click to edit the name
+6. Press **ESC** to cancel drawing at any time
+
+## Zone Labels
+Zone names are displayed at the center of each zone polygon on the map, colored to match the zone type. Edit names in the Zones tab panel.
+
+## Zones in Deployment
+When you switch to the **Deploy** tab, all zones from the editor are visible on the deployment map. The optimizer uses threat corridors and exclusion zones as constraints; engagement and safe passage zones are displayed but do not affect optimization.
+
+## Saving & Loading
+Zones are included in scenario export/import (JSON). When you save or load a scenario, all zones are preserved with their names, types, and vertices.`,
 
   'demo-guide': `# Demo Guide
 

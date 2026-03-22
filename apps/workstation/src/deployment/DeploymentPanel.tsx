@@ -85,8 +85,6 @@ export function DeploymentPanel() {
   const placedSensors = useDeploymentStore(s => s.placedSensors);
   const optimizing = useDeploymentStore(s => s.optimizing);
   const error = useDeploymentStore(s => s.error);
-  const exclusionZones = useDeploymentStore(s => s.exclusionZones);
-  const threatCorridors = useDeploymentStore(s => s.threatCorridors);
   const drawMode = useDeploymentStore(s => s.drawMode);
   const deploymentName = useDeploymentStore(s => s.deploymentName);
   const pendingSensorSpec = useDeploymentStore(s => s.pendingSensorSpec);
@@ -94,8 +92,6 @@ export function DeploymentPanel() {
   const removeSensor = useDeploymentStore(s => s.removeSensorFromInventory);
   const startPlaceSensor = useDeploymentStore(s => s.startPlaceSensor);
   const removePlacedSensor = useDeploymentStore(s => s.removePlacedSensor);
-  const removeExclusionZone = useDeploymentStore(s => s.removeExclusionZone);
-  const removeThreatCorridor = useDeploymentStore(s => s.removeThreatCorridor);
   const runOptimization = useDeploymentStore(s => s.runOptimization);
   const exportScenario = useDeploymentStore(s => s.exportScenario);
   const clearAll = useDeploymentStore(s => s.clearAll);
@@ -246,8 +242,6 @@ export function DeploymentPanel() {
     }
   };
 
-  const isDrawing = drawMode !== 'select';
-
   return (
     <div style={{ padding: '12px', color: colors.text, fontSize: '13px', overflowY: 'auto', height: '100%' }}>
       <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#fff', margin: '0 0 16px' }}>Deployment Planner</h3>
@@ -363,55 +357,12 @@ export function DeploymentPanel() {
         </div>
       </div>
 
-      {/* Zones — Draw on Map */}
+      {/* Zones — managed in Zones tab */}
       <div style={{ marginBottom: '16px' }}>
-        <div style={sectionTitle}>Area &amp; Zones</div>
-
-        {/* Draw buttons */}
-        <button
-          onClick={() => setDrawMode(isDrawing ? 'select' : 'draw-area')}
-          style={{
-            ...btnStyle,
-            color: drawMode === 'draw-area' ? '#fff' : colors.accent,
-            background: drawMode === 'draw-area' ? colors.accent : '#333',
-          }}
-        >
-          {drawMode === 'draw-area' ? 'Drawing Area... (click map)' : 'Draw Area on Map'}
-        </button>
-        <button
-          onClick={() => setDrawMode(isDrawing ? 'select' : 'draw-exclusion')}
-          style={{
-            ...btnStyle,
-            color: drawMode === 'draw-exclusion' ? '#fff' : colors.danger,
-            background: drawMode === 'draw-exclusion' ? colors.danger : '#333',
-          }}
-        >
-          {drawMode === 'draw-exclusion' ? 'Drawing Exclusion... (click map)' : 'Draw Exclusion on Map'}
-        </button>
-        <button
-          onClick={() => setDrawMode(isDrawing ? 'select' : 'draw-threat')}
-          style={{
-            ...btnStyle,
-            color: drawMode === 'draw-threat' ? '#fff' : colors.warning,
-            background: drawMode === 'draw-threat' ? colors.warning : '#333',
-          }}
-        >
-          {drawMode === 'draw-threat' ? 'Drawing Threat... (click map)' : 'Draw Threat Corridor on Map'}
-        </button>
-
-        {/* Existing zones list */}
-        {exclusionZones.map((_, i) => (
-          <div key={`excl-${i}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0', fontSize: '12px', marginTop: i === 0 ? '6px' : 0 }}>
-            <span style={{ color: colors.danger }}>Exclusion Zone {i + 1}</span>
-            <button onClick={() => removeExclusionZone(i)} style={{ background: 'none', border: 'none', color: colors.danger, cursor: 'pointer', fontSize: '14px' }}>x</button>
-          </div>
-        ))}
-        {threatCorridors.map((_, i) => (
-          <div key={`threat-${i}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0', fontSize: '12px' }}>
-            <span style={{ color: colors.warning }}>Threat Corridor {i + 1}</span>
-            <button onClick={() => removeThreatCorridor(i)} style={{ background: 'none', border: 'none', color: colors.danger, cursor: 'pointer', fontSize: '14px' }}>x</button>
-          </div>
-        ))}
+        <div style={sectionTitle}>Zones</div>
+        <div style={{ fontSize: '11px', color: colors.textDim, padding: '4px 0' }}>
+          Zones are managed in the <b style={{ color: colors.accent }}>Zones</b> tab. Threat corridors and exclusion zones affect optimization scoring and placement constraints.
+        </div>
       </div>
 
       {/* Placed Sensors */}
