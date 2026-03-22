@@ -29,6 +29,17 @@ import {
 import { ConsistencyEvaluator } from './consistency-evaluator.js';
 import type { ConsistencyResult } from './consistency-evaluator.js';
 import type { AssociationMode } from '../association/association-selector.js';
+import {
+  type TargetCategory,
+  type ClassifierState,
+  type CategoryProfile,
+  createClassifierState,
+  updateClassifier,
+  getProfile,
+  DEFAULT_PROFILE,
+  BM_PROFILE,
+  ABT_PROFILE,
+} from './target-category-profiles.js';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -104,6 +115,10 @@ interface TrackMeta {
   rollingSupportWindow: boolean[];
   /** Active motion model. */
   motionModelStatus: MotionModelStatus;
+  /** Dual-hypothesis BM/ABT classifier state. */
+  classifierState: ClassifierState;
+  /** Resolved target category (drives parameter profile). */
+  targetCategory: TargetCategory;
 }
 
 // ---------------------------------------------------------------------------
@@ -131,8 +146,128 @@ export class TrackManager {
   /** 6DOF consistency evaluator — tracks position/velocity/acceleration/Doppler consistency. */
   readonly consistencyEvaluator = new ConsistencyEvaluator();
 
+  /** Per-track consistency evaluators keyed by category for dual-hypothesis. */
+  private readonly categoryEvaluators: Map<string, ConsistencyEvaluator> = new Map();
+
+  /** Enable dual-hypothesis BM/ABT tracking. */
+  enableDualHypothesis: boolean = false;
+
   constructor(config: Partial<TrackManagerConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+  }
+
+  // ── Dual-hypothesis helpers ─────────────────────────────────────────
+
+  /**
+   * Get the resolved target category for a track.
+   * Returns 'unresolved' if dual-hypothesis is disabled or not yet resolved.
+   */
+  getTrackCategory(trackId: SystemTrackId | string): TargetCategory {
+    const meta = this.meta.get(trackId as string);
+    return meta?.targetCategory ?? 'unresolved';
+  }
+
+  /**
+   * Get the active parameter profile for a track based on its resolved category.
+   */
+  getTrackProfile(trackId: SystemTrackId | string): CategoryProfile {
+    if (!this.enableDualHypothesis) return DEFAULT_PROFILE;
+    return getProfile(this.getTrackCategory(trackId));
+  }
+
+  /**
+   * Get the classifier state for a track (for diagnostics/UI display).
+   */
+  getClassifierState(trackId: SystemTrackId | string): ClassifierState | undefined {
+    return this.meta.get(trackId as string)?.classifierState;
+  }
+
+  /**
+   * Get the effective correlator config for correlating against a specific track.
+   * When dual-hypothesis is enabled and the track has a resolved category,
+   * uses the category-specific gate. Otherwise uses the wider default gate.
+   */
+  private getEffectiveCorrelatorConfig(track: SystemTrack): CorrelatorConfig {
+    if (!this.enableDualHypothesis) return this.correlatorConfig;
+
+    const meta = this.meta.get(track.systemTrackId as string);
+    if (!meta) return this.correlatorConfig;
+
+    // For unresolved tracks, use the wider DEFAULT_PROFILE gate to allow
+    // both BM and ABT observations to correlate during early detection
+    const profile = getProfile(meta.targetCategory);
+    return profile.correlator;
+  }
+
+  /**
+   * Update the dual-hypothesis classifier for a track after a new observation.
+   * Computes speed and climb angle from the track's velocity.
+   */
+  private updateTrackClassifier(trackId: string, track: SystemTrack): void {
+    const meta = this.meta.get(trackId);
+    if (!meta || !this.enableDualHypothesis) return;
+    if (meta.classifierState.resolved !== 'unresolved') return; // already committed
+
+    if (!track.velocity) return;
+
+    const vx = track.velocity.vx ?? 0;
+    const vy = track.velocity.vy ?? 0;
+    const vz = track.velocity.vz ?? 0;
+    const horizontalSpeed = Math.sqrt(vx * vx + vy * vy);
+    const totalSpeed = Math.sqrt(vx * vx + vy * vy + vz * vz);
+
+    // Climb angle: atan2(vertical, horizontal) in degrees
+    const climbAngleDeg = Math.atan2(Math.abs(vz), horizontalSpeed) * (180 / Math.PI);
+
+    // Estimate acceleration from consistency evaluator snapshot
+    let accelMag: number | undefined;
+    const snapshot = this.consistencyEvaluator.getSnapshot(trackId);
+    if (snapshot?.acceleration) {
+      const { ax, ay, az } = snapshot.acceleration;
+      accelMag = Math.sqrt(ax * ax + ay * ay + az * az);
+    }
+
+    const prevCategory = meta.classifierState.resolved;
+    meta.classifierState = updateClassifier(
+      meta.classifierState,
+      totalSpeed,
+      climbAngleDeg,
+      accelMag,
+    );
+
+    // If just resolved, apply the category-specific consistency config
+    if (meta.classifierState.resolved !== 'unresolved' && prevCategory === 'unresolved') {
+      meta.targetCategory = meta.classifierState.resolved;
+      const profile = getProfile(meta.targetCategory);
+      // Reconfigure consistency evaluator for this track with category-specific params
+      // (the evaluator uses per-call config override, but we update the track's profile)
+      track.lineage = [
+        ...track.lineage,
+        createLineageEntry(
+          'track.classified',
+          `Category resolved: ${meta.targetCategory.toUpperCase()} (BM=${meta.classifierState.bmScore.toFixed(2)}, ABT=${meta.classifierState.abtScore.toFixed(2)})`,
+        ),
+      ];
+    }
+  }
+
+  /**
+   * Compute the effective correlator config for a set of tracks.
+   * Uses the widest gate needed among all track categories present.
+   * This ensures BM tracks (wide gate) don't miss correlations while
+   * ABT tracks (tight gate) still benefit from tight gating.
+   */
+  private computeEffectiveCorrelatorConfig(activeTracks: SystemTrack[]): CorrelatorConfig {
+    let maxGate = this.correlatorConfig.gateThreshold;
+    let maxVelGate = this.correlatorConfig.velocityGateThreshold;
+
+    for (const track of activeTracks) {
+      const profile = this.getTrackProfile(track.systemTrackId);
+      maxGate = Math.max(maxGate, profile.correlator.gateThreshold);
+      maxVelGate = Math.max(maxVelGate, profile.correlator.velocityGateThreshold);
+    }
+
+    return { gateThreshold: maxGate, velocityGateThreshold: maxVelGate };
   }
 
   // ── Runtime configuration ─────────────────────────────────────────────
@@ -204,6 +339,8 @@ export class TrackManager {
       existenceProbability: 0.3,
       rollingSupportWindow: [true],
       motionModelStatus: 'unknown',
+      classifierState: createClassifierState(),
+      targetCategory: 'unresolved',
     });
 
     // If existence tracking is enabled, set initial existence probability on track
@@ -333,6 +470,12 @@ export class TrackManager {
       meta.existenceProbability = track.confidence;
     }
 
+    // ── Dual-hypothesis BM/ABT classification ──
+    // Update velocity/trajectory classifier after each observation.
+    // In early detection (unresolved), both hypotheses compete.
+    // Once resolved, the track's parameter profile is locked to BM or ABT.
+    this.updateTrackClassifier(trackId as string, track);
+
     return track;
   }
 
@@ -423,6 +566,8 @@ export class TrackManager {
     // Combine meta
     const meta1 = this.meta.get(trackId1);
     const meta2 = this.meta.get(trackId2);
+    // Inherit the resolved category from the higher-confidence track
+    const primaryMeta = (track1.confidence >= track2.confidence ? meta1 : meta2) ?? meta1;
     this.meta.set(newId, {
       updateCount: (meta1?.updateCount ?? 0) + (meta2?.updateCount ?? 0),
       missCount: 0,
@@ -435,6 +580,8 @@ export class TrackManager {
         ...(meta2?.rollingSupportWindow ?? []),
       ].slice(-10),
       motionModelStatus: meta1?.motionModelStatus ?? 'unknown',
+      classifierState: primaryMeta?.classifierState ?? createClassifierState(),
+      targetCategory: primaryMeta?.targetCategory ?? 'unresolved',
     });
 
     return mergedTrack;
@@ -463,6 +610,8 @@ export class TrackManager {
       existenceProbability: track.confidence,
       rollingSupportWindow: [true],
       motionModelStatus: 'unknown',
+      classifierState: createClassifierState(),
+      targetCategory: 'unresolved',
     });
   }
 
@@ -589,8 +738,13 @@ export class TrackManager {
     const normalized = normalizeObservation(observation);
 
     // 2. Correlate against non-dropped tracks
+    // When dual-hypothesis is enabled, use the effective correlator config
+    // that accounts for per-track target category profiles.
     const activeTracks = this.getAllTracks().filter((t) => t.status !== 'dropped');
-    const correlationResult = correlate(normalized, activeTracks, this.correlatorConfig);
+    const effectiveCorrelatorConfig = this.enableDualHypothesis
+      ? this.computeEffectiveCorrelatorConfig(activeTracks)
+      : this.correlatorConfig;
+    const correlationResult = correlate(normalized, activeTracks, effectiveCorrelatorConfig);
 
     // 3. Build correlation event
     const correlationEnvelope = createEventEnvelope(
