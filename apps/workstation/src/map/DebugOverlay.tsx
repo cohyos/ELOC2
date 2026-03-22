@@ -83,9 +83,12 @@ function sectorLatLngs(
   return latlngs;
 }
 
-/** Create a divIcon with no default Leaflet styling */
+/** Create a divIcon with no default Leaflet styling and drag prevention */
 function icon(html: string, size: [number, number], anchor: [number, number]): L.DivIcon {
-  return L.divIcon({ html, iconSize: size, iconAnchor: anchor, className: '' });
+  return L.divIcon({
+    html: `<div draggable="false" style="user-select:none;-webkit-user-drag:none;">${html}</div>`,
+    iconSize: size, iconAnchor: anchor, className: '',
+  });
 }
 
 // ─── Props ───────────────────────────────────────────────────────────────────
@@ -289,9 +292,20 @@ export function DebugOverlay({
         if (!cov || !sensor.gimbal || !sensor.fov) continue;
         if (!Number.isFinite(cov.maxRangeM) || cov.maxRangeM <= 0) continue;
         const { lat, lon } = sensor.position;
-        const azDeg = sensor.gimbal.azimuthDeg;
-        const halfAngle = sensor.fov.halfAngleHDeg;
-        L.polygon(sectorLatLngs(lat, lon, azDeg - halfAngle, azDeg + halfAngle, cov.maxRangeM, 12), {
+        const isStaring = sensor.gimbal.slewRateDegPerSec === 0;
+        let fovStartDeg: number;
+        let fovEndDeg: number;
+        if (isStaring) {
+          // Fixed/staring sensor — FOV matches the coverage arc, no gimbal movement
+          fovStartDeg = cov.minAzDeg;
+          fovEndDeg = cov.maxAzDeg;
+        } else {
+          const azDeg = sensor.gimbal.azimuthDeg;
+          const halfAngle = sensor.fov.halfAngleHDeg;
+          fovStartDeg = azDeg - halfAngle;
+          fovEndDeg = azDeg + halfAngle;
+        }
+        L.polygon(sectorLatLngs(lat, lon, fovStartDeg, fovEndDeg, cov.maxRangeM, 12), {
           fillColor: '#ff8800', fillOpacity: 0.25,
           color: '#ff8800', opacity: 0.6, weight: 1, interactive: false,
         }).addTo(g);
@@ -331,10 +345,11 @@ export function DebugOverlay({
     if (!g) return;
     g.clearLayers();
 
-    // EO gimbal rays
+    // EO gimbal rays (skip staring/fixed sensors — they don't slew)
     if (layerVisibility.eoRays) {
       for (const sensor of sensors) {
         if (sensor.sensorType !== 'eo' || !sensor.gimbal || !sensor.online) continue;
+        if (sensor.gimbal.slewRateDegPerSec === 0) continue; // staring — no gimbal ray
         if (!Number.isFinite(sensor.gimbal.azimuthDeg)) continue;
         const { lon, lat } = sensor.position;
         const [endLon, endLat] = geoOffset(lon, lat, sensor.gimbal.azimuthDeg, 40000);

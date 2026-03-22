@@ -2132,16 +2132,35 @@ export class LiveEngine {
 
       const systemTrackId = this.cueToTrack.get(cueId);
 
-      // Create EO tracks from bearings
+      // Update existing or create EO tracks from bearings (deduplicate by sensor+cue)
       const newEoTracks: EoTrack[] = [];
       for (const bearingObs of bearings) {
-        const eoTrack = this.createEoTrack(bearingObs, cueId as CueId);
-        newEoTracks.push(eoTrack);
+        // Check if there's already an EoTrack from this sensor for this cue
+        const existingTrack = [...this.eoTracksById.values()].find(
+          t => t.parentCueId === cueId && (t.sensorId as string) === bearingObs.sensorId,
+        );
+        if (existingTrack) {
+          // Update existing track with new bearing instead of proliferating
+          existingTrack.bearing = bearingObs.bearing;
+          existingTrack.imageQuality = bearingObs.imageQuality;
+          existingTrack.lastUpdated = Date.now() as Timestamp;
+          existingTrack.confidence = Math.min(1, existingTrack.confidence + 0.1);
+          newEoTracks.push(existingTrack);
+
+          this.pushEvent(
+            'eo.track.updated',
+            `EO track ${(existingTrack.eoTrackId as string).slice(0, 8)} updated from ${bearingObs.sensorId} az=${bearingObs.bearing.azimuthDeg.toFixed(1)}°`,
+            { eoTrackId: existingTrack.eoTrackId, sensorId: bearingObs.sensorId, cueId },
+          );
+        } else {
+          const eoTrack = this.createEoTrack(bearingObs, cueId as CueId);
+          newEoTracks.push(eoTrack);
+        }
       }
 
       if (newEoTracks.length === 0) continue;
 
-      // Collect all EO tracks for this cue (existing + new)
+      // Collect all EO tracks for this cue (deduplicated)
       const cueEoTracks = [
         ...newEoTracks,
         ...[...this.eoTracksById.values()].filter(
