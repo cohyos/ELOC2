@@ -90,11 +90,48 @@ export function QualityMetricsPanel() {
   const detectionTargets = Object.entries(metrics.timeToFirstDetection);
   const geoTargets = Object.entries(metrics.timeToConfirmed3D);
 
+  const pa = metrics.pictureAccuracy ?? 0;
+  const paColor = pa >= 80 ? '#00cc44' : pa >= 50 ? '#ffcc00' : '#ff3333';
+
   return (
     <div style={panelStyle}>
       <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#fff', margin: '0 0 16px' }}>
         Quality Assessment
       </h3>
+
+      {/* PRIMARY: Picture Accuracy */}
+      <div style={{
+        marginBottom: '16px',
+        padding: '10px',
+        background: 'rgba(0,0,0,0.3)',
+        borderRadius: '6px',
+        border: `1px solid ${paColor}40`,
+      }}>
+        <div style={{ fontSize: '10px', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>
+          System Picture Accuracy (vs Ground Truth)
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+          <span style={{ fontSize: '28px', fontWeight: 700, color: paColor, fontFamily: 'monospace' }}>
+            {pa}%
+          </span>
+          <span style={{ fontSize: '11px', color: '#888' }}>
+            {pa >= 80 ? 'Excellent' : pa >= 60 ? 'Good' : pa >= 40 ? 'Fair' : 'Poor'}
+          </span>
+        </div>
+        {/* Progress bar */}
+        <div style={{ height: '4px', background: '#222', borderRadius: '2px', marginTop: '6px' }}>
+          <div style={{ height: '100%', width: `${pa}%`, background: paColor, borderRadius: '2px', transition: 'width 0.3s ease' }} />
+        </div>
+        {/* Sub-scores */}
+        {metrics.gtMatchDetails && metrics.gtMatchDetails.length > 0 && (
+          <div style={{ marginTop: '8px', fontSize: '11px', color: '#888' }}>
+            <span>{metrics.gtMatchDetails.filter(d => d.matched).length}/{metrics.gtMatchDetails.length} targets matched</span>
+            {metrics.positionErrorAvg > 0 && (
+              <span style={{ marginLeft: '10px' }}>avg err: {formatMeters(metrics.positionErrorAvg)}</span>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Track Association */}
       <div style={{ marginBottom: '16px' }}>

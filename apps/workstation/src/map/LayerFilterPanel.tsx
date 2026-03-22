@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
 import { useUiStore, type LayerVisibility } from '../stores/ui-store';
 
+const PICTURE_MODES: Array<{ value: 'all' | 'radar' | 'eo_bearings' | 'eo_3d'; label: string; color: string }> = [
+  { value: 'all', label: 'System picture', color: '#4a9eff' },
+  { value: 'radar', label: 'Radar only', color: '#4488ff' },
+  { value: 'eo_bearings', label: 'EO bearings', color: '#ff8800' },
+  { value: 'eo_3d', label: 'EO 3D tracks', color: '#00cc44' },
+];
+
 const LAYER_GROUPS: Array<{
   label: string;
   items: Array<{ key: keyof LayerVisibility; label: string; color: string }>;
@@ -120,10 +127,22 @@ const checkboxStyle = (checked: boolean, color: string): React.CSSProperties => 
   transition: 'all 0.15s ease',
 });
 
+const radioStyle = (active: boolean, color: string): React.CSSProperties => ({
+  width: '10px',
+  height: '10px',
+  borderRadius: '50%',
+  border: `2px solid ${active ? color : '#555'}`,
+  background: active ? color : 'transparent',
+  flexShrink: 0,
+  transition: 'all 0.15s ease',
+});
+
 export function LayerFilterPanel() {
   const [expanded, setExpanded] = useState(() => window.innerWidth >= 768);
   const layerVisibility = useUiStore(s => s.layerVisibility);
   const toggleLayer = useUiStore(s => s.toggleLayer);
+  const pictureMode = useUiStore(s => s.pictureMode);
+  const setPictureMode = useUiStore(s => s.setPictureMode);
 
   const allKeys = LAYER_GROUPS.flatMap(g => g.items.map(i => i.key));
   const allOn = allKeys.every(k => layerVisibility[k]);
@@ -155,6 +174,23 @@ export function LayerFilterPanel() {
         <span style={{ fontSize: '10px', color: '#555' }}>&#x25B2;</span>
       </div>
       <div style={{ padding: '4px 0 6px' }}>
+        {/* Picture mode filter */}
+        <div style={groupLabelStyle}>PICTURE MODE</div>
+        {PICTURE_MODES.map(mode => (
+          <div
+            key={mode.value}
+            style={itemStyle}
+            onClick={() => setPictureMode(mode.value)}
+          >
+            <div style={radioStyle(pictureMode === mode.value, mode.color)} />
+            <span style={{ opacity: pictureMode === mode.value ? 1 : 0.5 }}>
+              {mode.label}
+            </span>
+          </div>
+        ))}
+
+        <div style={{ borderBottom: '1px solid #2a2a3e', margin: '4px 0' }} />
+
         {/* Master on/off toggle */}
         <div
           style={{ ...itemStyle, borderBottom: '1px solid #2a2a3e', paddingBottom: '6px', marginBottom: '2px' }}
