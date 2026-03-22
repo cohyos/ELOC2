@@ -1,6 +1,18 @@
 import { create } from 'zustand';
 
+export interface GtMatchDetail {
+  targetId: string;
+  matched: boolean;
+  positionErrorM: number;
+  velocityErrorMps: number;
+  trackId: string | null;
+}
+
 export interface QualityMetrics {
+  /** Primary quality measure: system picture accuracy vs GT [0–100]. */
+  pictureAccuracy: number;
+  /** Per-GT-target match details. */
+  gtMatchDetails: GtMatchDetail[];
   trackToTruthAssociation: number;
   positionErrorAvg: number;
   positionErrorMax: number;

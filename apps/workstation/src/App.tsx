@@ -341,6 +341,11 @@ function InstructorButton({ children, onClick, style, title, disabled, isInstruc
 export function App() {
   const isMobile = useIsMobile();
   const [view, setView] = useState<'workstation' | 'editor' | 'users' | 'libraries' | 'logs'>('workstation');
+  const [prevView, setPrevView] = useState<'workstation' | 'editor'>('workstation');
+  const navigateTo = (target: typeof view, from?: 'workstation' | 'editor') => {
+    if (from) setPrevView(from);
+    setView(target);
+  };
 
   // ── Auth ────────────────────────────────────────────────────────────────
   const authEnabled = useAuthStore(s => s.authEnabled);
@@ -540,7 +545,7 @@ export function App() {
   const basicHiddenPanels = demoActive && viewMode === 'basic' ? getBasicModeHiddenPanels() : [];
 
   if (view === 'editor') {
-    return <ScenarioEditor onBack={() => setView('workstation')} onLibraries={() => setView('libraries')} />;
+    return <ScenarioEditor onBack={() => setView('workstation')} onLibraries={() => navigateTo('libraries', 'editor')} />;
   }
 
   if (view === 'logs') {
@@ -554,7 +559,7 @@ export function App() {
   if (view === 'libraries') {
     return (
       <LibrariesView
-        onBack={() => setView('workstation')}
+        onBack={() => setView(prevView)}
         onLoadScenario={(id) => { handleScenarioChange(id); setView('workstation'); }}
         onEditScenario={() => setView('editor')}
         onLoadDeployment={() => setView('editor')}

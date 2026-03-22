@@ -208,6 +208,41 @@
       "description": "360° staring array: 4× MWIR heads (each 20°H×90°V) on single mast, 24 Hz, 1 Mpixel per head, -3° below horizon (overridable)"
     },
     {
+      "id": "radar-phased-array-45-staring",
+      "name": "Phased Array 45° Staring Radar",
+      "type": "radar",
+      "coverage": { "minAzDeg": 0, "maxAzDeg": 45, "minElDeg": 0, "maxElDeg": 90, "maxRangeM": 120000 },
+      "radarParams": {
+        "scanTypeDeg": 45,
+        "modes": ["search", "track"],
+        "dimensionality": "3D",
+        "mountType": "fixed",
+        "antennaType": "phased-array",
+        "slewRateDegSec": 0,
+        "overridable": true
+      },
+      "description": "Fixed phased-array staring radar, 45°H × 90°V sector, 120km range. No mechanical rotation — electronic beam steering only. Azimuth orientation overridable at deployment."
+    },
+    {
+      "id": "radar-phased-array-360-quad",
+      "name": "360° Quad-Panel Phased Array",
+      "type": "radar",
+      "coverage": { "minAzDeg": 0, "maxAzDeg": 360, "minElDeg": 0, "maxElDeg": 90, "maxRangeM": 120000 },
+      "radarParams": {
+        "scanTypeDeg": 360,
+        "modes": ["search", "track"],
+        "dimensionality": "3D",
+        "mountType": "fixed",
+        "antennaType": "phased-array",
+        "slewRateDegSec": 0,
+        "overridable": true,
+        "panelCount": 4,
+        "panelFovHDeg": 90,
+        "configuration": "4× 45°×90° phased-array panels on single mast, 360° azimuth coverage"
+      },
+      "description": "360° staring radar: 4× phased-array panels (each 45°H × 90°V) on single mast, 120km range. No mechanical rotation — full hemisphere electronic scan. Panel orientation overridable."
+    },
+    {
       "id": "eo-staring-mwir-45x45",
       "name": "MWIR Staring Sensor (45°×45°)",
       "type": "eo",

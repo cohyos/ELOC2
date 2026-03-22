@@ -83,9 +83,12 @@ function sectorLatLngs(
   return latlngs;
 }
 
-/** Create a divIcon with no default Leaflet styling */
+/** Create a divIcon with no default Leaflet styling and drag prevention */
 function icon(html: string, size: [number, number], anchor: [number, number]): L.DivIcon {
-  return L.divIcon({ html, iconSize: size, iconAnchor: anchor, className: '' });
+  return L.divIcon({
+    html: `<div draggable="false" style="user-select:none;-webkit-user-drag:none;">${html}</div>`,
+    iconSize: size, iconAnchor: anchor, className: '',
+  });
 }
 
 // ─── Props ───────────────────────────────────────────────────────────────────
@@ -141,6 +144,30 @@ export function DebugOverlay({
   const groupsRef = useRef<LayerGroups | null>(null);
   const callbacksRef = useRef({ onSelectTrack, onSelectSensor, onSelectGroundTruth });
   callbacksRef.current = { onSelectTrack, onSelectSensor, onSelectGroundTruth };
+
+  // ── Picture mode filtering ──────────────────────────────────────────────────
+  const pictureMode = useUiStore(s => s.pictureMode);
+
+  const filteredTracks = useMemo(() => {
+    if (pictureMode === 'all') return tracks;
+    if (pictureMode === 'eo_bearings') return []; // bearings-only mode shows no tracks
+
+    const sensorMap = new Map(sensors.map(s => [s.sensorId as string, s]));
+    return tracks.filter(track => {
+      const sources = track.sources ?? [];
+      if (pictureMode === 'radar') {
+        // Show only tracks with at least one radar source and no EO-only tracks
+        return sources.some(sid => sensorMap.get(sid as string)?.sensorType === 'radar');
+      }
+      if (pictureMode === 'eo_3d') {
+        // Show only tracks with EO sources (triangulated) — no radar-only
+        const hasEo = sources.some(sid => sensorMap.get(sid as string)?.sensorType === 'eo');
+        const hasRadarOnly = sources.every(sid => sensorMap.get(sid as string)?.sensorType === 'radar');
+        return hasEo && !hasRadarOnly;
+      }
+      return true;
+    });
+  }, [tracks, sensors, pictureMode]);
 
   // ── Init layer groups (once when map is available) ─────────────────────────
   useEffect(() => {
@@ -247,8 +274,8 @@ export function DebugOverlay({
     if (!g) return;
     g.clearLayers();
 
-    // Radar coverage arcs
-    if (layerVisibility.radarCoverage) {
+    // Radar coverage arcs (hidden in EO-only modes)
+    if (layerVisibility.radarCoverage && pictureMode !== 'eo_bearings' && pictureMode !== 'eo_3d') {
       for (const sensor of sensors) {
         if (sensor.sensorType !== 'radar' || !sensor.online) continue;
         const cov = sensor.coverage;
@@ -264,8 +291,8 @@ export function DebugOverlay({
       }
     }
 
-    // EO field of regard (FOR)
-    if (layerVisibility.eoFor) {
+    // EO field of regard (FOR) — hidden in radar-only mode
+    if (layerVisibility.eoFor && pictureMode !== 'radar') {
       for (const sensor of sensors) {
         if (sensor.sensorType !== 'eo' || !sensor.online) continue;
         const cov = sensor.coverage;
@@ -289,9 +316,20 @@ export function DebugOverlay({
         if (!cov || !sensor.gimbal || !sensor.fov) continue;
         if (!Number.isFinite(cov.maxRangeM) || cov.maxRangeM <= 0) continue;
         const { lat, lon } = sensor.position;
-        const azDeg = sensor.gimbal.azimuthDeg;
-        const halfAngle = sensor.fov.halfAngleHDeg;
-        L.polygon(sectorLatLngs(lat, lon, azDeg - halfAngle, azDeg + halfAngle, cov.maxRangeM, 12), {
+        const isStaring = sensor.gimbal.slewRateDegPerSec === 0;
+        let fovStartDeg: number;
+        let fovEndDeg: number;
+        if (isStaring) {
+          // Fixed/staring sensor — FOV matches the coverage arc, no gimbal movement
+          fovStartDeg = cov.minAzDeg;
+          fovEndDeg = cov.maxAzDeg;
+        } else {
+          const azDeg = sensor.gimbal.azimuthDeg;
+          const halfAngle = sensor.fov.halfAngleHDeg;
+          fovStartDeg = azDeg - halfAngle;
+          fovEndDeg = azDeg + halfAngle;
+        }
+        L.polygon(sectorLatLngs(lat, lon, fovStartDeg, fovEndDeg, cov.maxRangeM, 12), {
           fillColor: '#ff8800', fillOpacity: 0.25,
           color: '#ff8800', opacity: 0.6, weight: 1, interactive: false,
         }).addTo(g);
@@ -323,7 +361,7 @@ export function DebugOverlay({
         }
       }
     }
-  }, [sensors, layerVisibility.radarCoverage, layerVisibility.eoFor, layerVisibility.eoFov, fovOverlaps]);
+  }, [sensors, layerVisibility.radarCoverage, layerVisibility.eoFor, layerVisibility.eoFov, fovOverlaps, pictureMode]);
 
   // ── SECTION: Ray layers (gimbal, bearing assoc, search, triangulation, multi-sensor)
   useEffect(() => {
@@ -331,10 +369,14 @@ export function DebugOverlay({
     if (!g) return;
     g.clearLayers();
 
-    // EO gimbal rays
-    if (layerVisibility.eoRays) {
+    // In radar-only picture mode, skip all EO ray rendering
+    const showEoLayers = pictureMode !== 'radar';
+
+    // EO gimbal rays (skip staring/fixed sensors — they don't slew)
+    if (layerVisibility.eoRays && showEoLayers) {
       for (const sensor of sensors) {
         if (sensor.sensorType !== 'eo' || !sensor.gimbal || !sensor.online) continue;
+        if (sensor.gimbal.slewRateDegPerSec === 0) continue; // staring — no gimbal ray
         if (!Number.isFinite(sensor.gimbal.azimuthDeg)) continue;
         const { lon, lat } = sensor.position;
         const [endLon, endLat] = geoOffset(lon, lat, sensor.gimbal.azimuthDeg, 40000);
@@ -379,7 +421,7 @@ export function DebugOverlay({
     }
 
     // Multi-sensor association links (thin cyan lines from sensors to resolved position)
-    if (multiSensorResolutions && multiSensorResolutions.length > 0 && layerVisibility.triangulation) {
+    if (multiSensorResolutions && multiSensorResolutions.length > 0 && layerVisibility.triangulation && showEoLayers) {
       const sensorMap = new Map(sensors.map(s => [s.sensorId as string, s]));
       for (const resolution of multiSensorResolutions) {
         if (resolution.sensorCount < 3 || !resolution.positionEstimate) continue;
@@ -422,9 +464,9 @@ export function DebugOverlay({
     }
 
     // Triangulation rays (EO sensor → track lines)
-    if (layerVisibility.triangulation) {
+    if (layerVisibility.triangulation && showEoLayers) {
       const sensorMap = new Map(sensors.map(s => [s.sensorId as string, s]));
-      for (const track of tracks) {
+      for (const track of filteredTracks) {
         if (track.eoInvestigationStatus === 'none' || track.status === 'dropped') continue;
         const eoSources = (track.sources ?? []).filter(sid => {
           const s = sensorMap.get(sid as string);
@@ -442,7 +484,7 @@ export function DebugOverlay({
         }
       }
     }
-  }, [sensors, tracks, layerVisibility.eoRays, layerVisibility.triangulation, layerVisibility.sensors, bearingAssociations, searchModeStates, multiSensorResolutions]);
+  }, [sensors, tracks, filteredTracks, layerVisibility.eoRays, layerVisibility.triangulation, layerVisibility.sensors, bearingAssociations, searchModeStates, multiSensorResolutions, pictureMode]);
 
   // ── SECTION: Ellipse layers (uncertainty ellipses) ──────────────────────────
   useEffect(() => {
@@ -453,7 +495,7 @@ export function DebugOverlay({
     const showTracks = showGroundTruth ? false : layerVisibility.tracks;
     if (!layerVisibility.trackEllipses || !showTracks) return;
 
-    for (const track of tracks) {
+    for (const track of filteredTracks) {
       const { lon, lat } = track.state;
       if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
       const cov = track.covariance;
@@ -479,7 +521,7 @@ export function DebugOverlay({
         color, opacity: 0.4, weight: 1, interactive: false,
       }).addTo(g);
     }
-  }, [tracks, layerVisibility.trackEllipses, layerVisibility.tracks, showGroundTruth]);
+  }, [tracks, filteredTracks, layerVisibility.trackEllipses, layerVisibility.tracks, showGroundTruth, pictureMode]);
 
   // ── SECTION: Ballistic layers (launch/impact point estimates) ─────────────
   useEffect(() => {
@@ -554,8 +596,10 @@ export function DebugOverlay({
     const showTracks = showGroundTruth ? false : layerVisibility.tracks;
     if (!showTracks || trailHistory.size === 0) return;
 
+    const filteredTrackIds = new Set(filteredTracks.map(t => t.systemTrackId as string));
     const trackStatusMap = new Map(tracks.map(t => [t.systemTrackId as string, t.status]));
     for (const [trackId, positions] of trailHistory) {
+      if (!filteredTrackIds.has(trackId)) continue;
       const status = trackStatusMap.get(trackId) ?? 'tentative';
       const color = statusColor(status);
       const count = positions.length;
@@ -585,7 +629,7 @@ export function DebugOverlay({
         }
       }
     }
-  }, [trailHistory, tracks, layerVisibility.tracks, showGroundTruth]);
+  }, [trailHistory, tracks, filteredTracks, layerVisibility.tracks, showGroundTruth, pictureMode]);
 
   // ── SECTION: Sensor markers + labels ──────────────────────────────────────
   useEffect(() => {
@@ -662,7 +706,7 @@ export function DebugOverlay({
       }
     }
 
-    for (const track of tracks) {
+    for (const track of filteredTracks) {
       const { lon, lat } = track.state;
       if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
       const color = statusColor(track.status);
@@ -715,7 +759,7 @@ export function DebugOverlay({
         }).addTo(g);
       }
     }
-  }, [tracks, layerVisibility.tracks, layerVisibility.trackLabels, layerVisibility.useNatoSymbols, showGroundTruth, multiSensorResolutions, convergedTrackIds]);
+  }, [tracks, filteredTracks, layerVisibility.tracks, layerVisibility.trackLabels, layerVisibility.useNatoSymbols, showGroundTruth, multiSensorResolutions, convergedTrackIds, pictureMode]);
 
   // ── SECTION: Ground truth targets ──────────────────────────────────────────
   useEffect(() => {

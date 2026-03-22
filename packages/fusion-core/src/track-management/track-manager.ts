@@ -26,6 +26,8 @@ import {
   updateExistenceOnDetection,
   updateExistenceOnMiss,
 } from './existence-calculator.js';
+import { ConsistencyEvaluator } from './consistency-evaluator.js';
+import type { ConsistencyResult } from './consistency-evaluator.js';
 import type { AssociationMode } from '../association/association-selector.js';
 
 // ---------------------------------------------------------------------------
@@ -126,6 +128,9 @@ export class TrackManager {
   private correlatorConfig: CorrelatorConfig = { gateThreshold: 16.27, velocityGateThreshold: 50 };
   private mergeDistanceM: number = 3000;
 
+  /** 6DOF consistency evaluator — tracks position/velocity/acceleration/Doppler consistency. */
+  readonly consistencyEvaluator = new ConsistencyEvaluator();
+
   constructor(config: Partial<TrackManagerConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
@@ -168,7 +173,6 @@ export class TrackManager {
     correlationResult: CorrelationResult,
   ): SystemTrack {
     const id = generateId() as SystemTrackId;
-    const now = Date.now() as Timestamp;
 
     const track: SystemTrack = {
       systemTrackId: id,
@@ -183,7 +187,10 @@ export class TrackManager {
           `New track from observation ${observation.observationId} (${correlationResult.method})`,
         ),
       ],
-      lastUpdated: now,
+      // Use observation timestamp (simulation time) for consistent prediction in correlator.
+      // Date.now() diverges from simulation time at >1x playback speed, causing
+      // prediction dt overflow and correlation gate failures (track proliferation).
+      lastUpdated: observation.timestamp,
       sources: [observation.sensorId],
       eoInvestigationStatus: 'none',
       radialVelocity: observation.radialVelocity,
@@ -228,7 +235,8 @@ export class TrackManager {
     track.state = { ...fusedState.state };
     track.covariance = fusedState.covariance.map((row) => [...row]) as Covariance3x3;
     track.confidence = fusedState.confidence;
-    track.lastUpdated = Date.now() as Timestamp;
+    // Use observation timestamp for consistent prediction at any playback speed
+    track.lastUpdated = observation.timestamp;
 
     // Propagate Doppler from fused state
     if (fusedState.radialVelocity !== undefined) {
@@ -310,6 +318,21 @@ export class TrackManager {
       }
     }
 
+    // ── 6DOF Consistency evaluation ──
+    // Compare current state against predicted state from previous cycle.
+    // Adjusts confidence based on position/velocity/acceleration/Doppler consistency.
+    const consistencyResult = this.consistencyEvaluator.evaluate(
+      trackId as string,
+      track.state,
+      observation.velocity ?? track.velocity,
+      observation.timestamp as number,
+      track.radialVelocity,
+    );
+    if (consistencyResult) {
+      track.confidence = Math.max(0, Math.min(1, track.confidence + consistencyResult.certaintyDelta));
+      meta.existenceProbability = track.confidence;
+    }
+
     return track;
   }
 
@@ -343,6 +366,9 @@ export class TrackManager {
       ...track.lineage,
       createLineageEntry('track.dropped', 'Track dropped'),
     ];
+
+    // Clean up consistency tracking
+    this.consistencyEvaluator.removeTrack(trackId as string);
 
     return track;
   }
@@ -422,6 +448,22 @@ export class TrackManager {
 
   getTrack(trackId: SystemTrackId): SystemTrack | undefined {
     return this.tracks.get(trackId);
+  }
+
+  /**
+   * Inject an externally created system track (e.g. from EO triangulation).
+   * The track is registered with default metadata so it participates in
+   * normal maintenance (miss-counting, merging, dropping).
+   */
+  injectTrack(track: SystemTrack): void {
+    this.tracks.set(track.systemTrackId, track);
+    this.meta.set(track.systemTrackId, {
+      updateCount: 1,
+      missCount: 0,
+      existenceProbability: track.confidence,
+      rollingSupportWindow: [true],
+      motionModelStatus: 'unknown',
+    });
   }
 
   // ── EO investigation support ─────────────────────────────────────────────
