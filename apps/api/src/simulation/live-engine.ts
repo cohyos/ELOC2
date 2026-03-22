@@ -492,6 +492,16 @@ export class LiveEngine {
   private totalTicks = 0;
   /** Cached quality metrics (recomputed each tick) */
   private cachedQualityMetrics: {
+    /** Primary quality measure: overall system picture accuracy vs GT [0–100]. */
+    pictureAccuracy: number;
+    /** Per-GT-target match details. */
+    gtMatchDetails: Array<{
+      targetId: string;
+      matched: boolean;
+      positionErrorM: number;
+      velocityErrorMps: number;
+      trackId: string | null;
+    }>;
     trackToTruthAssociation: number;
     positionErrorAvg: number;
     positionErrorMax: number;
@@ -3067,7 +3077,28 @@ export class LiveEngine {
       }
     }
 
-    // ── 3. Single-sensor detections → enhanced cueing fallback ──
+    // ── 3. Ambiguity-resolved targets → promote to system track ──
+    for (const target of result.resolvedFromAmbiguity) {
+      const fusedTrackId = this.fuseOrCreateTrackFromEoTarget(target);
+      this.coreEoDetector.markPromoted(target.eoTargetId, fusedTrackId);
+
+      this.pushEvent(
+        'eo.target.detected',
+        `Ambiguity resolved: ${target.sensorIds.length} sensors, ` +
+        `consistency-confirmed → ${target.classification} → track ${fusedTrackId.slice(0, 8)}`,
+        {
+          eoTargetId: target.eoTargetId,
+          sensorIds: target.sensorIds,
+          position: target.position,
+          classification: target.classification,
+          intersectionAngleDeg: target.intersectionAngleDeg,
+          systemTrackId: fusedTrackId,
+          resolvedViaConsistency: true,
+        },
+      );
+    }
+
+    // ── 4. Single-sensor detections → enhanced cueing fallback ──
     for (const cue of result.enhancedCueBearings) {
       const sensor = this.state.sensors.find(s => (s.sensorId as string) === cue.detection.sensorId);
       if (!sensor) continue;
@@ -4618,6 +4649,8 @@ export class LiveEngine {
 
     if (groundTruth.length === 0 && tracks.length === 0) {
       this.cachedQualityMetrics = {
+        pictureAccuracy: 100,
+        gtMatchDetails: [],
         trackToTruthAssociation: 1,
         positionErrorAvg: 0,
         positionErrorMax: 0,
@@ -4735,7 +4768,100 @@ export class LiveEngine {
       ? (tracks.length - matchedTrackCount) / tracks.length
       : 0;
 
+    // ── PRIMARY MEASURE: Picture Accuracy (GT match score 0–100) ──
+    // Composite of: coverage, position accuracy, velocity accuracy, false track penalty
+    const gtMatchDetails: Array<{
+      targetId: string;
+      matched: boolean;
+      positionErrorM: number;
+      velocityErrorMps: number;
+      trackId: string | null;
+    }> = [];
+
+    for (const gt of groundTruth) {
+      const matchedTrackId = targetToTrack.get(gt.targetId) ?? null;
+      if (!matchedTrackId) {
+        gtMatchDetails.push({
+          targetId: gt.targetId,
+          matched: false,
+          positionErrorM: Infinity,
+          velocityErrorMps: Infinity,
+          trackId: null,
+        });
+        continue;
+      }
+
+      const track = tracks.find(t => (t.systemTrackId as string) === matchedTrackId);
+      if (!track) {
+        gtMatchDetails.push({
+          targetId: gt.targetId,
+          matched: false,
+          positionErrorM: Infinity,
+          velocityErrorMps: Infinity,
+          trackId: matchedTrackId,
+        });
+        continue;
+      }
+
+      const posErrorM = LiveEngine.haversineMeters(
+        track.state.lat, track.state.lon,
+        gt.position.lat, gt.position.lon,
+      );
+
+      // Velocity error (3D Euclidean, m/s)
+      let velErrorMps = 0;
+      if (gt.velocity && track.velocity) {
+        const dvx = (track.velocity.vx ?? 0) - gt.velocity.vx;
+        const dvy = (track.velocity.vy ?? 0) - gt.velocity.vy;
+        const dvz = (track.velocity.vz ?? 0) - gt.velocity.vz;
+        velErrorMps = Math.sqrt(dvx * dvx + dvy * dvy + dvz * dvz);
+      }
+
+      gtMatchDetails.push({
+        targetId: gt.targetId,
+        matched: true,
+        positionErrorM: posErrorM,
+        velocityErrorMps: velErrorMps,
+        trackId: matchedTrackId,
+      });
+    }
+
+    // Compute composite picture accuracy [0–100]:
+    //   40% coverage (what fraction of GT targets are tracked)
+    //   30% position accuracy (how close tracks are to GT, normalized)
+    //   15% velocity accuracy (how close velocities match)
+    //   15% false track penalty (fewer false tracks = better)
+    const coverageScore = coveragePercent * 100; // 0–100
+
+    // Position accuracy: 100 for 0m error, 0 for ≥5000m, linear
+    const posScores = gtMatchDetails
+      .filter(d => d.matched)
+      .map(d => Math.max(0, 100 * (1 - d.positionErrorM / 5000)));
+    const posAccuracy = posScores.length > 0
+      ? posScores.reduce((a, b) => a + b, 0) / posScores.length
+      : 0;
+
+    // Velocity accuracy: 100 for 0 m/s error, 0 for ≥100 m/s, linear
+    const velScores = gtMatchDetails
+      .filter(d => d.matched && d.velocityErrorMps < Infinity)
+      .map(d => Math.max(0, 100 * (1 - d.velocityErrorMps / 100)));
+    const velAccuracy = velScores.length > 0
+      ? velScores.reduce((a, b) => a + b, 0) / velScores.length
+      : 100; // no velocity data = no penalty
+
+    // False track penalty: 100 for 0% false, 0 for 100% false
+    const falseTrackScore = (1 - falseTrackRate) * 100;
+
+    const pictureAccuracy = Math.round(
+      0.40 * coverageScore +
+      0.30 * posAccuracy +
+      0.15 * velAccuracy +
+      0.15 * falseTrackScore,
+    );
+
     this.cachedQualityMetrics = {
+      pictureAccuracy: Math.max(0, Math.min(100, pictureAccuracy)),
+      gtMatchDetails,
       trackToTruthAssociation,
       positionErrorAvg,
       positionErrorMax,

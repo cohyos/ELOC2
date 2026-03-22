@@ -62,6 +62,11 @@ interface UiState {
   // Track status filter (which statuses to show on map)
   trackStatusFilter: { confirmed: boolean; tentative: boolean; dropped: boolean };
 
+  // Picture mode filter — which part of the picture to show
+  // 'all' = full system picture, 'radar' = radar-only tracks,
+  // 'eo_bearings' = EO bearing rays only, 'eo_3d' = EO 3D tracks only
+  pictureMode: 'all' | 'radar' | 'eo_bearings' | 'eo_3d';
+
   // Replay
   replayPlaying: boolean;
   replaySpeed: number;
@@ -139,6 +144,7 @@ interface UiState {
   toggleTimelinePanel: () => void;
   toggleLayer: (layer: keyof LayerVisibility) => void;
   toggleTrackStatus: (status: 'confirmed' | 'tentative' | 'dropped') => void;
+  setPictureMode: (mode: 'all' | 'radar' | 'eo_bearings' | 'eo_3d') => void;
   setDetailView: (view: DetailView) => void;
   setReplayPlaying: (playing: boolean) => void;
   setReplaySpeed: (speed: number) => void;
@@ -241,6 +247,7 @@ export const useUiStore = create<UiState>((set) => ({
   timelinePanelOpen: true,
   layerVisibility: { ...DEFAULT_LAYER_VISIBILITY },
   trackStatusFilter: { confirmed: true, tentative: true, dropped: false },
+  pictureMode: 'all',
   replayPlaying: false,
   replaySpeed: 1,
   replayTime: 0,
@@ -311,6 +318,8 @@ export const useUiStore = create<UiState>((set) => ({
     set((s) => ({
       trackStatusFilter: { ...s.trackStatusFilter, [status]: !s.trackStatusFilter[status] },
     })),
+
+  setPictureMode: (mode) => set({ pictureMode: mode }),
 
   setDetailView: (view) =>
     set({ detailView: view, detailPanelOpen: true }),

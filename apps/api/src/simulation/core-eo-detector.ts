@@ -25,6 +25,7 @@ import type {
 import type { EoBearingObservation } from '@eloc2/simulator';
 import { generateId, bearingDeg } from '@eloc2/shared-utils';
 import { triangulateMultiple } from '@eloc2/geometry';
+import { ConsistencyEvaluator } from '@eloc2/fusion-core';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -75,12 +76,44 @@ export interface EoTarget3D {
   promotedTrackId: string | null;
 }
 
+/**
+ * An ambiguous EO candidate — a potential 3D target position that needs
+ * consistency validation over multiple cycles before promotion.
+ */
+export interface AmbiguityCandidate {
+  /** Unique candidate ID. */
+  candidateId: string;
+  /** The bearing group key (sorted sensor IDs) that produced this candidate. */
+  groupKey: string;
+  /** Triangulated 3D position. */
+  position: Position3D;
+  /** Triangulation quality. */
+  intersectionAngleDeg: number;
+  missDistanceM: number;
+  /** Contributing detection IDs. */
+  detectionIds: string[];
+  /** Contributing sensor IDs. */
+  sensorIds: string[];
+  /** How many cycles this candidate has been tracked. */
+  cycleCount: number;
+  /** When first created. */
+  createdAt: number;
+  /** When last updated. */
+  lastUpdated: number;
+  /** Running consistency score from the evaluator [0,1]. */
+  consistencyScore: number;
+  /** Whether this candidate has been resolved (promoted or discarded). */
+  resolved: boolean;
+}
+
 /** Result from a single tick of the core detector. */
 export interface CoreDetectorResult {
   /** New 3D targets triangulated this tick. */
   newTargets: EoTarget3D[];
   /** Updated 3D targets (re-triangulated with fresh bearings). */
   updatedTargets: EoTarget3D[];
+  /** Targets promoted from ambiguity resolution this tick. */
+  resolvedFromAmbiguity: EoTarget3D[];
   /** Single-sensor bearings matched to existing system tracks (enhanced cueing). */
   enhancedCueBearings: Array<{
     detection: EoDetection;
@@ -104,6 +137,14 @@ export interface CoreDetectorConfig {
   maxMissDistanceM: number;
   /** Angular gate for enhanced cueing fallback (degrees). */
   enhancedCueGateDeg: number;
+  /** Min cycles before an ambiguous candidate can be promoted. */
+  minCyclesForResolution: number;
+  /** Max cycles before an unresolved candidate is escalated/discarded. */
+  maxCyclesBeforeEscalation: number;
+  /** Consistency score threshold to promote an ambiguous candidate. */
+  ambiguityConsistencyThreshold: number;
+  /** Miss distance above which a triangulation is flagged ambiguous (meters). */
+  ambiguousMissDistanceM: number;
 }
 
 const DEFAULT_CONFIG: CoreDetectorConfig = {
@@ -112,6 +153,10 @@ const DEFAULT_CONFIG: CoreDetectorConfig = {
   minIntersectionAngleDeg: 5.0,
   maxMissDistanceM: 5000,
   enhancedCueGateDeg: 5.0,
+  minCyclesForResolution: 3,
+  maxCyclesBeforeEscalation: 8,
+  ambiguityConsistencyThreshold: 0.6,
+  ambiguousMissDistanceM: 3000,
 };
 
 // ---------------------------------------------------------------------------
@@ -124,6 +169,12 @@ export class CoreEoTargetDetector {
 
   /** Active 3D EO targets. Key = eoTargetId. */
   private eoTargets = new Map<string, EoTarget3D>();
+
+  /** Ambiguous candidates awaiting consistency resolution. Key = candidateId. */
+  private ambiguityCandidates = new Map<string, AmbiguityCandidate>();
+
+  /** Consistency evaluator for tracking candidate state across cycles. */
+  private consistencyEvaluator = new ConsistencyEvaluator();
 
   private config: CoreDetectorConfig;
 
@@ -190,6 +241,7 @@ export class CoreEoTargetDetector {
     const result: CoreDetectorResult = {
       newTargets: [],
       updatedTargets: [],
+      resolvedFromAmbiguity: [],
       enhancedCueBearings: [],
     };
 
@@ -256,28 +308,48 @@ export class CoreEoTargetDetector {
             : 'candidate_3d';
         result.updatedTargets.push(existingTarget);
       } else {
-        // Create new 3D EO target
-        const target: EoTarget3D = {
-          eoTargetId: generateId(),
-          detectionIds: selected.map(d => d.detectionId),
-          sensorIds: [...uniqueSensors],
-          position: triResult.position,
-          intersectionAngleDeg: triResult.intersectionAngleDeg,
-          missDistanceM: triResult.missDistanceM,
-          classification:
-            uniqueSensors.size >= 3 && triResult.intersectionAngleDeg > 15
-              ? 'confirmed_3d'
-              : 'candidate_3d',
-          createdAt: now,
-          lastUpdated: now,
-          promotedTrackId: null,
-        };
-        this.eoTargets.set(target.eoTargetId, target);
-        result.newTargets.push(target);
+        // Decide: clear triangulation or ambiguous candidate?
+        const isAmbiguous = triResult.missDistanceM > this.config.ambiguousMissDistanceM
+          || triResult.intersectionAngleDeg < 10;
+
+        if (isAmbiguous) {
+          // Route to ambiguity candidate pool for consistency resolution
+          const groupKey = [...uniqueSensors].sort().join('+');
+          this.addOrUpdateAmbiguityCandidate(
+            groupKey, triResult.position, triResult.intersectionAngleDeg,
+            triResult.missDistanceM, selected, uniqueSensors, now,
+          );
+        } else {
+          // Clear triangulation — create target immediately
+          const target: EoTarget3D = {
+            eoTargetId: generateId(),
+            detectionIds: selected.map(d => d.detectionId),
+            sensorIds: [...uniqueSensors],
+            position: triResult.position,
+            intersectionAngleDeg: triResult.intersectionAngleDeg,
+            missDistanceM: triResult.missDistanceM,
+            classification:
+              uniqueSensors.size >= 3 && triResult.intersectionAngleDeg > 15
+                ? 'confirmed_3d'
+                : 'candidate_3d',
+            createdAt: now,
+            lastUpdated: now,
+            promotedTrackId: null,
+          };
+          this.eoTargets.set(target.eoTargetId, target);
+          result.newTargets.push(target);
+        }
       }
     }
 
-    // 5. For unmatched single-sensor detections → enhanced cueing fallback
+    // 5. Resolve ambiguity candidates that have enough cycles
+    const resolved = this.resolveAmbiguityCandidates(now);
+    for (const target of resolved) {
+      this.eoTargets.set(target.eoTargetId, target);
+      result.resolvedFromAmbiguity.push(target);
+    }
+
+    // 6. For unmatched single-sensor detections → enhanced cueing fallback
     for (const det of allDetections) {
       if (matchedDetectionIds.has(det.detectionId)) continue;
 
@@ -324,10 +396,17 @@ export class CoreEoTargetDetector {
     }
   }
 
+  /** Get all active ambiguity candidates (for UI display). */
+  getAmbiguityCandidates(): AmbiguityCandidate[] {
+    return [...this.ambiguityCandidates.values()].filter(c => !c.resolved);
+  }
+
   /** Reset all state (on scenario reset). */
   reset(): void {
     this.sensorDetections.clear();
     this.eoTargets.clear();
+    this.ambiguityCandidates.clear();
+    this.consistencyEvaluator.reset();
   }
 
   // ── Private ─────────────────────────────────────────────────────────────
@@ -596,5 +675,144 @@ export class CoreEoTargetDetector {
         this.eoTargets.delete(targetId);
       }
     }
+
+    // Prune resolved or stale ambiguity candidates
+    for (const [cId, candidate] of this.ambiguityCandidates) {
+      if (candidate.resolved) {
+        this.ambiguityCandidates.delete(cId);
+        this.consistencyEvaluator.removeTrack(cId);
+      } else if (now - candidate.lastUpdated > this.config.maxDetectionAgeMs * 2) {
+        this.ambiguityCandidates.delete(cId);
+        this.consistencyEvaluator.removeTrack(cId);
+      }
+    }
+  }
+
+  // ── Ambiguity Resolution ──────────────────────────────────────────────
+
+  /**
+   * Add or update an ambiguity candidate. Each candidate is tracked by the
+   * ConsistencyEvaluator to assess whether it represents a real target.
+   */
+  private addOrUpdateAmbiguityCandidate(
+    groupKey: string,
+    position: Position3D,
+    intersectionAngleDeg: number,
+    missDistanceM: number,
+    detections: EoDetection[],
+    sensorIds: Set<string>,
+    now: number,
+  ): void {
+    // Find existing candidate for this bearing group
+    let candidate: AmbiguityCandidate | undefined;
+    for (const c of this.ambiguityCandidates.values()) {
+      if (c.groupKey === groupKey && !c.resolved) {
+        candidate = c;
+        break;
+      }
+    }
+
+    if (candidate) {
+      // Update existing candidate
+      candidate.position = { ...position };
+      candidate.intersectionAngleDeg = intersectionAngleDeg;
+      candidate.missDistanceM = missDistanceM;
+      candidate.detectionIds = detections.map(d => d.detectionId);
+      candidate.sensorIds = [...sensorIds];
+      candidate.cycleCount++;
+      candidate.lastUpdated = now;
+
+      // Evaluate consistency: does this position match the predicted trajectory?
+      const evalResult = this.consistencyEvaluator.evaluate(
+        candidate.candidateId,
+        position,
+        undefined, // velocity estimated internally by evaluator
+        now,
+      );
+      if (evalResult) {
+        candidate.consistencyScore = evalResult.consistencyScore;
+      }
+    } else {
+      // Create new candidate
+      const candidateId = generateId();
+      const newCandidate: AmbiguityCandidate = {
+        candidateId,
+        groupKey,
+        position: { ...position },
+        intersectionAngleDeg,
+        missDistanceM,
+        detectionIds: detections.map(d => d.detectionId),
+        sensorIds: [...sensorIds],
+        cycleCount: 1,
+        createdAt: now,
+        lastUpdated: now,
+        consistencyScore: 0.5,
+        resolved: false,
+      };
+      this.ambiguityCandidates.set(candidateId, newCandidate);
+
+      // Seed the consistency evaluator with initial position
+      this.consistencyEvaluator.evaluate(candidateId, position, undefined, now);
+    }
+  }
+
+  /**
+   * Resolve ambiguity candidates that have accumulated enough cycles.
+   * Promotes candidates with high consistency; discards those that fail
+   * after max cycles.
+   *
+   * @returns Newly promoted EoTarget3D objects.
+   */
+  private resolveAmbiguityCandidates(now: number): EoTarget3D[] {
+    const promoted: EoTarget3D[] = [];
+
+    // Group candidates by groupKey to handle competing candidates
+    const byGroup = new Map<string, AmbiguityCandidate[]>();
+    for (const c of this.ambiguityCandidates.values()) {
+      if (c.resolved) continue;
+      const list = byGroup.get(c.groupKey) ?? [];
+      list.push(c);
+      byGroup.set(c.groupKey, list);
+    }
+
+    for (const [, candidates] of byGroup) {
+      // Sort by consistency score descending
+      candidates.sort((a, b) => b.consistencyScore - a.consistencyScore);
+
+      const best = candidates[0];
+      if (!best) continue;
+
+      if (best.cycleCount >= this.config.minCyclesForResolution
+        && best.consistencyScore >= this.config.ambiguityConsistencyThreshold) {
+        // Promote the best candidate to a real EO target
+        const target: EoTarget3D = {
+          eoTargetId: best.candidateId,
+          detectionIds: best.detectionIds,
+          sensorIds: best.sensorIds,
+          position: best.position,
+          intersectionAngleDeg: best.intersectionAngleDeg,
+          missDistanceM: best.missDistanceM,
+          classification: best.sensorIds.length >= 3 && best.intersectionAngleDeg > 15
+            ? 'confirmed_3d'
+            : 'candidate_3d',
+          createdAt: best.createdAt,
+          lastUpdated: now,
+          promotedTrackId: null,
+        };
+        promoted.push(target);
+
+        // Mark all candidates in this group as resolved
+        for (const c of candidates) {
+          c.resolved = true;
+        }
+      } else if (best.cycleCount >= this.config.maxCyclesBeforeEscalation) {
+        // Exceeded max cycles without meeting threshold — discard all
+        for (const c of candidates) {
+          c.resolved = true;
+        }
+      }
+    }
+
+    return promoted;
   }
 }
