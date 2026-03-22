@@ -291,13 +291,17 @@ export function generateRadarObservation(
   let timestampMs = baseTimestamp + timeSec * 1000;
   timestampMs = applyClockDrift(timestampMs, sensorFaults);
 
-  // Covariance: diagonal, proportional to range squared
-  const rangeFactor = (coverage.rangeM / 10_000) ** 2;
+  // Covariance: diagonal, proportional to range squared.
+  // Floor at range=30km equivalent to prevent over-tight covariance at close range
+  // which causes correlation gate failures and track proliferation.
+  const rangeForCov = Math.max(coverage.rangeM, 30_000);
+  const rangeFactor = (rangeForCov / 10_000) ** 2;
   const baseCov = posNoise * posNoise;
+  const covDiag = baseCov * rangeFactor;
   const cov: Covariance3x3 = [
-    [baseCov * rangeFactor, 0, 0],
-    [0, baseCov * rangeFactor, 0],
-    [0, 0, baseCov * rangeFactor],
+    [covDiag, 0, 0],
+    [0, covDiag, 0],
+    [0, 0, covDiag],
   ];
 
   const observation: SourceObservation = {
