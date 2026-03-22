@@ -35,10 +35,11 @@ const colors = {
 
 interface ScenarioEditorProps {
   onBack: () => void;
+  onLibraries?: () => void;
 }
 
 
-export function ScenarioEditor({ onBack }: ScenarioEditorProps) {
+export function ScenarioEditor({ onBack, onLibraries }: ScenarioEditorProps) {
   const [activeTab, setActiveTab] = React.useState<TabId>('sensors');
   const setEditMode = useEditorStore((s) => s.setEditMode);
 
@@ -78,7 +79,7 @@ export function ScenarioEditor({ onBack }: ScenarioEditorProps) {
     >
       {/* Header */}
       <div style={{ gridArea: 'header' }}>
-        <EditorHeader onBack={onBack} />
+        <EditorHeader onBack={onBack} onLibraries={onLibraries} />
       </div>
 
       {/* Map — swap based on active tab */}
