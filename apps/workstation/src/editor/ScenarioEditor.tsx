@@ -5,6 +5,7 @@ import { SensorTab } from './SensorTab';
 import { TargetTab } from './TargetTab';
 import { FaultTab } from './FaultTab';
 import { ActionTab } from './ActionTab';
+import { ZoneTab } from './ZoneTab';
 import { SettingsTab } from './SettingsTab';
 import { ValidationBar } from './ValidationBar';
 import { useEditorStore } from '../stores/editor-store';
@@ -12,11 +13,12 @@ import { DeploymentMap } from '../deployment/DeploymentView';
 import { DeploymentPanel } from '../deployment/DeploymentPanel';
 import { DeploymentMetrics } from '../deployment/DeploymentMetrics';
 
-type TabId = 'sensors' | 'targets' | 'faults' | 'actions' | 'settings' | 'deploy';
+type TabId = 'sensors' | 'targets' | 'zones' | 'faults' | 'actions' | 'settings' | 'deploy';
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'sensors', label: 'Sensors' },
   { id: 'targets', label: 'Targets' },
+  { id: 'zones', label: 'Zones' },
   { id: 'faults', label: 'Faults' },
   { id: 'actions', label: 'Actions' },
   { id: 'settings', label: 'Settings' },
@@ -141,6 +143,7 @@ export function ScenarioEditor({ onBack }: ScenarioEditorProps) {
         <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
           {activeTab === 'sensors' && <SensorTab />}
           {activeTab === 'targets' && <TargetTab />}
+          {activeTab === 'zones' && <ZoneTab />}
           {activeTab === 'faults' && <FaultTab />}
           {activeTab === 'actions' && <ActionTab />}
           {activeTab === 'settings' && <SettingsTab />}
