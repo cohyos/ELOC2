@@ -41,8 +41,8 @@ export interface CorrelatorConfig {
 }
 
 const DEFAULT_CONFIG: CorrelatorConfig = {
-  gateThreshold: 16.27,
-  velocityGateThreshold: 50,
+  gateThreshold: 20.0, // Widened from 16.27 to reduce ghost track proliferation
+  velocityGateThreshold: 75, // Widened from 50 m/s for turning/maneuvering targets
 };
 
 // ---------------------------------------------------------------------------
@@ -106,8 +106,17 @@ export function correlate(
         predLon += (track.velocity.vx * dtSec) / metersPerDegLon;
         predAlt += (track.velocity.vz ?? 0) * dtSec;
 
-        // Grow covariance with process noise (Q = 100 m^2/s * dt)
-        const qDiag = 100 * dtSec;
+        // Grow covariance with process noise.
+        // Use velocity-adaptive Q: fast movers need larger uncertainty growth
+        // to prevent gate misses and ghost track proliferation.
+        const speed = Math.sqrt(
+          (track.velocity!.vx ?? 0) ** 2 +
+          (track.velocity!.vy ?? 0) ** 2 +
+          (track.velocity!.vz ?? 0) ** 2,
+        );
+        const baseQ = 200; // m²/s base process noise
+        const speedFactor = 1 + speed / 200; // scale with speed
+        const qDiag = baseQ * speedFactor * dtSec;
         predCov = [
           [track.covariance[0][0] + qDiag, track.covariance[0][1], track.covariance[0][2]],
           [track.covariance[1][0], track.covariance[1][1] + qDiag, track.covariance[1][2]],
