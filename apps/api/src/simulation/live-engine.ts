@@ -669,16 +669,16 @@ export class LiveEngine {
     this.runner = new ScenarioRunner(this.scenario);
     this.trackManager = new TrackManager({
       confirmAfter: 3,
-      dropAfterMisses: 8,
+      dropAfterMisses: 12,
       // Enhanced radar track building
       enableExistence: true,
       existencePromotionThreshold: 0.5,
       existenceConfirmationThreshold: 0.8,
-      existenceDeletionThreshold: 0.1,
-      coastingMissThreshold: 3,
+      existenceDeletionThreshold: 0.05,
+      coastingMissThreshold: 5,
       pDetection: 0.9,
       pFalseAlarm: 0.01,
-      maxCoastingTimeSec: 15,
+      maxCoastingTimeSec: 30,
       associationMode: 'nn', // default NN; switch to 'auto' for JPDA/MHT
       enableIMM: true, // P5: Enable IMM for coordinated turn detection
       enableTBD: false,
@@ -1263,14 +1263,8 @@ export class LiveEngine {
       // Update sensor status
       this.updateSensorStatus(result.activeFaults);
 
-      // Drop stale tracks (same logic as finalizeTick)
-      const seekNow = Date.now();
-      for (const tr of this.trackManager.getAllTracks().filter(t => t.status !== 'dropped')) {
-        const age = (seekNow - (tr.lastUpdated as number)) / 1000;
-        if (age > 3) {
-          try { this.trackManager.missedUpdate(tr.systemTrackId); } catch (_) { /* merged/dropped */ }
-        }
-      }
+      // Tick-based stale detection (same as finalizeTick)
+      this.trackManager.markStaleTracksAsMissed(result.currentTimeSec, 3);
 
       this.trackManager.mergeCloseTracks();
       this.state.tracks = this.trackManager.getAllTracks().filter(tr => tr.status !== 'dropped');
@@ -1470,15 +1464,15 @@ export class LiveEngine {
     this.runner = new ScenarioRunner(this.scenario);
     this.trackManager = new TrackManager({
       confirmAfter: 3,
-      dropAfterMisses: 8,
+      dropAfterMisses: 12,
       enableExistence: true,
       existencePromotionThreshold: 0.5,
       existenceConfirmationThreshold: 0.8,
-      existenceDeletionThreshold: 0.1,
-      coastingMissThreshold: 3,
+      existenceDeletionThreshold: 0.05,
+      coastingMissThreshold: 5,
       pDetection: 0.9,
       pFalseAlarm: 0.01,
-      maxCoastingTimeSec: 15,
+      maxCoastingTimeSec: 30,
       associationMode: 'nn',
       enableIMM: true, // P5: Enable IMM for coordinated turn detection
       enableTBD: false,
@@ -1775,26 +1769,14 @@ export class LiveEngine {
     // Update sensor online status based on active faults
     this.updateSensorStatus(result.activeFaults);
 
-    // Mark stale tracks as missed. Tracks not updated in this tick increment
-    // their miss counter; after 5 consecutive misses they get dropped.
-    // This prevents ghost-track accumulation from the correlator creating
-    // new tracks when fast-moving targets outrun the Mahalanobis gate.
-    const now = Date.now();
-    const activeTracks = this.trackManager.getAllTracks().filter(t => t.status !== 'dropped');
-    for (const track of activeTracks) {
-      // If this track wasn't updated in the last 3 seconds, count it as missed.
-      // (lastUpdated is set by TrackManager.updateTrack / createTrack)
-      const ageSec = (now - (track.lastUpdated as number)) / 1000;
-      if (ageSec > 3) {
-        try {
-          this.trackManager.missedUpdate(track.systemTrackId);
-        } catch (_) {
-          // Track may have been dropped or merged already
-        }
-      }
-    }
+    // Tick-based stale detection: mark tracks not updated this tick as missed.
+    // Uses monotonic tick counter (elapsedSec) instead of Date.now() which
+    // diverges from simulation time at >1x speed, causing either:
+    // - At >1x: negative age → tracks never coast → ghost track accumulation
+    // - At <1x: inflated age → tracks coast too fast → track fragmentation
+    this.trackManager.markStaleTracksAsMissed(this.state.elapsedSec, 3);
 
-    // Post-tick merge sweep: merge tracks within 3km to eliminate ghost tracks
+    // Post-tick merge sweep to eliminate ghost tracks
     this.trackManager.mergeCloseTracks();
 
     // Snapshot tracks from track manager
@@ -1940,9 +1922,13 @@ export class LiveEngine {
     const results = this.trackManager.processObservationBatch(observations, healthMap);
 
     // Emit events for each processed observation
+    const currentTick = this.state.elapsedSec;
     for (const tmResult of results) {
       this.eventEnvelopes.push(tmResult.event);
       this.eventEnvelopes.push(tmResult.correlationEvent);
+
+      // Record tick for stale detection
+      this.trackManager.setTrackUpdateTick(tmResult.track.systemTrackId, currentTick);
 
       const decision = tmResult.correlationEvent.data.decision;
       const trackId = tmResult.track.systemTrackId;
@@ -1987,6 +1973,9 @@ export class LiveEngine {
 
         // Process through track manager (correlate + fuse)
         const tmResult = this.trackManager.processObservation(obs, health ?? undefined);
+
+        // Record tick for stale detection
+        this.trackManager.setTrackUpdateTick(tmResult.track.systemTrackId, this.state.elapsedSec);
 
         // Collect formal event envelopes for validation
         this.eventEnvelopes.push(tmResult.event);
@@ -5682,7 +5671,8 @@ export class LiveEngine {
    * feeds the observation straight into the fusion pipeline.
    */
   injectExternalObservation(obs: SourceObservation): void {
-    this.trackManager.processObservation(obs);
+    const result = this.trackManager.processObservation(obs);
+    this.trackManager.setTrackUpdateTick(result.track.systemTrackId, this.state.elapsedSec);
     this.state.tracks = this.trackManager.getAllTracks().filter(t => t.status !== 'dropped');
   }
 }
