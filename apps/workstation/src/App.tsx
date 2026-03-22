@@ -18,6 +18,7 @@ import { GeometryDetailPanel } from './geometry-detail/GeometryDetailPanel';
 import { GroundTruthDetailPanel } from './ground-truth-detail/GroundTruthDetailPanel';
 import { HelpPage } from './help/HelpPage';
 import { ScenarioEditor } from './editor/ScenarioEditor';
+import { LogView } from './logs/LogView';
 import { LiveInjectionToolbar } from './injection/LiveInjectionToolbar';
 import { useDemoStore } from './stores/demo-store';
 import { useGroundTruthStore } from './stores/ground-truth-store';
@@ -339,7 +340,7 @@ function InstructorButton({ children, onClick, style, title, disabled, isInstruc
 
 export function App() {
   const isMobile = useIsMobile();
-  const [view, setView] = useState<'workstation' | 'editor' | 'users' | 'libraries'>('workstation');
+  const [view, setView] = useState<'workstation' | 'editor' | 'users' | 'libraries' | 'logs'>('workstation');
 
   // ── Auth ────────────────────────────────────────────────────────────────
   const authEnabled = useAuthStore(s => s.authEnabled);
@@ -542,6 +543,10 @@ export function App() {
     return <ScenarioEditor onBack={() => setView('workstation')} />;
   }
 
+  if (view === 'logs') {
+    return <LogView onBack={() => setView('workstation')} />;
+  }
+
   if (view === 'users') {
     return <UserManagementView onBack={() => setView('workstation')} />;
   }
@@ -677,6 +682,9 @@ export function App() {
 
           {/* Users */}
           <InstructorButton isInstructor={isInstructor} style={{ ...btn, background: '#2a2a4e', color: '#ff88cc', border: '1px solid #ff88cc44' }} onClick={() => setView('users')}>Users</InstructorButton>
+
+          {/* Decision Chain Log */}
+          <InstructorButton isInstructor={isInstructor} style={{ ...btn, background: '#2a2a4e', color: '#44ddaa', border: '1px solid #44ddaa44' }} onClick={() => setView('logs')} title="Decision Chain Log — trace GT targets through the full pipeline with quality scoring">Log</InstructorButton>
 
           {/* Demo */}
           <InstructorButton isInstructor={isInstructor}

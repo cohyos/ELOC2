@@ -7,6 +7,7 @@ import { useGroundTruthStore } from '../stores/ground-truth-store';
 import { useCoverZoneStore } from '../stores/cover-zone-store';
 import { useQualityStore } from '../stores/quality-store';
 import { useFovOverlapStore } from '../stores/fov-overlap-store';
+import { useDecisionChainStore } from '../stores/decision-chain-store';
 
 /**
  * ReplayController manages the WebSocket connection for real-time event streaming
@@ -200,6 +201,9 @@ export class ReplayController {
     }
     if (data.eoAllocationQuality && typeof data.eoAllocationQuality === 'object') {
       useQualityStore.getState().setEoAllocationQuality(data.eoAllocationQuality);
+    }
+    if (data.decisionChains && Array.isArray(data.decisionChains)) {
+      useDecisionChainStore.getState().setChains(data.decisionChains);
     }
     if (data.convergenceStates && Array.isArray(data.convergenceStates)) {
       useQualityStore.getState().setConvergenceStates(data.convergenceStates);
