@@ -427,6 +427,22 @@ export class TrackManager {
     return this.tracks.get(trackId);
   }
 
+  /**
+   * Inject an externally created system track (e.g. from EO triangulation).
+   * The track is registered with default metadata so it participates in
+   * normal maintenance (miss-counting, merging, dropping).
+   */
+  injectTrack(track: SystemTrack): void {
+    this.tracks.set(track.systemTrackId, track);
+    this.meta.set(track.systemTrackId, {
+      updateCount: 1,
+      missCount: 0,
+      existenceProbability: track.confidence,
+      rollingSupportWindow: [true],
+      motionModelStatus: 'unknown',
+    });
+  }
+
   // ── EO investigation support ─────────────────────────────────────────────
 
   /**

@@ -70,6 +70,8 @@ import {
 } from '@eloc2/fusion-core';
 import { EoManagementModule } from '@eloc2/eo-management';
 import type { EoModuleStatus } from '@eloc2/eo-management';
+import { CoreEoTargetDetector } from './core-eo-detector.js';
+import type { EoDetection, EoTarget3D, CoreDetectorResult } from './core-eo-detector.js';
 import { SimulationStateMachine } from './state-machine.js';
 import type { SimulationState, SimulationAction } from './state-machine.js';
 import { accumulateSample, resetAccumulator } from '../reports/report-generator.js';
@@ -540,6 +542,10 @@ export class LiveEngine {
   private eoModule = new EoManagementModule();
   /** Cached EO module status for WS broadcast. */
   private cachedEoModuleStatus: EoModuleStatus | null = null;
+
+  // ── Core EO Target Detector ─────────────────────────────────────────
+  /** Two-tier staring EO detection: per-sensor az/el detections + cross-sensor triangulation. */
+  private coreEoDetector = new CoreEoTargetDetector();
 
   // ── Latency tracking ─────────────────────────────────────────────────
   /** Rolling window of per-tick processing latencies (ms) */
@@ -1503,6 +1509,9 @@ export class LiveEngine {
     this.eoModule.reset();
     this.cachedEoModuleStatus = null;
 
+    // Reset Core EO Target Detector
+    this.coreEoDetector.reset();
+
     this.state = this.buildInitialState();
   }
 
@@ -1766,7 +1775,12 @@ export class LiveEngine {
     // Snapshot tracks from track manager
     this.state.tracks = this.trackManager.getAllTracks().filter(t => t.status !== 'dropped');
 
-    // Phase 5: Process accumulated bearings and run EO tasking
+    // Core EO Target Detector: correlate staring sensor az/el detections,
+    // triangulate when ≥2 sensors overlap → create 3D EO targets → promote to system tracks.
+    // Single-sensor detections fall back to enhanced cueing against existing tracks.
+    this.processCoreEoDetector();
+
+    // Phase 5: Process accumulated bearings (slewing sensors) and run EO tasking
     this.processAccumulatedBearings();
     this.expireStaleEoCues();
 
@@ -1965,37 +1979,42 @@ export class LiveEngine {
       }
 
       case 'bearing': {
-        // Phase 5: Accumulate bearing for batch processing in finalizeTick
+        // Phase 5: EO bearing/az-el detection processing
         const bearingObs = simEvent.data as EoBearingObservation;
         if (!bearingObs?.bearing) break;
 
         const sensorId = bearingObs.sensorId;
+        const sensor = this.state.sensors.find(s => (s.sensorId as string) === sensorId);
+        const isStaring = sensor?.gimbal?.slewRateDegPerSec === 0;
 
-        // Try to match bearing to an active cue for this sensor
-        let matchedCueId = this.matchBearingToCue(bearingObs);
+        if (isStaring && sensor) {
+          // ── Staring sensor: route through Core EO Target Detector ──
+          // Each staring sensor independently manages az/el detections.
+          // Cross-sensor correlation and triangulation happens in finalizeTick.
+          this.coreEoDetector.ingestBearing(bearingObs, sensor.position);
 
-        // Staring sensors: auto-create cue for unmatched bearings so they
-        // process all targets in FOV simultaneously (not one-at-a-time via tasking)
-        if (!matchedCueId) {
-          const sensor = this.state.sensors.find(s => (s.sensorId as string) === sensorId);
-          if (sensor?.gimbal?.slewRateDegPerSec === 0) {
-            matchedCueId = this.autoCreateCueForBearing(bearingObs, sensor);
+          this.pushEvent(
+            'eo.detection.ingested',
+            `${sensorId} az/el detection az=${bearingObs.bearing.azimuthDeg.toFixed(1)}° el=${bearingObs.bearing.elevationDeg.toFixed(1)}° → core detector`,
+            { sensorId, targetId: bearingObs.targetId, timeSec: simEvent.timeSec },
+          );
+        } else {
+          // ── Slewing sensor: existing cue-based pipeline ──
+          let matchedCueId = this.matchBearingToCue(bearingObs);
+
+          if (matchedCueId) {
+            if (!this.pendingBearings.has(matchedCueId)) {
+              this.pendingBearings.set(matchedCueId, []);
+            }
+            this.pendingBearings.get(matchedCueId)!.push(bearingObs);
           }
-        }
 
-        if (matchedCueId) {
-          // Accumulate for batch processing
-          if (!this.pendingBearings.has(matchedCueId)) {
-            this.pendingBearings.set(matchedCueId, []);
-          }
-          this.pendingBearings.get(matchedCueId)!.push(bearingObs);
+          this.pushEvent(
+            'eo.bearing.measured',
+            `${sensorId} bearing az=${bearingObs.bearing.azimuthDeg.toFixed(1)}° → ${matchedCueId ? `cue ${matchedCueId.slice(0, 8)}` : 'unmatched'}`,
+            { sensorId, targetId: bearingObs.targetId, cueId: matchedCueId ?? undefined, timeSec: simEvent.timeSec },
+          );
         }
-
-        this.pushEvent(
-          'eo.bearing.measured',
-          `${sensorId} bearing az=${bearingObs.bearing.azimuthDeg.toFixed(1)}° → ${matchedCueId ? `cue ${matchedCueId.slice(0, 8)}` : 'unmatched'}`,
-          { sensorId, targetId: bearingObs.targetId, cueId: matchedCueId ?? undefined, timeSec: simEvent.timeSec },
-        );
         break;
       }
 
@@ -2992,6 +3011,300 @@ export class LiveEngine {
       } catch {
         // Triangulation can fail with degenerate geometry — skip
       }
+    }
+  }
+
+  // ── Core EO Target Detector Integration ──────────────────────────────
+
+  /**
+   * Process the Core EO Target Detector results each tick.
+   *
+   * Flow:
+   * 1. Run the detector's processTick() — correlates bearing detections
+   *    across staring sensors, triangulates overlapping ones.
+   * 2. For new 3D EO targets: try to fuse with existing system track
+   *    (within spatial gate). If match → update track with EO source.
+   *    If no match → create new EO-originated system track.
+   * 3. For updated 3D targets: update the associated system track position.
+   * 4. For single-sensor enhanced-cue bearings: route through existing
+   *    cue pipeline (autoCreateCueForBearing) for EO investigation.
+   */
+  private processCoreEoDetector(): void {
+    const staringSensors = this.state.sensors.filter(
+      s => s.gimbal?.slewRateDegPerSec === 0 && s.online,
+    );
+    if (staringSensors.length === 0) return;
+
+    const result = this.coreEoDetector.processTick(staringSensors, this.state.tracks);
+
+    // ── 1. New 3D EO targets → fuse or create system track ──
+    for (const target of result.newTargets) {
+      const fusedTrackId = this.fuseOrCreateTrackFromEoTarget(target);
+      this.coreEoDetector.markPromoted(target.eoTargetId, fusedTrackId);
+
+      this.pushEvent(
+        'eo.target.detected',
+        `Core EO detector: 3D target from ${target.sensorIds.length} sensors → ` +
+        `${target.classification} (angle=${target.intersectionAngleDeg.toFixed(1)}°) → track ${fusedTrackId.slice(0, 8)}`,
+        {
+          eoTargetId: target.eoTargetId,
+          sensorIds: target.sensorIds,
+          position: target.position,
+          classification: target.classification,
+          intersectionAngleDeg: target.intersectionAngleDeg,
+          systemTrackId: fusedTrackId,
+        },
+      );
+    }
+
+    // ── 2. Updated 3D targets → update associated system track ──
+    for (const target of result.updatedTargets) {
+      if (target.promotedTrackId) {
+        this.updateTrackFromEoTarget(target);
+      }
+    }
+
+    // ── 3. Single-sensor detections → enhanced cueing fallback ──
+    for (const cue of result.enhancedCueBearings) {
+      const sensor = this.state.sensors.find(s => (s.sensorId as string) === cue.detection.sensorId);
+      if (!sensor) continue;
+
+      // Route through existing cue pipeline to create EO tracks for investigation
+      const cueId = this.autoCreateCueForBearing(
+        {
+          sensorId: cue.detection.sensorId,
+          targetId: cue.detection.targetId,
+          bearing: cue.detection.bearing,
+          imageQuality: cue.detection.imageQuality,
+        } as EoBearingObservation,
+        sensor,
+      );
+
+      if (cueId) {
+        // Accumulate for batch processing in processAccumulatedBearings
+        if (!this.pendingBearings.has(cueId)) {
+          this.pendingBearings.set(cueId, []);
+        }
+        this.pendingBearings.get(cueId)!.push({
+          sensorId: cue.detection.sensorId,
+          targetId: cue.detection.targetId,
+          bearing: cue.detection.bearing,
+          imageQuality: cue.detection.imageQuality,
+        } as EoBearingObservation);
+
+        this.pushEvent(
+          'eo.enhanced.cue',
+          `${cue.detection.sensorId} az/el detection → enhanced cue for track ${cue.systemTrackId.slice(0, 8)} (Δ=${cue.angularDiffDeg.toFixed(1)}°)`,
+          { sensorId: cue.detection.sensorId, systemTrackId: cue.systemTrackId, angularDiff: cue.angularDiffDeg },
+        );
+      }
+    }
+  }
+
+  /**
+   * Create a 3D EO system track from a triangulated EO target, then
+   * attempt to fuse it with an existing radar/system track.
+   *
+   * Flow:
+   * 1. Always create a new EO 3D system track first.
+   * 2. Try to fuse with an existing radar/system track (within gate).
+   *    - If match: merge EO data into the existing track, mark EO track
+   *      as fused (linked to the radar track).
+   * 3. If no match: EO 3D track stands as a new independent system track.
+   *
+   * Returns the EO system track ID.
+   */
+  private fuseOrCreateTrackFromEoTarget(target: EoTarget3D): string {
+    const now = Date.now() as Timestamp;
+    const EO_FUSION_GATE_M = 3000; // 3km gate for EO→radar track fusion
+
+    // ── Step 1: Always create the EO 3D system track ──
+    const eoTrackId = generateId() as SystemTrackId;
+
+    const eoSystemTrack: SystemTrack = {
+      systemTrackId: eoTrackId,
+      state: { ...target.position },
+      velocity: undefined,
+      covariance: [
+        [2500, 0, 0],   // ~50m uncertainty in each axis (from triangulation)
+        [0, 2500, 0],
+        [0, 0, 10000],  // altitude less certain from EO
+      ],
+      confidence: target.classification === 'confirmed_3d' ? 0.6 : 0.4,
+      status: 'tentative',
+      lineage: [
+        createLineageEntry(
+          'eo.target.created',
+          `EO 3D track: ${target.classification} from ${target.sensorIds.length} staring sensors (angle=${target.intersectionAngleDeg.toFixed(1)}°)`,
+        ),
+      ],
+      lastUpdated: now,
+      sources: target.sensorIds.map(s => s as SensorId),
+      eoInvestigationStatus: 'confirmed',
+      fusionMode: 'eo_triangulation',
+    };
+
+    // Register EO track with TrackManager
+    this.trackManager.injectTrack(eoSystemTrack);
+
+    // Store geometry estimate for the EO track
+    this.state.geometryEstimates.set(eoTrackId as string, {
+      estimateId: generateId(),
+      eoTrackIds: target.detectionIds.map(d => d as EoTrackId),
+      position3D: target.position,
+      covariance3D: undefined,
+      quality: target.intersectionAngleDeg > 15 ? 'strong' : 'acceptable',
+      classification: target.classification,
+      intersectionAngleDeg: target.intersectionAngleDeg,
+      timeAlignmentQualityMs: 0,
+      bearingNoiseDeg: 0.1,
+    } as GeometryEstimate);
+
+    // ── Step 2: Try to fuse with existing radar/system track ──
+    let bestRadarTrack: SystemTrack | undefined;
+    let bestDistance = Infinity;
+
+    for (const track of this.state.tracks) {
+      if (track.status === 'dropped') continue;
+      // Skip tracks that are already EO-originated (don't fuse EO with EO)
+      if (track.fusionMode === 'eo_triangulation') continue;
+
+      const dLat = (target.position.lat - track.state.lat) * 110540;
+      const dLon = (target.position.lon - track.state.lon) * 111320 *
+        Math.cos(track.state.lat * Math.PI / 180);
+      const dAlt = target.position.alt - track.state.alt;
+      const dist = Math.sqrt(dLat * dLat + dLon * dLon + dAlt * dAlt);
+
+      if (dist < bestDistance) {
+        bestDistance = dist;
+        bestRadarTrack = track;
+      }
+    }
+
+    if (bestRadarTrack && bestDistance <= EO_FUSION_GATE_M) {
+      // ── Fuse EO data into existing radar track ──
+      const radarTrackId = bestRadarTrack.systemTrackId as string;
+
+      // Weighted position fusion: radar has range, EO has angular triangulation
+      const eoWeight = target.classification === 'confirmed_3d' ? 0.4 : 0.2;
+      const radarWeight = 1 - eoWeight;
+
+      bestRadarTrack.state = {
+        lat: radarWeight * bestRadarTrack.state.lat + eoWeight * target.position.lat,
+        lon: radarWeight * bestRadarTrack.state.lon + eoWeight * target.position.lon,
+        alt: radarWeight * bestRadarTrack.state.alt + eoWeight * target.position.alt,
+      };
+
+      // Add EO sensor sources to radar track
+      for (const sid of target.sensorIds) {
+        if (!bestRadarTrack.sources.includes(sid as SensorId)) {
+          bestRadarTrack.sources.push(sid as SensorId);
+        }
+      }
+
+      bestRadarTrack.lineage.push(
+        createLineageEntry(
+          'eo.target.fused',
+          `Fused with EO 3D track ${(eoTrackId as string).slice(0, 8)} (${target.sensorIds.length} sensors, angle=${target.intersectionAngleDeg.toFixed(1)}°, dist=${bestDistance.toFixed(0)}m)`,
+        ),
+      );
+      bestRadarTrack.lastUpdated = now;
+      bestRadarTrack.eoInvestigationStatus = 'confirmed';
+
+      // Also copy geometry estimate to the radar track
+      this.state.geometryEstimates.set(radarTrackId, {
+        estimateId: generateId(),
+        eoTrackIds: target.detectionIds.map(d => d as EoTrackId),
+        position3D: target.position,
+        covariance3D: undefined,
+        quality: target.intersectionAngleDeg > 15 ? 'strong' : 'acceptable',
+        classification: target.classification,
+        intersectionAngleDeg: target.intersectionAngleDeg,
+        timeAlignmentQualityMs: 0,
+        bearingNoiseDeg: 0.1,
+      } as GeometryEstimate);
+
+      // Mark the EO track as fused to the radar track
+      eoSystemTrack.lineage.push(
+        createLineageEntry(
+          'eo.track.fused',
+          `Fused into radar track ${radarTrackId.slice(0, 8)} (dist=${bestDistance.toFixed(0)}m)`,
+        ),
+      );
+
+      this.pushEvent(
+        'eo.track.fused',
+        `EO 3D track ${(eoTrackId as string).slice(0, 8)} fused into radar track ${radarTrackId.slice(0, 8)} (dist=${bestDistance.toFixed(0)}m)`,
+        { eoTrackId: eoTrackId as string, radarTrackId, distance: bestDistance },
+      );
+    }
+    // Step 3: If no match, the EO track stands alone as a new system track
+
+    return eoTrackId as string;
+  }
+
+  /**
+   * Update an existing EO system track (and any fused radar track) with
+   * refreshed triangulated position from the Core EO Detector.
+   */
+  private updateTrackFromEoTarget(target: EoTarget3D): void {
+    if (!target.promotedTrackId) return;
+    const now = Date.now() as Timestamp;
+
+    // Update the EO 3D system track directly
+    const eoTrack = this.state.tracks.find(
+      t => (t.systemTrackId as string) === target.promotedTrackId,
+    );
+    if (eoTrack && eoTrack.status !== 'dropped') {
+      eoTrack.state = { ...target.position };
+      eoTrack.lastUpdated = now;
+      eoTrack.confidence = Math.min(1, eoTrack.confidence + 0.05);
+
+      // Update geometry estimate for EO track
+      this.state.geometryEstimates.set(target.promotedTrackId, {
+        estimateId: generateId(),
+        eoTrackIds: target.detectionIds.map(d => d as EoTrackId),
+        position3D: target.position,
+        covariance3D: undefined,
+        quality: target.intersectionAngleDeg > 15 ? 'strong' : 'acceptable',
+        classification: target.classification,
+        intersectionAngleDeg: target.intersectionAngleDeg,
+        timeAlignmentQualityMs: 0,
+        bearingNoiseDeg: 0.1,
+      } as GeometryEstimate);
+    }
+
+    // Also update any radar track this was fused into
+    // (search for tracks that have an "eo.target.fused" lineage entry referencing this EO track)
+    const eoTrackIdShort = target.promotedTrackId.slice(0, 8);
+    for (const track of this.state.tracks) {
+      if (track.status === 'dropped') continue;
+      if (track.fusionMode === 'eo_triangulation') continue; // skip EO tracks
+      const hasFusion = track.lineage.some(l => l.description.includes(eoTrackIdShort));
+      if (!hasFusion) continue;
+
+      // Update fused radar track with EO position
+      const eoWeight = target.classification === 'confirmed_3d' ? 0.3 : 0.15;
+      const existingWeight = 1 - eoWeight;
+      track.state = {
+        lat: existingWeight * track.state.lat + eoWeight * target.position.lat,
+        lon: existingWeight * track.state.lon + eoWeight * target.position.lon,
+        alt: existingWeight * track.state.alt + eoWeight * target.position.alt,
+      };
+      track.lastUpdated = now;
+
+      // Copy geometry estimate to radar track
+      this.state.geometryEstimates.set(track.systemTrackId as string, {
+        estimateId: generateId(),
+        eoTrackIds: target.detectionIds.map(d => d as EoTrackId),
+        position3D: target.position,
+        covariance3D: undefined,
+        quality: target.intersectionAngleDeg > 15 ? 'strong' : 'acceptable',
+        classification: target.classification,
+        intersectionAngleDeg: target.intersectionAngleDeg,
+        timeAlignmentQualityMs: 0,
+        bearingNoiseDeg: 0.1,
+      } as GeometryEstimate);
     }
   }
 

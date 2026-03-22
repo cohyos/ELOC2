@@ -1,0 +1,600 @@
+/**
+ * Core EO Target Detector
+ *
+ * Implements the two-tier staring-EO detection model:
+ *
+ * 1. **Primary detector mode** — Each staring sensor independently manages
+ *    az/el detections. When ≥2 sensors have overlapping detections
+ *    (within a correlation gate), the detector triangulates and produces
+ *    a 3D EO target that can be promoted to a system track.
+ *
+ * 2. **Enhanced cueing mode** — When only a single sensor holds a detection
+ *    and an existing system track falls near that az/el line, the detection
+ *    enhances (cues) the existing track with EO data.
+ *
+ * Each EO detection is a full az/el measurement (BearingMeasurement),
+ * not just azimuth. Elevation is used in both correlation and triangulation.
+ */
+
+import type {
+  BearingMeasurement,
+  Position3D,
+  SensorState,
+  SystemTrack,
+} from '@eloc2/domain';
+import type { EoBearingObservation } from '@eloc2/simulator';
+import { generateId, bearingDeg } from '@eloc2/shared-utils';
+import { triangulateMultiple } from '@eloc2/geometry';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+/** An az/el detection maintained by a single staring sensor. */
+export interface EoDetection {
+  /** Unique detection ID. */
+  detectionId: string;
+  /** Sensor that made the detection. */
+  sensorId: string;
+  /** Sensor position at time of detection. */
+  sensorPosition: Position3D;
+  /** The az/el measurement. */
+  bearing: BearingMeasurement;
+  /** Image quality score [0,1]. */
+  imageQuality: number;
+  /** GT target ID from simulator (for scoring, not used in correlation). */
+  targetId: string;
+  /** When first detected (ms). */
+  firstSeen: number;
+  /** When last updated (ms). */
+  lastUpdated: number;
+  /** Consecutive update count. */
+  updateCount: number;
+}
+
+/** A correlated EO target produced by matching bearings across ≥2 sensors. */
+export interface EoTarget3D {
+  /** Unique EO target ID. */
+  eoTargetId: string;
+  /** Contributing detection IDs (one per sensor). */
+  detectionIds: string[];
+  /** Contributing sensor IDs. */
+  sensorIds: string[];
+  /** Triangulated 3D position. */
+  position: Position3D;
+  /** Triangulation quality metrics. */
+  intersectionAngleDeg: number;
+  missDistanceM: number;
+  /** Geometry classification. */
+  classification: 'candidate_3d' | 'confirmed_3d';
+  /** When created. */
+  createdAt: number;
+  /** When last updated. */
+  lastUpdated: number;
+  /** If promoted to a system track, its ID. */
+  promotedTrackId: string | null;
+}
+
+/** Result from a single tick of the core detector. */
+export interface CoreDetectorResult {
+  /** New 3D targets triangulated this tick. */
+  newTargets: EoTarget3D[];
+  /** Updated 3D targets (re-triangulated with fresh bearings). */
+  updatedTargets: EoTarget3D[];
+  /** Single-sensor bearings matched to existing system tracks (enhanced cueing). */
+  enhancedCueBearings: Array<{
+    detection: EoDetection;
+    systemTrackId: string;
+    angularDiffDeg: number;
+  }>;
+}
+
+// ---------------------------------------------------------------------------
+// Configuration
+// ---------------------------------------------------------------------------
+
+export interface CoreDetectorConfig {
+  /** Max angular difference (degrees) for cross-sensor bearing correlation. */
+  correlationGateDeg: number;
+  /** Max age (ms) of a bearing detection before it's pruned. */
+  maxDetectionAgeMs: number;
+  /** Min intersection angle (degrees) for usable triangulation. */
+  minIntersectionAngleDeg: number;
+  /** Max miss distance (meters) for accepting a triangulation. */
+  maxMissDistanceM: number;
+  /** Angular gate for enhanced cueing fallback (degrees). */
+  enhancedCueGateDeg: number;
+}
+
+const DEFAULT_CONFIG: CoreDetectorConfig = {
+  correlationGateDeg: 3.0,
+  maxDetectionAgeMs: 15_000,
+  minIntersectionAngleDeg: 5.0,
+  maxMissDistanceM: 5000,
+  enhancedCueGateDeg: 5.0,
+};
+
+// ---------------------------------------------------------------------------
+// Core EO Target Detector
+// ---------------------------------------------------------------------------
+
+export class CoreEoTargetDetector {
+  /** Per-sensor bearing-only detections. Key = sensorId. */
+  private sensorDetections = new Map<string, Map<string, EoDetection>>();
+
+  /** Active 3D EO targets. Key = eoTargetId. */
+  private eoTargets = new Map<string, EoTarget3D>();
+
+  private config: CoreDetectorConfig;
+
+  constructor(config?: Partial<CoreDetectorConfig>) {
+    this.config = { ...DEFAULT_CONFIG, ...config };
+  }
+
+  // ── Public API ──────────────────────────────────────────────────────────
+
+  /**
+   * Ingest a bearing observation from a staring sensor.
+   * The detector manages it as an independent bearing-only detection.
+   */
+  ingestBearing(obs: EoBearingObservation, sensorPosition: Position3D): EoDetection {
+    const sensorId = obs.sensorId;
+    if (!this.sensorDetections.has(sensorId)) {
+      this.sensorDetections.set(sensorId, new Map());
+    }
+
+    const sensorStore = this.sensorDetections.get(sensorId)!;
+
+    // Try to match to existing detection from same sensor (same target az/el)
+    const existing = this.findMatchingDetection(sensorStore, obs.bearing.azimuthDeg, obs.bearing.elevationDeg);
+
+    if (existing) {
+      // Update existing detection
+      existing.bearing = obs.bearing;
+      existing.imageQuality = obs.imageQuality;
+      existing.lastUpdated = Date.now();
+      existing.updateCount++;
+      return existing;
+    }
+
+    // Create new bearing-only detection
+    const detection: EoDetection = {
+      detectionId: generateId(),
+      sensorId,
+      sensorPosition: { ...sensorPosition },
+      bearing: obs.bearing,
+      imageQuality: obs.imageQuality,
+      targetId: obs.targetId,
+      firstSeen: Date.now(),
+      lastUpdated: Date.now(),
+      updateCount: 1,
+    };
+
+    sensorStore.set(detection.detectionId, detection);
+    return detection;
+  }
+
+  /**
+   * Run the core detection cycle: correlate bearings across sensors,
+   * triangulate overlapping detections, and identify enhanced-cue
+   * candidates for single-sensor detections.
+   *
+   * @param sensors Active staring sensors
+   * @param existingTracks Current system tracks (for enhanced cueing fallback)
+   */
+  processTick(
+    sensors: SensorState[],
+    existingTracks: SystemTrack[],
+  ): CoreDetectorResult {
+    const now = Date.now();
+    const result: CoreDetectorResult = {
+      newTargets: [],
+      updatedTargets: [],
+      enhancedCueBearings: [],
+    };
+
+    // 1. Prune stale detections
+    this.pruneStaleDetections(now);
+
+    // 2. Collect all live detections across sensors
+    const allDetections: EoDetection[] = [];
+    for (const sensorStore of this.sensorDetections.values()) {
+      for (const det of sensorStore.values()) {
+        allDetections.push(det);
+      }
+    }
+
+    if (allDetections.length === 0) return result;
+
+    // 3. Group detections by target using cross-sensor bearing correlation
+    const correlationGroups = this.correlateBearings(allDetections, sensors);
+
+    // 4. Process each correlation group
+    const matchedDetectionIds = new Set<string>();
+
+    for (const group of correlationGroups) {
+      if (group.length < 2) continue;
+
+      // Ensure detections come from different sensors
+      const uniqueSensors = new Set(group.map(d => d.sensorId));
+      if (uniqueSensors.size < 2) continue;
+
+      // Mark all as matched
+      for (const det of group) {
+        matchedDetectionIds.add(det.detectionId);
+      }
+
+      // Pick best (most recent) detection per sensor
+      const bestPerSensor = new Map<string, EoDetection>();
+      for (const det of group) {
+        const existing = bestPerSensor.get(det.sensorId);
+        if (!existing || det.bearing.timestamp > existing.bearing.timestamp) {
+          bestPerSensor.set(det.sensorId, det);
+        }
+      }
+      const selected = [...bestPerSensor.values()];
+      if (selected.length < 2) continue;
+
+      // Triangulate
+      const triResult = this.tryTriangulate(selected);
+      if (!triResult) continue;
+
+      // Check if this group already has an existing EO target
+      const existingTarget = this.findExistingTarget(selected);
+
+      if (existingTarget) {
+        // Update existing target
+        existingTarget.position = triResult.position;
+        existingTarget.intersectionAngleDeg = triResult.intersectionAngleDeg;
+        existingTarget.missDistanceM = triResult.missDistanceM;
+        existingTarget.detectionIds = selected.map(d => d.detectionId);
+        existingTarget.sensorIds = [...uniqueSensors];
+        existingTarget.lastUpdated = now;
+        existingTarget.classification =
+          uniqueSensors.size >= 3 && triResult.intersectionAngleDeg > 15
+            ? 'confirmed_3d'
+            : 'candidate_3d';
+        result.updatedTargets.push(existingTarget);
+      } else {
+        // Create new 3D EO target
+        const target: EoTarget3D = {
+          eoTargetId: generateId(),
+          detectionIds: selected.map(d => d.detectionId),
+          sensorIds: [...uniqueSensors],
+          position: triResult.position,
+          intersectionAngleDeg: triResult.intersectionAngleDeg,
+          missDistanceM: triResult.missDistanceM,
+          classification:
+            uniqueSensors.size >= 3 && triResult.intersectionAngleDeg > 15
+              ? 'confirmed_3d'
+              : 'candidate_3d',
+          createdAt: now,
+          lastUpdated: now,
+          promotedTrackId: null,
+        };
+        this.eoTargets.set(target.eoTargetId, target);
+        result.newTargets.push(target);
+      }
+    }
+
+    // 5. For unmatched single-sensor detections → enhanced cueing fallback
+    for (const det of allDetections) {
+      if (matchedDetectionIds.has(det.detectionId)) continue;
+
+      const match = this.findEnhancedCueMatch(det, existingTracks);
+      if (match) {
+        result.enhancedCueBearings.push({
+          detection: det,
+          systemTrackId: match.trackId,
+          angularDiffDeg: match.angularDiff,
+        });
+      }
+    }
+
+    return result;
+  }
+
+  /** Get all active 3D EO targets. */
+  getEoTargets(): EoTarget3D[] {
+    return [...this.eoTargets.values()];
+  }
+
+  /** Get all bearing-only detections for a sensor. */
+  getSensorDetections(sensorId: string): EoDetection[] {
+    const store = this.sensorDetections.get(sensorId);
+    return store ? [...store.values()] : [];
+  }
+
+  /** Get all bearing-only detections across all sensors. */
+  getAllDetections(): EoDetection[] {
+    const all: EoDetection[] = [];
+    for (const store of this.sensorDetections.values()) {
+      for (const det of store.values()) {
+        all.push(det);
+      }
+    }
+    return all;
+  }
+
+  /** Mark an EO target as promoted to a system track. */
+  markPromoted(eoTargetId: string, systemTrackId: string): void {
+    const target = this.eoTargets.get(eoTargetId);
+    if (target) {
+      target.promotedTrackId = systemTrackId;
+    }
+  }
+
+  /** Reset all state (on scenario reset). */
+  reset(): void {
+    this.sensorDetections.clear();
+    this.eoTargets.clear();
+  }
+
+  // ── Private ─────────────────────────────────────────────────────────────
+
+  /**
+   * Find an existing detection from same sensor within the correlation gate
+   * using both azimuth and elevation. This prevents duplicate detections
+   * from the same sensor for the same target.
+   */
+  private findMatchingDetection(
+    sensorStore: Map<string, EoDetection>,
+    azimuthDeg: number,
+    elevationDeg: number,
+  ): EoDetection | undefined {
+    for (const det of sensorStore.values()) {
+      let azDiff = Math.abs(azimuthDeg - det.bearing.azimuthDeg);
+      if (azDiff > 180) azDiff = 360 - azDiff;
+      const elDiff = Math.abs(elevationDeg - det.bearing.elevationDeg);
+      // Both az and el must be within the correlation gate
+      if (azDiff < this.config.correlationGateDeg && elDiff < this.config.correlationGateDeg) {
+        return det;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Correlate bearing detections across different sensors.
+   * Two detections from different sensors are correlated if their bearing
+   * rays intersect within the correlation gate (projected from sensor positions).
+   *
+   * Returns groups of correlated detections.
+   */
+  private correlateBearings(
+    detections: EoDetection[],
+    sensors: SensorState[],
+  ): EoDetection[][] {
+    // Build adjacency: two detections correlate if from different sensors
+    // and their bearings plausibly point at the same target.
+    // We use a simple approach: for each pair of detections from different
+    // sensors, check if the ray intersection point is consistent.
+
+    const n = detections.length;
+    const parent = Array.from({ length: n }, (_, i) => i);
+
+    function find(x: number): number {
+      while (parent[x] !== x) {
+        parent[x] = parent[parent[x]];
+        x = parent[x];
+      }
+      return x;
+    }
+    function union(a: number, b: number): void {
+      const ra = find(a), rb = find(b);
+      if (ra !== rb) parent[ra] = rb;
+    }
+
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const di = detections[i];
+        const dj = detections[j];
+        if (di.sensorId === dj.sensorId) continue;
+
+        // Check if bearings from these two sensors plausibly intersect
+        if (this.bearingsCorrelate(di, dj)) {
+          union(i, j);
+        }
+      }
+    }
+
+    // Collect groups
+    const groups = new Map<number, EoDetection[]>();
+    for (let i = 0; i < n; i++) {
+      const root = find(i);
+      if (!groups.has(root)) groups.set(root, []);
+      groups.get(root)!.push(detections[i]);
+    }
+
+    return [...groups.values()];
+  }
+
+  /**
+   * Check if two bearing detections from different sensors plausibly
+   * point at the same target. Uses simplified ray intersection:
+   * compute where the two bearing lines cross, and check that the
+   * intersection distance from each sensor is reasonable.
+   */
+  private bearingsCorrelate(a: EoDetection, b: EoDetection): boolean {
+    // Quick angular check: compute expected azimuth from sensor A
+    // to the point along sensor B's bearing, and vice versa.
+    // If the bearing rays are roughly convergent, they correlate.
+
+    const latA = a.sensorPosition.lat;
+    const lonA = a.sensorPosition.lon;
+    const latB = b.sensorPosition.lat;
+    const lonB = b.sensorPosition.lon;
+
+    // Azimuth from sensor A to sensor B
+    const azAtoB = bearingDeg(latA, lonA, latB, lonB);
+    // Azimuth from sensor B to sensor A
+    const azBtoA = bearingDeg(latB, lonB, latA, lonA);
+
+    // For two bearings to point at the same target, the target must lie
+    // on the "same side" relative to the baseline.
+    // Check: bearing A should point roughly toward the half-plane
+    // that sensor B sees, and vice versa.
+    const azA = a.bearing.azimuthDeg;
+    const azB = b.bearing.azimuthDeg;
+
+    // Angular difference between bearing A and direction A→B
+    let diffA = azA - azAtoB;
+    if (diffA > 180) diffA -= 360;
+    if (diffA < -180) diffA += 360;
+
+    // Angular difference between bearing B and direction B→A
+    let diffB = azB - azBtoA;
+    if (diffB > 180) diffB -= 360;
+    if (diffB < -180) diffB += 360;
+
+    // For convergent rays: the bearings should point roughly "past" each other
+    // (i.e., bearing A is within ~90° of A→B direction, and bearing B is within
+    // ~90° of B→A direction, and they converge rather than diverge).
+    // A simple test: the sum of angular deviations should indicate convergence.
+    // If both bearings point toward the baseline region, they converge.
+    if (Math.abs(diffA) > 90 || Math.abs(diffB) > 90) return false;
+
+    // More precise: try a quick triangulation and check miss distance
+    try {
+      const triResult = triangulateMultiple(
+        [a.sensorPosition, b.sensorPosition],
+        [a.bearing, b.bearing],
+      );
+      // Accept if miss distance is within gate and intersection angle is usable
+      return triResult.averageMissDistance < this.config.maxMissDistanceM;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Attempt triangulation on a set of detections.
+   * Returns null if triangulation fails or quality is too low.
+   */
+  private tryTriangulate(
+    detections: EoDetection[],
+  ): { position: Position3D; intersectionAngleDeg: number; missDistanceM: number } | null {
+    const positions = detections.map(d => d.sensorPosition);
+    const bearings = detections.map(d => d.bearing);
+
+    try {
+      const result = triangulateMultiple(positions, bearings);
+
+      if (!result.position) return null;
+
+      // Quality gate: intersection angle must be usable
+      if (result.intersectionAngleDeg < this.config.minIntersectionAngleDeg) return null;
+
+      // Quality gate: miss distance must be acceptable
+      if (result.averageMissDistance > this.config.maxMissDistanceM) return null;
+
+      return {
+        position: result.position,
+        intersectionAngleDeg: result.intersectionAngleDeg,
+        missDistanceM: result.averageMissDistance,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Find an existing EO target that involves the same sensors/detections.
+   */
+  private findExistingTarget(detections: EoDetection[]): EoTarget3D | undefined {
+    const detIds = new Set(detections.map(d => d.detectionId));
+    for (const target of this.eoTargets.values()) {
+      // Match if any detection ID overlaps
+      if (target.detectionIds.some(id => detIds.has(id))) {
+        return target;
+      }
+    }
+    // Also match by sensor set overlap + spatial proximity
+    const sensorIds = new Set(detections.map(d => d.sensorId));
+    for (const target of this.eoTargets.values()) {
+      const targetSensors = new Set(target.sensorIds);
+      const overlap = [...sensorIds].filter(s => targetSensors.has(s));
+      if (overlap.length >= 2) {
+        return target;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Enhanced cueing fallback: find the nearest system track to a
+   * single-sensor az/el detection.
+   * Compares both azimuth and elevation to the track's direction.
+   */
+  private findEnhancedCueMatch(
+    detection: EoDetection,
+    tracks: SystemTrack[],
+  ): { trackId: string; angularDiff: number } | null {
+    const detAz = detection.bearing.azimuthDeg;
+    const detEl = detection.bearing.elevationDeg;
+    let bestTrackId: string | null = null;
+    let bestDiff = Infinity;
+
+    for (const track of tracks) {
+      if (track.status === 'dropped') continue;
+
+      // Compute expected azimuth from sensor to track
+      const trackAz = bearingDeg(
+        detection.sensorPosition.lat,
+        detection.sensorPosition.lon,
+        track.state.lat,
+        track.state.lon,
+      );
+      let azDiff = Math.abs(detAz - trackAz);
+      if (azDiff > 180) azDiff = 360 - azDiff;
+
+      // Compute expected elevation from sensor to track
+      const dLat = (track.state.lat - detection.sensorPosition.lat) * 110540;
+      const dLon = (track.state.lon - detection.sensorPosition.lon) * 111320 * Math.cos(detection.sensorPosition.lat * Math.PI / 180);
+      const horizDist = Math.sqrt(dLat * dLat + dLon * dLon);
+      const dAlt = track.state.alt - detection.sensorPosition.alt;
+      const expectedEl = Math.atan2(dAlt, horizDist) * (180 / Math.PI);
+      const elDiff = Math.abs(detEl - expectedEl);
+
+      // Combined angular distance (RSS of az and el diffs)
+      const combinedDiff = Math.sqrt(azDiff * azDiff + elDiff * elDiff);
+
+      if (combinedDiff < bestDiff) {
+        bestDiff = combinedDiff;
+        bestTrackId = track.systemTrackId as string;
+      }
+    }
+
+    if (bestTrackId && bestDiff <= this.config.enhancedCueGateDeg) {
+      return { trackId: bestTrackId, angularDiff: bestDiff };
+    }
+    return null;
+  }
+
+  /** Remove detections older than maxDetectionAgeMs. */
+  private pruneStaleDetections(now: number): void {
+    for (const [sensorId, store] of this.sensorDetections) {
+      for (const [detId, det] of store) {
+        if (now - det.lastUpdated > this.config.maxDetectionAgeMs) {
+          store.delete(detId);
+        }
+      }
+      if (store.size === 0) {
+        this.sensorDetections.delete(sensorId);
+      }
+    }
+
+    // Also prune 3D targets whose detections are all gone
+    for (const [targetId, target] of this.eoTargets) {
+      const anyAlive = target.detectionIds.some(dId => {
+        for (const store of this.sensorDetections.values()) {
+          if (store.has(dId)) return true;
+        }
+        return false;
+      });
+      if (!anyAlive && !target.promotedTrackId) {
+        this.eoTargets.delete(targetId);
+      }
+    }
+  }
+}
