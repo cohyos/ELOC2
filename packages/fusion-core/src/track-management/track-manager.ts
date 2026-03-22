@@ -26,6 +26,8 @@ import {
   updateExistenceOnDetection,
   updateExistenceOnMiss,
 } from './existence-calculator.js';
+import { ConsistencyEvaluator } from './consistency-evaluator.js';
+import type { ConsistencyResult } from './consistency-evaluator.js';
 import type { AssociationMode } from '../association/association-selector.js';
 
 // ---------------------------------------------------------------------------
@@ -125,6 +127,9 @@ export class TrackManager {
   private readonly config: TrackManagerConfig;
   private correlatorConfig: CorrelatorConfig = { gateThreshold: 16.27, velocityGateThreshold: 50 };
   private mergeDistanceM: number = 3000;
+
+  /** 6DOF consistency evaluator — tracks position/velocity/acceleration/Doppler consistency. */
+  readonly consistencyEvaluator = new ConsistencyEvaluator();
 
   constructor(config: Partial<TrackManagerConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -313,6 +318,21 @@ export class TrackManager {
       }
     }
 
+    // ── 6DOF Consistency evaluation ──
+    // Compare current state against predicted state from previous cycle.
+    // Adjusts confidence based on position/velocity/acceleration/Doppler consistency.
+    const consistencyResult = this.consistencyEvaluator.evaluate(
+      trackId as string,
+      track.state,
+      observation.velocity ?? track.velocity,
+      observation.timestamp as number,
+      track.radialVelocity,
+    );
+    if (consistencyResult) {
+      track.confidence = Math.max(0, Math.min(1, track.confidence + consistencyResult.certaintyDelta));
+      meta.existenceProbability = track.confidence;
+    }
+
     return track;
   }
 
@@ -346,6 +366,9 @@ export class TrackManager {
       ...track.lineage,
       createLineageEntry('track.dropped', 'Track dropped'),
     ];
+
+    // Clean up consistency tracking
+    this.consistencyEvaluator.removeTrack(trackId as string);
 
     return track;
   }

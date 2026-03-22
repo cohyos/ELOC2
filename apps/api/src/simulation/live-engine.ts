@@ -1512,6 +1512,9 @@ export class LiveEngine {
     // Reset Core EO Target Detector
     this.coreEoDetector.reset();
 
+    // Reset 6DOF consistency evaluator
+    this.trackManager.consistencyEvaluator.reset();
+
     this.state = this.buildInitialState();
   }
 
@@ -3256,9 +3259,24 @@ export class LiveEngine {
       t => (t.systemTrackId as string) === target.promotedTrackId,
     );
     if (eoTrack && eoTrack.status !== 'dropped') {
+      // 6DOF consistency evaluation: compare new position against predicted
+      const consistency = this.trackManager.consistencyEvaluator.evaluate(
+        target.promotedTrackId,
+        target.position,
+        eoTrack.velocity,
+        now as number,
+      );
+
       eoTrack.state = { ...target.position };
       eoTrack.lastUpdated = now;
-      eoTrack.confidence = Math.min(1, eoTrack.confidence + 0.05);
+
+      if (consistency) {
+        // Apply consistency-based certainty delta
+        eoTrack.confidence = Math.max(0, Math.min(1, eoTrack.confidence + consistency.certaintyDelta));
+      } else {
+        // First update — small boost
+        eoTrack.confidence = Math.min(1, eoTrack.confidence + 0.05);
+      }
 
       // Update geometry estimate for EO track
       this.state.geometryEstimates.set(target.promotedTrackId, {
