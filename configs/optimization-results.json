@@ -1,91 +1,18 @@
 {
-  "timestamp": "2026-03-22T22:52:46.793Z",
+  "timestamp": "2026-03-22T22:54:26.422Z",
   "results": [
     {
       "level": "eo_level",
-      "bestFitness": 85.19662921348315,
+      "bestFitness": 86.32022471910112,
       "bestParams": {
-        "correlationGateDeg": 3,
-        "minIntersectionAngleDeg": 6,
-        "maxMissDistanceM": 8500,
-        "enhancedCueGateDeg": 5,
-        "minCyclesForResolution": 3,
-        "maxCyclesBeforeEscalation": 6,
-        "ambiguityConsistencyThreshold": 0.5,
-        "ambiguousMissDistanceM": 4000
-      },
-      "converged": true,
-      "reason": "Asymptote detected at generation 9 (improvement 0.00% over last 6 generations)",
-      "totalRuns": 1736,
-      "generationCount": 10,
-      "progressCurve": [
-        {
-          "gen": 0,
-          "best": 84.1,
-          "avg": 79.7
-        },
-        {
-          "gen": 1,
-          "best": 84.1,
-          "avg": 80.7
-        },
-        {
-          "gen": 2,
-          "best": 84.5,
-          "avg": 81.9
-        },
-        {
-          "gen": 3,
-          "best": 84.5,
-          "avg": 80.7
-        },
-        {
-          "gen": 4,
-          "best": 85.2,
-          "avg": 81.6
-        },
-        {
-          "gen": 5,
-          "best": 85.2,
-          "avg": 80.8
-        },
-        {
-          "gen": 6,
-          "best": 85.2,
-          "avg": 81.6
-        },
-        {
-          "gen": 7,
-          "best": 85.2,
-          "avg": 81.1
-        },
-        {
-          "gen": 8,
-          "best": 85.2,
-          "avg": 80.7
-        },
-        {
-          "gen": 9,
-          "best": 85.2,
-          "avg": 81.3
-        }
-      ]
-    },
-    {
-      "level": "radar_level",
-      "bestFitness": 89.10112359550561,
-      "bestParams": {
-        "gateThreshold": 28,
-        "velocityGateThreshold": 120,
-        "confirmAfter": 4,
-        "dropAfterMisses": 8,
-        "pDetection": 0.7999999999999999,
-        "pFalseAlarm": 0.036000000000000004,
-        "existencePromotionThreshold": 0.55,
-        "existenceConfirmationThreshold": 0.65,
-        "existenceDeletionThreshold": 0.11,
-        "coastingMissThreshold": 6,
-        "maxCoastingTimeSec": 9
+        "correlationGateDeg": 5.5,
+        "minIntersectionAngleDeg": 11,
+        "maxMissDistanceM": 9500,
+        "enhancedCueGateDeg": 14,
+        "minCyclesForResolution": 5,
+        "maxCyclesBeforeEscalation": 10,
+        "ambiguityConsistencyThreshold": 0.7,
+        "ambiguousMissDistanceM": 2000
       },
       "converged": true,
       "reason": "Asymptote detected at generation 11 (improvement 0.00% over last 6 generations)",
@@ -94,110 +21,168 @@
       "progressCurve": [
         {
           "gen": 0,
-          "best": 88.5,
-          "avg": 86.6
+          "best": 84.3,
+          "avg": 81.2
         },
         {
           "gen": 1,
-          "best": 88.5,
-          "avg": 87.5
+          "best": 84.4,
+          "avg": 82.2
         },
         {
           "gen": 2,
-          "best": 88.5,
-          "avg": 87.8
+          "best": 84.7,
+          "avg": 81.7
         },
         {
           "gen": 3,
-          "best": 88.5,
-          "avg": 87.5
+          "best": 84.7,
+          "avg": 81.3
         },
         {
           "gen": 4,
-          "best": 88.5,
+          "best": 85,
+          "avg": 81.1
+        },
+        {
+          "gen": 5,
+          "best": 85,
+          "avg": 79.1
+        },
+        {
+          "gen": 6,
+          "best": 86.3,
+          "avg": 82.2
+        },
+        {
+          "gen": 7,
+          "best": 86.3,
+          "avg": 81.9
+        },
+        {
+          "gen": 8,
+          "best": 86.3,
+          "avg": 81.3
+        },
+        {
+          "gen": 9,
+          "best": 86.3,
+          "avg": 81.4
+        },
+        {
+          "gen": 10,
+          "best": 86.3,
+          "avg": 81.5
+        },
+        {
+          "gen": 11,
+          "best": 86.3,
+          "avg": 81.4
+        }
+      ]
+    },
+    {
+      "level": "radar_level",
+      "bestFitness": 89.24157303370787,
+      "bestParams": {
+        "gateThreshold": 32,
+        "velocityGateThreshold": 80,
+        "confirmAfter": 5,
+        "dropAfterMisses": 10,
+        "pDetection": 0.75,
+        "pFalseAlarm": 0.041,
+        "existencePromotionThreshold": 0.65,
+        "existenceConfirmationThreshold": 0.75,
+        "existenceDeletionThreshold": 0.21000000000000002,
+        "coastingMissThreshold": 3,
+        "maxCoastingTimeSec": 13
+      },
+      "converged": true,
+      "reason": "Asymptote detected at generation 6 (improvement 0.17% over last 6 generations)",
+      "totalRuns": 1232,
+      "generationCount": 7,
+      "progressCurve": [
+        {
+          "gen": 0,
+          "best": 88.3,
+          "avg": 86.9
+        },
+        {
+          "gen": 1,
+          "best": 89.1,
+          "avg": 87.6
+        },
+        {
+          "gen": 2,
+          "best": 89.1,
+          "avg": 87.5
+        },
+        {
+          "gen": 3,
+          "best": 89.1,
+          "avg": 86.8
+        },
+        {
+          "gen": 4,
+          "best": 89.1,
           "avg": 87.5
         },
         {
           "gen": 5,
-          "best": 88.5,
-          "avg": 87.7
+          "best": 89.1,
+          "avg": 87.4
         },
         {
           "gen": 6,
-          "best": 89.1,
-          "avg": 87.6
-        },
-        {
-          "gen": 7,
-          "best": 89.1,
+          "best": 89.2,
           "avg": 87.7
-        },
-        {
-          "gen": 8,
-          "best": 89.1,
-          "avg": 87.2
-        },
-        {
-          "gen": 9,
-          "best": 89.1,
-          "avg": 87.6
-        },
-        {
-          "gen": 10,
-          "best": 89.1,
-          "avg": 87.9
-        },
-        {
-          "gen": 11,
-          "best": 89.1,
-          "avg": 87.4
         }
       ]
     },
     {
       "level": "bm_radar_level",
-      "bestFitness": 81.5,
+      "bestFitness": 81.125,
       "bestParams": {
-        "gateThreshold": 70,
-        "velocityGateThreshold": 500,
-        "confirmAfter": 1,
-        "dropAfterMisses": 5,
-        "pDetection": 0.9099999999999999,
-        "pFalseAlarm": 0.007,
-        "existencePromotionThreshold": 0.5,
-        "existenceConfirmationThreshold": 0.75,
-        "existenceDeletionThreshold": 0.22999999999999998,
-        "coastingMissThreshold": 3,
-        "maxCoastingTimeSec": 3,
-        "positionGateM": 3600,
-        "velocityGateMps": 550,
-        "accelerationGateMps2": 90,
-        "dopplerGateMps": 230,
-        "consistentBoost": 0.15000000000000002,
-        "inconsistentDecay": -0.09,
-        "maxDeltaPerUpdate": 0.1,
+        "gateThreshold": 60,
+        "velocityGateThreshold": 750,
+        "confirmAfter": 2,
+        "dropAfterMisses": 9,
+        "pDetection": 0.89,
+        "pFalseAlarm": 0.005,
+        "existencePromotionThreshold": 0.55,
+        "existenceConfirmationThreshold": 0.65,
+        "existenceDeletionThreshold": 0.27,
+        "coastingMissThreshold": 4,
+        "maxCoastingTimeSec": 11,
+        "positionGateM": 6000,
+        "velocityGateMps": 300,
+        "accelerationGateMps2": 40,
+        "dopplerGateMps": 270,
+        "consistentBoost": 0.1,
+        "inconsistentDecay": -0.19,
+        "maxDeltaPerUpdate": 0.33999999999999997,
         "streakBonusAfter": 2,
-        "streakBonusMultiplier": 1.5
+        "streakBonusMultiplier": 1.75
       },
       "converged": true,
-      "reason": "Asymptote detected at generation 10 (improvement 0.00% over last 6 generations)",
-      "totalRuns": 408,
-      "generationCount": 11,
+      "reason": "Asymptote detected at generation 6 (improvement 0.00% over last 6 generations)",
+      "totalRuns": 264,
+      "generationCount": 7,
       "progressCurve": [
         {
           "gen": 0,
           "best": 81.1,
-          "avg": 80.2
+          "avg": 80.3
         },
         {
           "gen": 1,
           "best": 81.1,
-          "avg": 80.3
+          "avg": 80.5
         },
         {
           "gen": 2,
           "best": 81.1,
-          "avg": 80.6
+          "avg": 80.5
         },
         {
           "gen": 3,
@@ -207,255 +192,260 @@
         {
           "gen": 4,
           "best": 81.1,
-          "avg": 80.6
-        },
-        {
-          "gen": 5,
-          "best": 81.5,
-          "avg": 80.6
-        },
-        {
-          "gen": 6,
-          "best": 81.5,
-          "avg": 80
-        },
-        {
-          "gen": 7,
-          "best": 81.5,
           "avg": 80.3
         },
         {
-          "gen": 8,
-          "best": 81.5,
-          "avg": 80.5
+          "gen": 5,
+          "best": 81.1,
+          "avg": 80.3
         },
         {
-          "gen": 9,
-          "best": 81.5,
-          "avg": 80.8
-        },
-        {
-          "gen": 10,
-          "best": 81.5,
+          "gen": 6,
+          "best": 81.1,
           "avg": 80.6
         }
       ]
     },
     {
       "level": "abt_radar_level",
-      "bestFitness": 94.79166666666667,
+      "bestFitness": 94.70833333333333,
       "bestParams": {
-        "gateThreshold": 22,
-        "velocityGateThreshold": 50,
-        "confirmAfter": 2,
-        "dropAfterMisses": 7,
-        "pDetection": 0.87,
-        "pFalseAlarm": 0.015,
-        "existencePromotionThreshold": 0.6000000000000001,
-        "existenceConfirmationThreshold": 0.7,
-        "existenceDeletionThreshold": 0.04,
-        "coastingMissThreshold": 6,
-        "maxCoastingTimeSec": 18,
-        "positionGateM": 1900,
-        "velocityGateMps": 35,
-        "accelerationGateMps2": 20,
-        "dopplerGateMps": 70,
+        "gateThreshold": 12,
+        "velocityGateThreshold": 140,
+        "confirmAfter": 5,
+        "dropAfterMisses": 9,
+        "pDetection": 0.81,
+        "pFalseAlarm": 0.005,
+        "existencePromotionThreshold": 0.7,
+        "existenceConfirmationThreshold": 0.8,
+        "existenceDeletionThreshold": 0.08,
+        "coastingMissThreshold": 3,
+        "maxCoastingTimeSec": 32,
+        "positionGateM": 750,
+        "velocityGateMps": 45,
+        "accelerationGateMps2": 50,
+        "dopplerGateMps": 60,
         "consistentBoost": 0.09,
-        "inconsistentDecay": -0.1,
-        "maxDeltaPerUpdate": 0.13,
-        "streakBonusAfter": 4,
-        "streakBonusMultiplier": 1.25
+        "inconsistentDecay": -0.12000000000000001,
+        "maxDeltaPerUpdate": 0.21000000000000002,
+        "streakBonusAfter": 5,
+        "streakBonusMultiplier": 1.75
       },
       "converged": true,
-      "reason": "Asymptote detected at generation 6 (improvement 0.00% over last 6 generations)",
-      "totalRuns": 704,
-      "generationCount": 7,
+      "reason": "Asymptote detected at generation 10 (improvement 0.00% over last 6 generations)",
+      "totalRuns": 1088,
+      "generationCount": 11,
       "progressCurve": [
         {
           "gen": 0,
-          "best": 94.2,
-          "avg": 91.4
-        },
-        {
-          "gen": 1,
-          "best": 94.8,
-          "avg": 91
-        },
-        {
-          "gen": 2,
-          "best": 94.8,
+          "best": 93.9,
           "avg": 91.3
         },
         {
-          "gen": 3,
-          "best": 94.8,
-          "avg": 92.5
+          "gen": 1,
+          "best": 94.4,
+          "avg": 92.2
         },
         {
-          "gen": 4,
-          "best": 94.8,
-          "avg": 92
-        },
-        {
-          "gen": 5,
-          "best": 94.8,
+          "gen": 2,
+          "best": 94.4,
           "avg": 91.4
         },
         {
+          "gen": 3,
+          "best": 94.4,
+          "avg": 92
+        },
+        {
+          "gen": 4,
+          "best": 94.4,
+          "avg": 92.1
+        },
+        {
+          "gen": 5,
+          "best": 94.7,
+          "avg": 91.7
+        },
+        {
           "gen": 6,
-          "best": 94.8,
-          "avg": 92.3
+          "best": 94.7,
+          "avg": 91.8
+        },
+        {
+          "gen": 7,
+          "best": 94.7,
+          "avg": 92
+        },
+        {
+          "gen": 8,
+          "best": 94.7,
+          "avg": 91.9
+        },
+        {
+          "gen": 9,
+          "best": 94.7,
+          "avg": 92.4
+        },
+        {
+          "gen": 10,
+          "best": 94.7,
+          "avg": 90.7
         }
       ]
     },
     {
       "level": "collection_level",
-      "bestFitness": 84.7752808988764,
+      "bestFitness": 84.91573033707864,
       "bestParams": {
         "gateThreshold": 24,
-        "velocityGateThreshold": 60,
+        "velocityGateThreshold": 110,
         "confirmAfter": 3,
-        "dropAfterMisses": 10,
-        "pDetection": 0.8999999999999999,
-        "pFalseAlarm": 0.051000000000000004,
+        "dropAfterMisses": 12,
+        "pDetection": 0.7999999999999999,
+        "pFalseAlarm": 0.096,
         "existencePromotionThreshold": 0.5,
-        "existenceConfirmationThreshold": 0.8,
-        "existenceDeletionThreshold": 0.17,
+        "existenceConfirmationThreshold": 0.6,
+        "existenceDeletionThreshold": 0.23,
         "coastingMissThreshold": 3,
-        "maxCoastingTimeSec": 23,
-        "positionGateM": 600,
-        "velocityGateMps": 80,
+        "maxCoastingTimeSec": 15,
+        "positionGateM": 1000,
+        "velocityGateMps": 90,
         "accelerationGateMps2": 40,
-        "dopplerGateMps": 45,
-        "consistentBoost": 0.05,
-        "inconsistentDecay": -0.12000000000000001,
-        "maxDeltaPerUpdate": 0.16999999999999998,
-        "streakBonusAfter": 4,
-        "streakBonusMultiplier": 2.5
+        "dopplerGateMps": 90,
+        "consistentBoost": 0.08,
+        "inconsistentDecay": -0.04000000000000001,
+        "maxDeltaPerUpdate": 0.21000000000000002,
+        "streakBonusAfter": 2,
+        "streakBonusMultiplier": 2.75
       },
       "converged": true,
-      "reason": "Asymptote detected at generation 7 (improvement 0.17% over last 6 generations)",
-      "totalRuns": 1400,
-      "generationCount": 8,
+      "reason": "Asymptote detected at generation 8 (improvement 0.00% over last 6 generations)",
+      "totalRuns": 1568,
+      "generationCount": 9,
       "progressCurve": [
         {
           "gen": 0,
-          "best": 83,
-          "avg": 80.6
+          "best": 82.6,
+          "avg": 79.5
         },
         {
           "gen": 1,
-          "best": 83,
-          "avg": 81.2
+          "best": 83.2,
+          "avg": 80.1
         },
         {
           "gen": 2,
-          "best": 84.6,
-          "avg": 81.3
+          "best": 84.5,
+          "avg": 80.1
         },
         {
           "gen": 3,
-          "best": 84.6,
-          "avg": 81.1
+          "best": 84.9,
+          "avg": 81.6
         },
         {
           "gen": 4,
-          "best": 84.6,
-          "avg": 81.1
+          "best": 84.9,
+          "avg": 81.8
         },
         {
           "gen": 5,
-          "best": 84.8,
-          "avg": 81.9
+          "best": 84.9,
+          "avg": 80.6
         },
         {
           "gen": 6,
-          "best": 84.8,
-          "avg": 82.4
+          "best": 84.9,
+          "avg": 80.1
         },
         {
           "gen": 7,
-          "best": 84.8,
-          "avg": 80.8
+          "best": 84.9,
+          "avg": 81.4
+        },
+        {
+          "gen": 8,
+          "best": 84.9,
+          "avg": 79.9
         }
       ]
     },
     {
       "level": "system_level",
-      "bestFitness": 85.92696629213482,
+      "bestFitness": 85.58988764044943,
       "bestParams": {
-        "correlationGateDeg": 4,
+        "correlationGateDeg": 4.5,
         "minIntersectionAngleDeg": 13,
-        "maxMissDistanceM": 6500,
-        "enhancedCueGateDeg": 5,
-        "minCyclesForResolution": 3,
-        "maxCyclesBeforeEscalation": 10,
-        "ambiguityConsistencyThreshold": 0.6000000000000001,
-        "ambiguousMissDistanceM": 3000,
-        "gateThreshold": 26,
-        "velocityGateThreshold": 80,
+        "maxMissDistanceM": 4500,
+        "enhancedCueGateDeg": 8,
+        "minCyclesForResolution": 2,
+        "maxCyclesBeforeEscalation": 7,
+        "ambiguityConsistencyThreshold": 0.55,
+        "ambiguousMissDistanceM": 3500,
+        "gateThreshold": 32,
+        "velocityGateThreshold": 120,
         "confirmAfter": 3,
-        "dropAfterMisses": 7,
+        "dropAfterMisses": 13,
         "pDetection": 0.85,
-        "pFalseAlarm": 0.076,
-        "existencePromotionThreshold": 0.6000000000000001,
-        "existenceConfirmationThreshold": 0.9,
-        "existenceDeletionThreshold": 0.19,
-        "coastingMissThreshold": 5,
-        "maxCoastingTimeSec": 29,
-        "positionGateM": 800,
-        "velocityGateMps": 60,
-        "accelerationGateMps2": 30,
+        "pFalseAlarm": 0.046,
+        "existencePromotionThreshold": 0.45,
+        "existenceConfirmationThreshold": 0.75,
+        "existenceDeletionThreshold": 0.15000000000000002,
+        "coastingMissThreshold": 4,
+        "maxCoastingTimeSec": 23,
+        "positionGateM": 750,
+        "velocityGateMps": 70,
+        "accelerationGateMps2": 25,
         "dopplerGateMps": 30,
-        "consistentBoost": 0.02,
-        "inconsistentDecay": -0.14,
-        "maxDeltaPerUpdate": 0.07,
-        "streakBonusAfter": 6,
+        "consistentBoost": 0.03,
+        "inconsistentDecay": -0.06,
+        "maxDeltaPerUpdate": 0.15000000000000002,
+        "streakBonusAfter": 3,
         "streakBonusMultiplier": 1.75,
-        "mergeDistanceM": 3500,
-        "eoFusionGateM": 2000,
-        "eoConfirmedWeight": 0.35,
-        "eoCandidateWeight": 0.15000000000000002
+        "mergeDistanceM": 5500,
+        "eoFusionGateM": 2500,
+        "eoConfirmedWeight": 0.30000000000000004,
+        "eoCandidateWeight": 0.2
       },
       "converged": true,
-      "reason": "Asymptote detected at generation 6 (improvement 0.00% over last 6 generations)",
+      "reason": "Asymptote detected at generation 6 (improvement 0.14% over last 6 generations)",
       "totalRuns": 2016,
       "generationCount": 7,
       "progressCurve": [
         {
           "gen": 0,
-          "best": 84.5,
-          "avg": 81.8
+          "best": 85.4,
+          "avg": 81.3
         },
         {
           "gen": 1,
-          "best": 85.9,
-          "avg": 82.8
+          "best": 85.4,
+          "avg": 82.3
         },
         {
           "gen": 2,
-          "best": 85.9,
-          "avg": 83.3
+          "best": 85.4,
+          "avg": 82.9
         },
         {
           "gen": 3,
-          "best": 85.9,
-          "avg": 81.9
+          "best": 85.4,
+          "avg": 83
         },
         {
           "gen": 4,
-          "best": 85.9,
-          "avg": 82.6
+          "best": 85.4,
+          "avg": 82.7
         },
         {
           "gen": 5,
-          "best": 85.9,
-          "avg": 82.5
+          "best": 85.6,
+          "avg": 82.4
         },
         {
           "gen": 6,
-          "best": 85.9,
-          "avg": 82.4
+          "best": 85.6,
+          "avg": 82.9
         }
       ]
     }
