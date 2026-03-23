@@ -3277,7 +3277,7 @@ export class LiveEngine {
       ],
       lastUpdated: now,
       sources: target.sensorIds.map(s => s as SensorId),
-      eoInvestigationStatus: 'confirmed',
+      eoInvestigationStatus: 'in_progress', // allow investigator cueing for refinement
       fusionMode: 'eo_triangulation',
     };
 
