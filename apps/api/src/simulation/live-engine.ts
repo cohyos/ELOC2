@@ -366,7 +366,10 @@ export class LiveEngine {
   private registrationService: RegistrationHealthService;
   private state: LiveState;
   private stateMachine = new SimulationStateMachine();
-  private timer: ReturnType<typeof setInterval> | null = null;
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  /** Guard: true while tick() is executing. Prevents scheduleStep() from
+   *  creating a second concurrent step chain during speed changes. */
+  private ticking = false;
   private wsClients = new Set<WsClient>();
   private wsClientInfos = new Map<WsClient, WsClientInfo>();
   private autoLoopEnabled = false;
@@ -1233,9 +1236,13 @@ export class LiveEngine {
 
   setSpeed(speed: number): void {
     this.state.speed = Math.max(0.1, Math.min(100, speed));
-    // Reschedule with new speed
-    if (this.state.running) {
+    // Reschedule with new speed — but only if we're not mid-tick.
+    // If tick() is running, it will call scheduleStep() itself when done,
+    // which will pick up the new speed. Creating a second chain here was
+    // the root cause of the "timeline plays on its own" duplication bug.
+    if (this.state.running && !this.ticking) {
       if (this.timer) clearTimeout(this.timer);
+      this.timer = null;
       this.scheduleStep();
     }
     this.pushEvent('scenario.speed_changed', `Speed set to ${this.state.speed}x`);
@@ -1770,10 +1777,21 @@ export class LiveEngine {
 
   private scheduleStep(): void {
     if (!this.state.running) return;
+    // Prevent duplicate step chains — only one timer should be active at a time
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
     // 1-second sim steps, scaled by speed
     const intervalMs = 1000 / this.state.speed;
     this.timer = setTimeout(() => {
-      this.tick();
+      this.timer = null; // timer has fired, clear reference
+      this.ticking = true;
+      try {
+        this.tick();
+      } finally {
+        this.ticking = false;
+      }
       this.scheduleStep();
     }, intervalMs);
   }
