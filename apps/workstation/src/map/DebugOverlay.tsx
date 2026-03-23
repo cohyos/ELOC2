@@ -86,10 +86,14 @@ function sectorLatLngs(
 /** Create a divIcon with no default Leaflet styling and drag prevention */
 function icon(html: string, size: [number, number], anchor: [number, number]): L.DivIcon {
   return L.divIcon({
-    html: `<div draggable="false" style="user-select:none;-webkit-user-drag:none;pointer-events:none;">${html}</div>`,
+    html: `<div draggable="false" style="user-select:none;-webkit-user-drag:none;">${html}</div>`,
     iconSize: size, iconAnchor: anchor, className: '',
   });
 }
+
+/** Clickable hit area size — larger than the visual element for easier selection */
+const HIT_SIZE: [number, number] = [32, 32];
+const HIT_ANCHOR: [number, number] = [16, 16];
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -144,6 +148,79 @@ export function DebugOverlay({
   const groupsRef = useRef<LayerGroups | null>(null);
   const callbacksRef = useRef({ onSelectTrack, onSelectSensor, onSelectGroundTruth });
   callbacksRef.current = { onSelectTrack, onSelectSensor, onSelectGroundTruth };
+
+  // ── Disambiguation: when multiple objects overlap, show selection popup ────
+  const disambigRef = useRef<{
+    candidates: Array<{ type: 'track' | 'sensor' | 'gt'; id: string; label: string; color: string }>;
+    timer: ReturnType<typeof setTimeout> | null;
+    popup: L.Popup | null;
+  }>({ candidates: [], timer: null, popup: null });
+
+  const addClickCandidate = (
+    type: 'track' | 'sensor' | 'gt',
+    id: string,
+    label: string,
+    color: string,
+    latlng: L.LatLng,
+  ) => {
+    const d = disambigRef.current;
+    // Close any existing popup
+    if (d.popup && map) { map.closePopup(d.popup); d.popup = null; }
+    d.candidates.push({ type, id, label, color });
+    if (d.timer) clearTimeout(d.timer);
+    // Wait one frame for all overlapping clicks to register
+    d.timer = setTimeout(() => {
+      const items = [...d.candidates];
+      d.candidates = [];
+      d.timer = null;
+      if (items.length === 1) {
+        // Single object — select directly
+        const item = items[0];
+        if (item.type === 'track') callbacksRef.current.onSelectTrack?.(item.id);
+        else if (item.type === 'sensor') callbacksRef.current.onSelectSensor?.(item.id);
+        else callbacksRef.current.onSelectGroundTruth?.(item.id);
+      } else if (items.length > 1 && map) {
+        // Multiple objects — show disambiguation popup
+        const listHtml = items.map(item =>
+          `<div class="disambig-item" data-type="${item.type}" data-id="${item.id}" ` +
+          `style="padding:4px 8px;cursor:pointer;display:flex;align-items:center;gap:6px;border-bottom:1px solid #444;" ` +
+          `onmouseover="this.style.background='#333'" onmouseout="this.style.background='transparent'">` +
+          `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${item.color};flex-shrink:0;"></span>` +
+          `<span style="font:11px monospace;color:#e0e0e0;white-space:nowrap;">${item.label}</span>` +
+          `</div>`
+        ).join('');
+        const popup = L.popup({
+          closeButton: true,
+          className: 'disambig-popup',
+          maxWidth: 250,
+          minWidth: 120,
+        })
+          .setLatLng(latlng)
+          .setContent(
+            `<div style="background:#1a1a1a;border-radius:4px;overflow:hidden;margin:-13px -20px -13px -20px;">` +
+            `<div style="padding:4px 8px;font:bold 10px monospace;color:#888;border-bottom:1px solid #444;">Select object</div>` +
+            `${listHtml}</div>`
+          )
+          .openOn(map);
+        d.popup = popup;
+        // Bind click handlers on popup items
+        const el = popup.getElement();
+        if (el) {
+          el.querySelectorAll('.disambig-item').forEach(itemEl => {
+            itemEl.addEventListener('click', () => {
+              const t = itemEl.getAttribute('data-type');
+              const itemId = itemEl.getAttribute('data-id');
+              if (!itemId) return;
+              if (t === 'track') callbacksRef.current.onSelectTrack?.(itemId);
+              else if (t === 'sensor') callbacksRef.current.onSelectSensor?.(itemId);
+              else callbacksRef.current.onSelectGroundTruth?.(itemId);
+              map.closePopup(popup);
+            });
+          });
+        }
+      }
+    }, 50); // 50ms debounce — enough to collect overlapping clicks
+  };
 
   // ── Suppress layer rebuilds during zoom animations to prevent flicker ─────
   const zoomingRef = useRef(false);
@@ -666,27 +743,20 @@ export function DebugOverlay({
       const color = sensor.online ? sensorColorFn(sensor.sensorType) : '#555555';
 
       if (showSensors) {
+        let sensorHtml: string;
         if (useNato) {
           const sym = resolveSensorSymbol(sensor, false, 24);
-          const marker = L.marker([lat, lon], {
-            icon: icon(sym.svgHtml, [24, 24], [12, 12]),
-            interactive: true,
-          });
-          marker.bindTooltip(`${shortSensorLabel(sensor)} — ${sensor.sensorId}`, { direction: 'top', offset: [0, -14] });
-          marker.on('click', () => callbacksRef.current.onSelectSensor?.(sensor.sensorId as string));
-          marker.addTo(g);
+          sensorHtml = `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;cursor:pointer;">${sym.svgHtml}</div>`;
         } else {
-          const marker = L.marker([lat, lon], {
-            icon: icon(
-              `<div style="width:14px;height:14px;background:${color};border:2px solid #000;cursor:pointer;"></div>`,
-              [14, 14], [7, 7],
-            ),
-            interactive: true,
-          });
-          marker.bindTooltip(`${shortSensorLabel(sensor)} — ${sensor.sensorId}`, { direction: 'top', offset: [0, -10] });
-          marker.on('click', () => callbacksRef.current.onSelectSensor?.(sensor.sensorId as string));
-          marker.addTo(g);
+          sensorHtml = `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;cursor:pointer;"><div style="width:14px;height:14px;background:${color};border:2px solid #000;"></div></div>`;
         }
+        const marker = L.marker([lat, lon], {
+          icon: icon(sensorHtml, HIT_SIZE, HIT_ANCHOR),
+          interactive: true,
+        });
+        marker.bindTooltip(`${shortSensorLabel(sensor)} — ${sensor.sensorId}`, { direction: 'top', offset: [0, -14] });
+        marker.on('click', (e: L.LeafletMouseEvent) => addClickCandidate('sensor', sensor.sensorId as string, `${shortSensorLabel(sensor)} (${sensor.sensorType})`, color, e.latlng));
+        marker.addTo(g);
       }
 
       if (showSensorLabels) {
@@ -738,20 +808,20 @@ export function DebugOverlay({
         let markerHtml: string;
         if (useNato) {
           const sym = resolveTrackSymbol(track, false, 24);
-          markerHtml = sym.svgHtml;
+          markerHtml = `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;cursor:pointer;">${sym.svgHtml}</div>`;
         } else if (isMultiSensor) {
-          markerHtml = `<div style="width:12px;height:12px;background:#00ffcc;border:2px solid #fff;transform:rotate(45deg);cursor:pointer;"></div>`;
+          markerHtml = `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;cursor:pointer;"><div style="width:12px;height:12px;background:#00ffcc;border:2px solid #fff;transform:rotate(45deg);"></div></div>`;
         } else {
-          markerHtml = `<div style="width:12px;height:12px;border-radius:50%;background:${color};border:2px solid #fff;cursor:pointer;"></div>`;
+          markerHtml = `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;cursor:pointer;"><div style="width:12px;height:12px;border-radius:50%;background:${color};border:2px solid #fff;"></div></div>`;
         }
 
         const marker = L.marker([lat, lon], {
-          icon: icon(markerHtml, [24, 24], [12, 12]),
+          icon: icon(markerHtml, HIT_SIZE, HIT_ANCHOR),
           interactive: true,
           zIndexOffset: 200,
         });
         marker.bindTooltip(title, { direction: 'top', offset: [0, -14] });
-        marker.on('click', () => callbacksRef.current.onSelectTrack?.(trackId));
+        marker.on('click', (e: L.LeafletMouseEvent) => addClickCandidate('track', trackId, `${shortTrackLabel(track)} — ${track.status}`, color, e.latlng));
         marker.on('dblclick', () => useUiStore.getState().setEoVideoPopupTrackId(trackId));
         marker.addTo(g);
 
@@ -798,20 +868,21 @@ export function DebugOverlay({
       const isSelected = selectedGroundTruthId === gtId;
       const size = isSelected ? 18 : 14;
 
-      // Diamond marker (rotated square)
+      // Diamond marker (rotated square) with enlarged hit area
       const marker = L.marker([lat, lon], {
         icon: icon(
+          `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;cursor:pointer;">` +
           `<div style="width:${size}px;height:${size}px;background:#00ffff;` +
           `border:${isSelected ? '3px solid #fff' : '2px solid #fff'};` +
-          `transform:rotate(45deg);cursor:pointer;` +
-          `${isSelected ? 'box-shadow:0 0 12px #00ffff,0 0 24px #00ffff66;' : ''}"></div>`,
-          [size, size], [size / 2, size / 2],
+          `transform:rotate(45deg);` +
+          `${isSelected ? 'box-shadow:0 0 12px #00ffff,0 0 24px #00ffff66;' : ''}"></div></div>`,
+          HIT_SIZE, HIT_ANCHOR,
         ),
         interactive: true,
         zIndexOffset: 300,
       });
       marker.bindTooltip(`GT: ${target.name} — ${target.classification ?? 'unclassified'}`, { direction: 'top', offset: [0, -12] });
-      marker.on('click', () => callbacksRef.current.onSelectGroundTruth?.(gtId));
+      marker.on('click', (e: L.LeafletMouseEvent) => addClickCandidate('gt', gtId, `GT: ${target.name}`, '#00ffff', e.latlng));
       marker.addTo(g);
 
       // Selection ring + GT-to-track connection line
