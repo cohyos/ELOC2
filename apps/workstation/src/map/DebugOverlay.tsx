@@ -3,7 +3,6 @@ import L from 'leaflet';
 import type { SystemTrack, SensorState } from '@eloc2/domain';
 import type { LayerVisibility } from '../stores/ui-store';
 import { useUiStore } from '../stores/ui-store';
-import { useAuthStore } from '../auth/auth-store';
 import type { GroundTruthTarget } from '../stores/ground-truth-store';
 import type { CoverZone, OperationalZone } from '../stores/cover-zone-store';
 import type { SearchModeStateWS } from '../stores/sensor-store';
@@ -58,7 +57,10 @@ function shortTrackLabel(track: SystemTrack): string {
 }
 
 function shortSensorLabel(sensor: SensorState): string {
-  const prefix = sensor.sensorType === 'radar' ? 'R' : sensor.sensorType === 'eo' ? 'E' : 'C';
+  const isStaring = sensor.sensorType === 'eo' && sensor.gimbal?.slewRateDegPerSec === 0;
+  const prefix = sensor.sensorType === 'radar' ? 'R'
+    : sensor.sensorType === 'eo' ? (isStaring ? 'S' : 'E')
+    : 'C';
   const idNum = (sensor.sensorId as string).match(/(\d+)/)?.[1] ?? '?';
   return `${prefix}${idNum}`;
 }
@@ -241,18 +243,11 @@ export function DebugOverlay({
     if (!map) return;
     if (ctxRef.current.popup) { map.closePopup(ctxRef.current.popup); ctxRef.current.popup = null; }
 
-    // Role check: instructor can do everything; operator has restricted actions
-    const authUser = useAuthStore.getState().user;
-    const authEnabled = useAuthStore.getState().authEnabled;
-    const uiRole = useUiStore.getState().effectiveRole;
-    const isInstructor = authEnabled
-      ? authUser?.role === 'instructor'
-      : uiRole === 'instructor';
-
-    // Build actions based on object type + role
-    type Action = { label: string; action: () => void; disabled?: boolean };
+    // Build actions based on object type — all actions available to all users
+    type Action = { label: string; action: () => void; disabled?: boolean; separator?: boolean };
     const actions: Action[] = [];
     const jsonHeaders = { 'Content-Type': 'application/json' };
+    const classify = (cls: string) => { fetch('/api/operator/classify', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ trackId: id, classification: cls }) }).catch(() => {}); };
 
     if (type === 'track') {
       // Find track for investigation status check
@@ -260,7 +255,6 @@ export function DebugOverlay({
       const eoStatus = track?.eoInvestigationStatus ?? 'none';
       const hasEoInvestigation = eoStatus === 'confirmed' || eoStatus === 'in_progress';
 
-      // Operator + Instructor actions
       actions.push(
         { label: 'Select', action: () => callbacksRef.current.onSelectTrack?.(id) },
         { label: 'Cue EO', action: () => { fetch('/api/operator/priority', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ trackId: id, priority: true }) }).catch(() => {}); } },
@@ -269,22 +263,24 @@ export function DebugOverlay({
 
       // EO Video — only available after EO investigation
       if (hasEoInvestigation) {
-        actions.push(
-          { label: 'Open EO Video', action: () => useUiStore.getState().setEoVideoPopupTrackId(id) },
-        );
+        actions.push({ label: 'Open EO Video', action: () => useUiStore.getState().setEoVideoPopupTrackId(id) });
       } else {
-        actions.push(
-          { label: 'Open EO Video', action: () => {}, disabled: true },
-        );
+        actions.push({ label: 'Open EO Video', action: () => {}, disabled: true });
       }
 
-      // Instructor-only: classification overrides
-      if (isInstructor) {
-        actions.push(
-          { label: 'Mark Hostile', action: () => { fetch('/api/operator/classify', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ trackId: id, classification: 'fighter_aircraft' }) }).catch(() => {}); } },
-          { label: 'Mark Friendly', action: () => { fetch('/api/operator/classify', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ trackId: id, classification: 'civilian_aircraft' }) }).catch(() => {}); } },
-        );
-      }
+      // Classification — all valid types, grouped
+      actions.push(
+        { label: '── Classify ──', action: () => {}, separator: true },
+        { label: '\u2022 Fighter', action: () => classify('fighter_aircraft') },
+        { label: '\u2022 Helicopter', action: () => classify('helicopter') },
+        { label: '\u2022 UAV / Drone', action: () => classify('uav') },
+        { label: '\u2022 Small UAV', action: () => classify('small_uav') },
+        { label: '\u2022 Missile', action: () => classify('missile') },
+        { label: '\u2022 Civilian', action: () => classify('civilian_aircraft') },
+        { label: '\u2022 Friendly', action: () => classify('ally') },
+        { label: '\u2022 Neutral', action: () => classify('neutral') },
+        { label: '\u2022 Unknown', action: () => classify('unknown') },
+      );
     } else if (type === 'sensor') {
       const sensor = sensors.find(s => (s.sensorId as string) === id);
       const isOnline = sensor?.online ?? true;
@@ -293,16 +289,9 @@ export function DebugOverlay({
         { label: 'Select', action: () => callbacksRef.current.onSelectSensor?.(id) },
         { label: isOnline ? 'Turn Off' : 'Turn On', action: () => { fetch('/api/operator/toggle-sensor', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ sensorId: id, online: !isOnline }) }).catch(() => {}); } },
         { label: 'Release Sensor', action: () => { fetch('/api/operator/release-sensor', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ sensorId: id }) }).catch(() => {}); } },
+        { label: 'Toggle Search Mode', action: () => { fetch('/api/operator/toggle-search', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ sensorId: id }) }).catch(() => {}); } },
       );
-
-      // Instructor-only: search mode toggle
-      if (isInstructor) {
-        actions.push(
-          { label: 'Toggle Search Mode', action: () => { fetch('/api/operator/toggle-search', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ sensorId: id }) }).catch(() => {}); } },
-        );
-      }
     } else if (type === 'gt') {
-      // GT context menu — instructor only (GT visibility is already instructor-gated)
       actions.push(
         { label: 'Select', action: () => callbacksRef.current.onSelectGroundTruth?.(id) },
       );
@@ -310,6 +299,10 @@ export function DebugOverlay({
 
     const menuHtml = actions.map((a, i) => {
       const disabled = (a as any).disabled;
+      const isSep = (a as any).separator;
+      if (isSep) {
+        return `<div style="padding:3px 12px;font:bold 9px monospace;color:#666;border-bottom:1px solid #333;background:#1a1a1a;">${a.label}</div>`;
+      }
       const style = disabled
         ? `padding:5px 12px;cursor:not-allowed;font:11px monospace;color:#555;border-bottom:1px solid #333;`
         : `padding:5px 12px;cursor:pointer;font:11px monospace;color:#e0e0e0;border-bottom:1px solid #333;`;
@@ -865,10 +858,18 @@ export function DebugOverlay({
 
       if (showSensors) {
         let sensorHtml: string;
+        const isStaring = sensor.sensorType === 'eo' && sensor.gimbal?.slewRateDegPerSec === 0;
         if (useNato) {
           const sym = resolveSensorSymbol(sensor, false, 24);
           sensorHtml = `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;cursor:pointer;">${sym.svgHtml}</div>`;
+        } else if (isStaring) {
+          // Staring MWIR sensor: concentric rings icon (distinguishes from gimbal EO)
+          sensorHtml = `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;cursor:pointer;">` +
+            `<div style="width:16px;height:16px;border-radius:50%;border:2px solid ${color};display:flex;align-items:center;justify-content:center;">` +
+            `<div style="width:8px;height:8px;border-radius:50%;background:${color};"></div>` +
+            `</div></div>`;
         } else {
+          // Standard sensor: filled square (radar=blue, gimbal-eo=orange, c4isr=purple)
           sensorHtml = `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;cursor:pointer;"><div style="width:14px;height:14px;background:${color};border:2px solid #000;"></div></div>`;
         }
         const marker = L.marker([lat, lon], {
