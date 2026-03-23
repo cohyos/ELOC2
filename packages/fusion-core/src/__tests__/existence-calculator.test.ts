@@ -21,10 +21,10 @@ describe('updateExistenceOnDetection', () => {
     expect(updated).toBeCloseTo(0, 5);
   });
 
-  it('should stay at 1 when Pe is 1', () => {
-    // numerator = pd * 1 = pd; denominator = pd * 1 + pfa * 0 = pd; result = 1
+  it('should cap at 0.999 when Pe is 1 (prevents singularity in miss decay)', () => {
+    // Pe capped at 0.999 to ensure miss decay remains effective
     const updated = updateExistenceOnDetection(1, 0.9, 0.01);
-    expect(updated).toBeCloseTo(1, 5);
+    expect(updated).toBeCloseTo(0.999, 3);
   });
 
   it('should increase more with higher detection probability', () => {

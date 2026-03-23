@@ -45,10 +45,12 @@ export interface EoDetection {
   imageQuality: number;
   /** GT target ID from simulator (for scoring, not used in correlation). */
   targetId: string;
-  /** When first detected (ms). */
+  /** When first detected (ms wall-clock). */
   firstSeen: number;
-  /** When last updated (ms). */
+  /** When last updated (ms wall-clock). */
   lastUpdated: number;
+  /** When last updated (simulation seconds) — used for speed-independent pruning. */
+  lastUpdatedSimSec: number;
   /** Consecutive update count. */
   updateCount: number;
 }
@@ -61,6 +63,10 @@ export interface EoTarget3D {
   detectionIds: string[];
   /** Contributing sensor IDs. */
   sensorIds: string[];
+  /** Best DRI tier from contributing detections (for target-ID propagation). */
+  bestDriTier?: 'detection' | 'recognition' | 'identification';
+  /** Best image quality from contributing detections [0,1]. */
+  bestImageQuality: number;
   /** Triangulated 3D position. */
   position: Position3D;
   /** Triangulation quality metrics. */
@@ -188,7 +194,7 @@ export class CoreEoTargetDetector {
    * Ingest a bearing observation from a staring sensor.
    * The detector manages it as an independent bearing-only detection.
    */
-  ingestBearing(obs: EoBearingObservation, sensorPosition: Position3D): EoDetection {
+  ingestBearing(obs: EoBearingObservation, sensorPosition: Position3D, simTimeSec?: number): EoDetection {
     const sensorId = obs.sensorId;
     if (!this.sensorDetections.has(sensorId)) {
       this.sensorDetections.set(sensorId, new Map());
@@ -204,6 +210,7 @@ export class CoreEoTargetDetector {
       existing.bearing = obs.bearing;
       existing.imageQuality = obs.imageQuality;
       existing.lastUpdated = Date.now();
+      existing.lastUpdatedSimSec = simTimeSec ?? existing.lastUpdatedSimSec;
       existing.updateCount++;
       return existing;
     }
@@ -218,6 +225,7 @@ export class CoreEoTargetDetector {
       targetId: obs.targetId,
       firstSeen: Date.now(),
       lastUpdated: Date.now(),
+      lastUpdatedSimSec: simTimeSec ?? 0,
       updateCount: 1,
     };
 
@@ -236,6 +244,7 @@ export class CoreEoTargetDetector {
   processTick(
     sensors: SensorState[],
     existingTracks: SystemTrack[],
+    simTimeSec?: number,
   ): CoreDetectorResult {
     const now = Date.now();
     const result: CoreDetectorResult = {
@@ -245,8 +254,8 @@ export class CoreEoTargetDetector {
       enhancedCueBearings: [],
     };
 
-    // 1. Prune stale detections
-    this.pruneStaleDetections(now);
+    // 1. Prune stale detections (use sim time if available for speed-independent pruning)
+    this.pruneStaleDetections(now, simTimeSec);
 
     // 2. Collect all live detections across sensors
     const allDetections: EoDetection[] = [];
@@ -306,11 +315,19 @@ export class CoreEoTargetDetector {
           uniqueSensors.size >= 3 && triResult.intersectionAngleDeg > 15
             ? 'confirmed_3d'
             : 'candidate_3d';
+        // Update DRI/image quality from latest detections
+        const updIq = Math.max(...selected.map(d => d.imageQuality));
+        existingTarget.bestImageQuality = updIq;
+        existingTarget.bestDriTier = updIq >= 0.8 ? 'identification' : updIq >= 0.5 ? 'recognition' : 'detection';
         result.updatedTargets.push(existingTarget);
       } else {
         // Decide: clear triangulation or ambiguous candidate?
+        // With good multi-sensor geometry (pentagon layout), real targets
+        // should have miss distance < 1 km. Higher values indicate
+        // cross-contaminated groups (bearings from different targets merged).
         const isAmbiguous = triResult.missDistanceM > this.config.ambiguousMissDistanceM
-          || triResult.intersectionAngleDeg < 10;
+          || triResult.intersectionAngleDeg < 10
+          || (selected.length >= 3 && triResult.missDistanceM > 1000);
 
         if (isAmbiguous) {
           // Route to ambiguity candidate pool for consistency resolution
@@ -321,6 +338,8 @@ export class CoreEoTargetDetector {
           );
         } else {
           // Clear triangulation — create target immediately
+          // Propagate best image quality from contributing detections
+          const bestIq = Math.max(...selected.map(d => d.imageQuality));
           const target: EoTarget3D = {
             eoTargetId: generateId(),
             detectionIds: selected.map(d => d.detectionId),
@@ -332,6 +351,8 @@ export class CoreEoTargetDetector {
               uniqueSensors.size >= 3 && triResult.intersectionAngleDeg > 15
                 ? 'confirmed_3d'
                 : 'candidate_3d',
+            bestDriTier: bestIq >= 0.8 ? 'identification' : bestIq >= 0.5 ? 'recognition' : 'detection',
+            bestImageQuality: bestIq,
             createdAt: now,
             lastUpdated: now,
             promotedTrackId: null,
@@ -442,50 +463,90 @@ export class CoreEoTargetDetector {
    */
   private correlateBearings(
     detections: EoDetection[],
-    sensors: SensorState[],
+    _sensors: SensorState[],
   ): EoDetection[][] {
-    // Build adjacency: two detections correlate if from different sensors
-    // and their bearings plausibly point at the same target.
-    // We use a simple approach: for each pair of detections from different
-    // sensors, check if the ray intersection point is consistent.
+    // Multi-target correlation using angular clustering.
+    //
+    // Step 1: Group detections by sensor (each sensor may see multiple targets)
+    // Step 2: Pick the sensor with the most detections as the reference
+    // Step 3: For each reference detection, find the best-matching detection
+    //         from every other sensor (by ray intersection quality)
+    // Step 4: Each reference detection seeds a target group
+    //
+    // This avoids the Union-Find transitive merge problem where separate targets
+    // get merged because intermediate rays happen to intersect.
 
-    const n = detections.length;
-    const parent = Array.from({ length: n }, (_, i) => i);
+    if (detections.length === 0) return [];
 
-    function find(x: number): number {
-      while (parent[x] !== x) {
-        parent[x] = parent[parent[x]];
-        x = parent[x];
-      }
-      return x;
+    // Group detections by sensor
+    const bySensor = new Map<string, EoDetection[]>();
+    for (const det of detections) {
+      if (!bySensor.has(det.sensorId)) bySensor.set(det.sensorId, []);
+      bySensor.get(det.sensorId)!.push(det);
     }
-    function union(a: number, b: number): void {
-      const ra = find(a), rb = find(b);
-      if (ra !== rb) parent[ra] = rb;
+
+    // Pick reference sensor (most detections = sees the most targets)
+    let refSensorId = '';
+    let maxDets = 0;
+    for (const [sid, dets] of bySensor) {
+      if (dets.length > maxDets) { maxDets = dets.length; refSensorId = sid; }
     }
 
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        const di = detections[i];
-        const dj = detections[j];
-        if (di.sensorId === dj.sensorId) continue;
+    const refDets = bySensor.get(refSensorId) ?? [];
+    if (refDets.length === 0) return [detections]; // fallback: one group
 
-        // Check if bearings from these two sensors plausibly intersect
-        if (this.bearingsCorrelate(di, dj)) {
-          union(i, j);
+    // For each reference detection, build a target group by finding
+    // the best matching detection from each other sensor
+    const groups: EoDetection[][] = [];
+    const assigned = new Set<string>(); // detection IDs already assigned
+
+    for (const refDet of refDets) {
+      const group: EoDetection[] = [refDet];
+      assigned.add(refDet.detectionId);
+
+      for (const [sid, dets] of bySensor) {
+        if (sid === refSensorId) continue;
+
+        // Find best matching detection from this sensor
+        let bestDet: EoDetection | null = null;
+        let bestScore = Infinity; // lower = better (miss distance)
+
+        for (const det of dets) {
+          if (assigned.has(det.detectionId)) continue;
+          if (!this.bearingsCorrelate(refDet, det)) continue;
+
+          // Score by ray intersection quality
+          try {
+            const triResult = triangulateMultiple(
+              [refDet.sensorPosition, det.sensorPosition],
+              [refDet.bearing, det.bearing],
+            );
+            if (triResult.averageMissDistance < bestScore) {
+              bestScore = triResult.averageMissDistance;
+              bestDet = det;
+            }
+          } catch {
+            // Triangulation failed — skip
+          }
+        }
+
+        if (bestDet) {
+          group.push(bestDet);
+          assigned.add(bestDet.detectionId);
         }
       }
+
+      groups.push(group);
     }
 
-    // Collect groups
-    const groups = new Map<number, EoDetection[]>();
-    for (let i = 0; i < n; i++) {
-      const root = find(i);
-      if (!groups.has(root)) groups.set(root, []);
-      groups.get(root)!.push(detections[i]);
+    // Collect any unassigned detections as singleton groups
+    for (const det of detections) {
+      if (!assigned.has(det.detectionId)) {
+        groups.push([det]);
+      }
     }
 
-    return [...groups.values()];
+    return groups;
   }
 
   /**
@@ -583,18 +644,26 @@ export class CoreEoTargetDetector {
   private findExistingTarget(detections: EoDetection[]): EoTarget3D | undefined {
     const detIds = new Set(detections.map(d => d.detectionId));
     for (const target of this.eoTargets.values()) {
-      // Match if any detection ID overlaps
+      // Match if any detection ID overlaps (same bearing group, same target)
       if (target.detectionIds.some(id => detIds.has(id))) {
         return target;
       }
     }
-    // Also match by sensor set overlap + spatial proximity
-    const sensorIds = new Set(detections.map(d => d.sensorId));
-    for (const target of this.eoTargets.values()) {
-      const targetSensors = new Set(target.sensorIds);
-      const overlap = [...sensorIds].filter(s => targetSensors.has(s));
-      if (overlap.length >= 2) {
-        return target;
+
+    // Also match by spatial proximity: triangulate the new group and compare
+    // to existing targets. Sensor overlap alone is insufficient because staring
+    // sensors cover 360° and would match ALL targets indiscriminately.
+    const triResult = this.tryTriangulate(detections);
+    if (triResult) {
+      const SPATIAL_GATE_M = 2500; // 2.5 km gate for same-target matching
+      for (const target of this.eoTargets.values()) {
+        const dLat = (triResult.position.lat - target.position.lat) * 110540;
+        const dLon = (triResult.position.lon - target.position.lon) * 111320 *
+          Math.cos(target.position.lat * Math.PI / 180);
+        const dist = Math.sqrt(dLat * dLat + dLon * dLon);
+        if (dist < SPATIAL_GATE_M) {
+          return target;
+        }
       }
     }
     return undefined;
@@ -650,11 +719,22 @@ export class CoreEoTargetDetector {
     return null;
   }
 
-  /** Remove detections older than maxDetectionAgeMs. */
-  private pruneStaleDetections(now: number): void {
+  /**
+   * Remove detections older than maxDetectionAgeMs.
+   * Uses simulation time when available for speed-independent pruning during seek/fast-forward.
+   * maxDetectionAgeMs = 15s → maxDetectionAgeSec = 15 in sim time.
+   */
+  private pruneStaleDetections(now: number, simTimeSec?: number): void {
+    const maxAgeSec = this.config.maxDetectionAgeMs / 1000; // convert ms to sim seconds
+
     for (const [sensorId, store] of this.sensorDetections) {
       for (const [detId, det] of store) {
-        if (now - det.lastUpdated > this.config.maxDetectionAgeMs) {
+        // Prefer simulation-time-based pruning (speed-independent)
+        const staleBySimTime = simTimeSec !== undefined && det.lastUpdatedSimSec > 0 &&
+          (simTimeSec - det.lastUpdatedSimSec) > maxAgeSec;
+        const staleByWallClock = (now - det.lastUpdated) > this.config.maxDetectionAgeMs;
+
+        if (staleBySimTime || staleByWallClock) {
           store.delete(detId);
         }
       }
@@ -795,6 +875,8 @@ export class CoreEoTargetDetector {
           classification: best.sensorIds.length >= 3 && best.intersectionAngleDeg > 15
             ? 'confirmed_3d'
             : 'candidate_3d',
+          bestImageQuality: 0.5, // default for ambiguity-resolved targets
+          bestDriTier: 'recognition',
           createdAt: best.createdAt,
           lastUpdated: now,
           promotedTrackId: null,

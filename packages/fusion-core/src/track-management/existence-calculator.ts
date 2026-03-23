@@ -22,7 +22,9 @@ export function updateExistenceOnDetection(
   const numerator = pd * currentPe;
   const denominator = numerator + pfa * (1 - currentPe);
   if (denominator <= 0) return currentPe;
-  return Math.min(1, Math.max(0, numerator / denominator));
+  // Cap at 0.999 to prevent singularity at Pe=1.0 where miss decay
+  // becomes ineffective: (1-pd)*1.0 / (1-pd) = 1.0 forever.
+  return Math.min(0.999, Math.max(0, numerator / denominator));
 }
 
 /**

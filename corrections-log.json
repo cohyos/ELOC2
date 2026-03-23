@@ -1,0 +1,90 @@
+[
+  {
+    "runId": 1,
+    "timestamp": "2026-03-23T20:19:45.856Z",
+    "issuesSummary": "3 critical, 2 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 79
+  },
+  {
+    "runId": 2,
+    "timestamp": "2026-03-23T20:19:59.677Z",
+    "issuesSummary": "3 critical, 2 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 79
+  },
+  {
+    "runId": 3,
+    "timestamp": "2026-03-23T21:04:27.782Z",
+    "issuesSummary": "4 critical, 3 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 78
+  },
+  {
+    "runId": 4,
+    "timestamp": "2026-03-23T21:08:40.643Z",
+    "issuesSummary": "4 critical, 3 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 78
+  },
+  {
+    "runId": 5,
+    "timestamp": "2026-03-23T21:09:19.768Z",
+    "issuesSummary": "4 critical, 3 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 78
+  },
+  {
+    "runId": 6,
+    "timestamp": "2026-03-23T21:10:59.899Z",
+    "issuesSummary": "4 critical, 3 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 78
+  },
+  {
+    "runId": 7,
+    "timestamp": "2026-03-23T21:12:55.246Z",
+    "issuesSummary": "4 critical, 3 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 78
+  },
+  {
+    "runId": 8,
+    "timestamp": "2026-03-23T21:17:26.870Z",
+    "issuesSummary": "4 critical, 3 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 78
+  },
+  {
+    "runId": 9,
+    "timestamp": "2026-03-23T21:39:48.198Z",
+    "issuesSummary": "5 critical, 3 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 74
+  },
+  {
+    "runId": 10,
+    "timestamp": "2026-03-23T21:45:51.196Z",
+    "issuesSummary": "5 critical, 3 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 74
+  },
+  {
+    "runId": 11,
+    "timestamp": "2026-03-23T22:16:59.646Z",
+    "issuesSummary": "5 critical, 3 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 73
+  }
+]

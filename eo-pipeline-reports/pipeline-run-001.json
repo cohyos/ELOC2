@@ -1,0 +1,672 @@
+[
+  {
+    "runId": 1,
+    "timestamp": "2026-03-23T22:16:04.473Z",
+    "simTimeSec": 200,
+    "phase": "Phase 1: Fighter (t=200)",
+    "bearing": {
+      "gtInCoverage": 1,
+      "gtDetected": 1,
+      "detectionRate": 1,
+      "avgAzErrorDeg": 0.08675966989146389,
+      "avgElErrorDeg": 0,
+      "totalBearings": 15,
+      "bearingsPerSensor": {
+        "STARE-N-1": 1,
+        "STARE-N-2": 1,
+        "STARE-N-3": 1,
+        "STARE-NW-1": 1,
+        "STARE-NW-2": 1,
+        "STARE-NW-3": 1,
+        "STARE-SW-1": 1,
+        "STARE-SW-2": 1,
+        "STARE-SW-3": 1,
+        "STARE-SE-1": 1,
+        "STARE-SE-2": 1,
+        "STARE-SE-3": 1,
+        "STARE-NE-1": 1,
+        "STARE-NE-2": 1,
+        "STARE-NE-3": 1
+      },
+      "sensorsPerTarget": {
+        "TGT-F1": 15
+      }
+    },
+    "correlation": {
+      "totalGroups": 3,
+      "multiSensorGroups": 3,
+      "singleSensorGroups": 0,
+      "groupPurity": 1,
+      "gtCompleteness": 1,
+      "bearingContinuity": 1,
+      "detectionsPerSensor": {
+        "STARE-N-1": 1,
+        "STARE-N-2": 1,
+        "STARE-N-3": 1,
+        "STARE-NW-1": 1,
+        "STARE-NW-2": 1,
+        "STARE-NW-3": 1,
+        "STARE-SW-1": 1,
+        "STARE-SW-2": 1,
+        "STARE-SW-3": 1,
+        "STARE-SE-1": 1,
+        "STARE-SE-2": 1,
+        "STARE-SE-3": 1,
+        "STARE-NE-1": 1,
+        "STARE-NE-2": 1,
+        "STARE-NE-3": 1
+      }
+    },
+    "triangulation": {
+      "totalAttempts": 3,
+      "successCount": 3,
+      "successRate": 1,
+      "avgPositionErrorM": 7920.540110070254,
+      "maxPositionErrorM": 15152.549678414294,
+      "avgIntersectionAngleDeg": 86.53661035133895,
+      "avgMissDistanceM": 300.41807825476855,
+      "ambiguityCount": 0,
+      "classificationDist": {
+        "confirmed_3d": 3
+      }
+    },
+    "track": {
+      "eoTracksCreated": 3,
+      "aliveTrackCount": 1,
+      "trackToGtRatio": 1,
+      "gtCoverage": 1,
+      "avgTrackAgeSec": 0,
+      "trackContinuity": 0,
+      "avgConfidence": 1,
+      "proliferationCount": 0,
+      "fusedWithRadarCount": 0
+    },
+    "quality": {
+      "pictureAccuracy": 90,
+      "coveragePercent": 1,
+      "falseTrackRate": 0,
+      "positionErrorAvg": 68.78646827321377,
+      "classificationAccuracy": 1
+    },
+    "grades": [
+      {
+        "stage": "S1: Bearing Generation",
+        "score": 100,
+        "grade": "A",
+        "issues": []
+      },
+      {
+        "stage": "S2: Correlation",
+        "score": 100,
+        "grade": "A",
+        "issues": []
+      },
+      {
+        "stage": "S3: Triangulation",
+        "score": 70,
+        "grade": "B",
+        "issues": [
+          "High pos error: 7921m"
+        ]
+      },
+      {
+        "stage": "S4: Track Management",
+        "score": 100,
+        "grade": "A",
+        "issues": []
+      },
+      {
+        "stage": "S5: Quality Assessment",
+        "score": 90,
+        "grade": "A",
+        "issues": []
+      }
+    ],
+    "compositeScore": 92,
+    "compositeGrade": "A"
+  },
+  {
+    "runId": 1,
+    "timestamp": "2026-03-23T22:16:06.270Z",
+    "simTimeSec": 450,
+    "phase": "Phase 2: Formation (t=450)",
+    "bearing": {
+      "gtInCoverage": 5,
+      "gtDetected": 5,
+      "detectionRate": 1,
+      "avgAzErrorDeg": 0.6382954890437543,
+      "avgElErrorDeg": 0,
+      "totalBearings": 47,
+      "bearingsPerSensor": {
+        "STARE-N-1": 5,
+        "STARE-N-2": 5,
+        "STARE-N-3": 5,
+        "STARE-NW-1": 3,
+        "STARE-NW-2": 3,
+        "STARE-NW-3": 3,
+        "STARE-NE-1": 3,
+        "STARE-NE-2": 3,
+        "STARE-NE-3": 3,
+        "STARE-SW-1": 3,
+        "STARE-SE-1": 3,
+        "STARE-SW-3": 3,
+        "STARE-SE-2": 3,
+        "STARE-SW-2": 1,
+        "STARE-SE-3": 1
+      },
+      "sensorsPerTarget": {
+        "TGT-S136-4": 10,
+        "TGT-S136-5": 10,
+        "TGT-S136-1": 13,
+        "TGT-S136-2": 3,
+        "TGT-S136-3": 7
+      }
+    },
+    "correlation": {
+      "totalGroups": 19,
+      "multiSensorGroups": 17,
+      "singleSensorGroups": 2,
+      "groupPurity": 0,
+      "gtCompleteness": 1,
+      "bearingContinuity": 0.9574468085106383,
+      "detectionsPerSensor": {
+        "STARE-N-1": 5,
+        "STARE-N-2": 5,
+        "STARE-N-3": 5,
+        "STARE-NW-1": 3,
+        "STARE-NW-2": 3,
+        "STARE-NW-3": 3,
+        "STARE-NE-1": 3,
+        "STARE-NE-2": 3,
+        "STARE-NE-3": 3,
+        "STARE-SW-1": 3,
+        "STARE-SE-1": 3,
+        "STARE-SW-3": 3,
+        "STARE-SE-2": 3,
+        "STARE-SW-2": 1,
+        "STARE-SE-3": 1
+      }
+    },
+    "triangulation": {
+      "totalAttempts": 19,
+      "successCount": 17,
+      "successRate": 0.8947368421052632,
+      "avgPositionErrorM": 5681.919565143176,
+      "maxPositionErrorM": 29618.191911530426,
+      "avgIntersectionAngleDeg": 65.92940823684417,
+      "avgMissDistanceM": 212.24374976687633,
+      "ambiguityCount": 2,
+      "classificationDist": {
+        "confirmed_3d": 11,
+        "candidate_3d": 6
+      }
+    },
+    "track": {
+      "eoTracksCreated": 17,
+      "aliveTrackCount": 4,
+      "trackToGtRatio": 0.8,
+      "gtCoverage": 0.6,
+      "avgTrackAgeSec": 0,
+      "trackContinuity": 0,
+      "avgConfidence": 0.5625,
+      "proliferationCount": 0,
+      "fusedWithRadarCount": 0
+    },
+    "quality": {
+      "pictureAccuracy": 81,
+      "coveragePercent": 0.8,
+      "falseTrackRate": 0,
+      "positionErrorAvg": 1453.859932049229,
+      "classificationAccuracy": 1
+    },
+    "grades": [
+      {
+        "stage": "S1: Bearing Generation",
+        "score": 90,
+        "grade": "A",
+        "issues": [
+          "Moderate az error: 0.64°"
+        ]
+      },
+      {
+        "stage": "S2: Correlation",
+        "score": 70,
+        "grade": "B",
+        "issues": [
+          "Low group purity: 0%"
+        ]
+      },
+      {
+        "stage": "S3: Triangulation",
+        "score": 70,
+        "grade": "B",
+        "issues": [
+          "High pos error: 5682m"
+        ]
+      },
+      {
+        "stage": "S4: Track Management",
+        "score": 85,
+        "grade": "A",
+        "issues": [
+          "GT coverage: 60%"
+        ]
+      },
+      {
+        "stage": "S5: Quality Assessment",
+        "score": 81,
+        "grade": "B",
+        "issues": []
+      }
+    ],
+    "compositeScore": 79,
+    "compositeGrade": "B"
+  },
+  {
+    "runId": 1,
+    "timestamp": "2026-03-23T22:16:10.187Z",
+    "simTimeSec": 660,
+    "phase": "Phase 3: Ballistic (t=660)",
+    "bearing": {
+      "gtInCoverage": 1,
+      "gtDetected": 1,
+      "detectionRate": 1,
+      "avgAzErrorDeg": 9.225394415787283,
+      "avgElErrorDeg": 0,
+      "totalBearings": 14,
+      "bearingsPerSensor": {
+        "STARE-N-2": 1,
+        "STARE-N-3": 1,
+        "STARE-NW-1": 1,
+        "STARE-NW-2": 1,
+        "STARE-NW-3": 1,
+        "STARE-NE-1": 1,
+        "STARE-NE-2": 1,
+        "STARE-NE-3": 1,
+        "STARE-SW-1": 1,
+        "STARE-SE-1": 1,
+        "STARE-SW-3": 1,
+        "STARE-SE-2": 1,
+        "STARE-SW-2": 1,
+        "STARE-SE-3": 1
+      },
+      "sensorsPerTarget": {
+        "TGT-BM1": 14
+      }
+    },
+    "correlation": {
+      "totalGroups": 23,
+      "multiSensorGroups": 21,
+      "singleSensorGroups": 2,
+      "groupPurity": 1,
+      "gtCompleteness": 1,
+      "bearingContinuity": 1,
+      "detectionsPerSensor": {
+        "STARE-N-2": 1,
+        "STARE-N-3": 1,
+        "STARE-NW-1": 1,
+        "STARE-NW-2": 1,
+        "STARE-NW-3": 1,
+        "STARE-NE-1": 1,
+        "STARE-NE-2": 1,
+        "STARE-NE-3": 1,
+        "STARE-SW-1": 1,
+        "STARE-SE-1": 1,
+        "STARE-SW-3": 1,
+        "STARE-SE-2": 1,
+        "STARE-SW-2": 1,
+        "STARE-SE-3": 1
+      }
+    },
+    "triangulation": {
+      "totalAttempts": 23,
+      "successCount": 21,
+      "successRate": 0.9130434782608695,
+      "avgPositionErrorM": 11154.235748157598,
+      "maxPositionErrorM": 36190.98206303107,
+      "avgIntersectionAngleDeg": 57.994382133610685,
+      "avgMissDistanceM": 236.23655770485726,
+      "ambiguityCount": 2,
+      "classificationDist": {
+        "confirmed_3d": 15,
+        "candidate_3d": 6
+      }
+    },
+    "track": {
+      "eoTracksCreated": 21,
+      "aliveTrackCount": 0,
+      "trackToGtRatio": 0,
+      "gtCoverage": 0,
+      "avgTrackAgeSec": 0,
+      "trackContinuity": 0,
+      "avgConfidence": 0,
+      "proliferationCount": 0,
+      "fusedWithRadarCount": 0
+    },
+    "quality": {
+      "pictureAccuracy": 30,
+      "coveragePercent": 0,
+      "falseTrackRate": 0,
+      "positionErrorAvg": 0,
+      "classificationAccuracy": 1
+    },
+    "grades": [
+      {
+        "stage": "S1: Bearing Generation",
+        "score": 70,
+        "grade": "B",
+        "issues": [
+          "High az error: 9.23°"
+        ]
+      },
+      {
+        "stage": "S2: Correlation",
+        "score": 100,
+        "grade": "A",
+        "issues": []
+      },
+      {
+        "stage": "S3: Triangulation",
+        "score": 70,
+        "grade": "B",
+        "issues": [
+          "High pos error: 11154m"
+        ]
+      },
+      {
+        "stage": "S4: Track Management",
+        "score": 0,
+        "grade": "F",
+        "issues": [
+          "Low GT coverage: 0%",
+          "Low confidence: 0.00",
+          "No alive tracks"
+        ]
+      },
+      {
+        "stage": "S5: Quality Assessment",
+        "score": 30,
+        "grade": "F",
+        "issues": [
+          "Low coverage: 0%"
+        ]
+      }
+    ],
+    "compositeScore": 54,
+    "compositeGrade": "D"
+  },
+  {
+    "runId": 1,
+    "timestamp": "2026-03-23T22:16:18.896Z",
+    "simTimeSec": 1050,
+    "phase": "Phase 4a: Dense Early (t=1050)",
+    "bearing": {
+      "gtInCoverage": 5,
+      "gtDetected": 5,
+      "detectionRate": 1,
+      "avgAzErrorDeg": 0.7919808314267044,
+      "avgElErrorDeg": 0,
+      "totalBearings": 76,
+      "bearingsPerSensor": {
+        "STARE-N-1": 5,
+        "STARE-N-2": 5,
+        "STARE-N-3": 5,
+        "STARE-NW-1": 5,
+        "STARE-NW-2": 5,
+        "STARE-NW-3": 5,
+        "STARE-SW-1": 5,
+        "STARE-SW-2": 5,
+        "STARE-SW-3": 4,
+        "STARE-SE-1": 5,
+        "STARE-SE-2": 5,
+        "STARE-SE-3": 5,
+        "STARE-NE-1": 5,
+        "STARE-NE-2": 7,
+        "STARE-NE-3": 5
+      },
+      "sensorsPerTarget": {
+        "TGT-R0": 15,
+        "TGT-R1": 13,
+        "TGT-R3": 15,
+        "TGT-R4": 15,
+        "TGT-R2": 15
+      }
+    },
+    "correlation": {
+      "totalGroups": 34,
+      "multiSensorGroups": 32,
+      "singleSensorGroups": 2,
+      "groupPurity": 0,
+      "gtCompleteness": 1,
+      "bearingContinuity": 0.9605263157894737,
+      "detectionsPerSensor": {
+        "STARE-N-1": 5,
+        "STARE-N-2": 5,
+        "STARE-N-3": 5,
+        "STARE-NW-1": 5,
+        "STARE-NW-2": 5,
+        "STARE-NW-3": 5,
+        "STARE-SW-1": 5,
+        "STARE-SW-2": 5,
+        "STARE-SW-3": 4,
+        "STARE-SE-1": 5,
+        "STARE-SE-2": 5,
+        "STARE-SE-3": 5,
+        "STARE-NE-1": 5,
+        "STARE-NE-2": 7,
+        "STARE-NE-3": 5
+      }
+    },
+    "triangulation": {
+      "totalAttempts": 34,
+      "successCount": 32,
+      "successRate": 0.9411764705882353,
+      "avgPositionErrorM": 8649.283315665947,
+      "maxPositionErrorM": 28426.025210316668,
+      "avgIntersectionAngleDeg": 65.77125631347576,
+      "avgMissDistanceM": 446.3194823486263,
+      "ambiguityCount": 2,
+      "classificationDist": {
+        "confirmed_3d": 24,
+        "candidate_3d": 8
+      }
+    },
+    "track": {
+      "eoTracksCreated": 32,
+      "aliveTrackCount": 7,
+      "trackToGtRatio": 1.4,
+      "gtCoverage": 1,
+      "avgTrackAgeSec": 0,
+      "trackContinuity": 0,
+      "avgConfidence": 0.8250000000000001,
+      "proliferationCount": 2,
+      "fusedWithRadarCount": 0
+    },
+    "quality": {
+      "pictureAccuracy": 87,
+      "coveragePercent": 1,
+      "falseTrackRate": 0.14285714285714285,
+      "positionErrorAvg": 1212.3622438116497,
+      "classificationAccuracy": 0.6
+    },
+    "grades": [
+      {
+        "stage": "S1: Bearing Generation",
+        "score": 90,
+        "grade": "A",
+        "issues": [
+          "Moderate az error: 0.79°"
+        ]
+      },
+      {
+        "stage": "S2: Correlation",
+        "score": 70,
+        "grade": "B",
+        "issues": [
+          "Low group purity: 0%"
+        ]
+      },
+      {
+        "stage": "S3: Triangulation",
+        "score": 70,
+        "grade": "B",
+        "issues": [
+          "High pos error: 8649m"
+        ]
+      },
+      {
+        "stage": "S4: Track Management",
+        "score": 100,
+        "grade": "A",
+        "issues": []
+      },
+      {
+        "stage": "S5: Quality Assessment",
+        "score": 87,
+        "grade": "A",
+        "issues": []
+      }
+    ],
+    "compositeScore": 83,
+    "compositeGrade": "B"
+  },
+  {
+    "runId": 1,
+    "timestamp": "2026-03-23T22:16:40.078Z",
+    "simTimeSec": 1300,
+    "phase": "Phase 4b: Dense Mid (t=1300)",
+    "bearing": {
+      "gtInCoverage": 6,
+      "gtDetected": 9,
+      "detectionRate": 1.5,
+      "avgAzErrorDeg": 0.37913577867406767,
+      "avgElErrorDeg": 0,
+      "totalBearings": 120,
+      "bearingsPerSensor": {
+        "STARE-N-1": 8,
+        "STARE-N-2": 8,
+        "STARE-N-3": 8,
+        "STARE-NW-1": 8,
+        "STARE-NW-2": 8,
+        "STARE-NW-3": 8,
+        "STARE-SW-1": 8,
+        "STARE-SW-2": 8,
+        "STARE-SW-3": 8,
+        "STARE-SE-1": 8,
+        "STARE-SE-2": 8,
+        "STARE-SE-3": 8,
+        "STARE-NE-1": 8,
+        "STARE-NE-2": 8,
+        "STARE-NE-3": 8
+      },
+      "sensorsPerTarget": {
+        "TGT-R5": 14,
+        "TGT-R6": 15,
+        "TGT-R7": 14,
+        "TGT-R9": 14,
+        "TGT-R10": 15,
+        "TGT-R11": 12,
+        "TGT-R8": 13,
+        "TGT-R12": 14,
+        "TGT-R0": 1
+      }
+    },
+    "correlation": {
+      "totalGroups": 45,
+      "multiSensorGroups": 40,
+      "singleSensorGroups": 5,
+      "groupPurity": 0,
+      "gtCompleteness": 1.5,
+      "bearingContinuity": 0.975,
+      "detectionsPerSensor": {
+        "STARE-N-1": 8,
+        "STARE-N-2": 8,
+        "STARE-N-3": 8,
+        "STARE-NW-1": 8,
+        "STARE-NW-2": 8,
+        "STARE-NW-3": 8,
+        "STARE-SW-1": 8,
+        "STARE-SW-2": 8,
+        "STARE-SW-3": 8,
+        "STARE-SE-1": 8,
+        "STARE-SE-2": 8,
+        "STARE-SE-3": 8,
+        "STARE-NE-1": 8,
+        "STARE-NE-2": 8,
+        "STARE-NE-3": 8
+      }
+    },
+    "triangulation": {
+      "totalAttempts": 45,
+      "successCount": 40,
+      "successRate": 0.8888888888888888,
+      "avgPositionErrorM": 7051.854152698024,
+      "maxPositionErrorM": 16522.682651125855,
+      "avgIntersectionAngleDeg": 66.7902589333995,
+      "avgMissDistanceM": 712.3888437717574,
+      "ambiguityCount": 5,
+      "classificationDist": {
+        "confirmed_3d": 29,
+        "candidate_3d": 11
+      }
+    },
+    "track": {
+      "eoTracksCreated": 40,
+      "aliveTrackCount": 8,
+      "trackToGtRatio": 1.3333333333333333,
+      "gtCoverage": 0.6666666666666666,
+      "avgTrackAgeSec": 0,
+      "trackContinuity": 0,
+      "avgConfidence": 0.59375,
+      "proliferationCount": 2,
+      "fusedWithRadarCount": 0
+    },
+    "quality": {
+      "pictureAccuracy": 67,
+      "coveragePercent": 0.6666666666666666,
+      "falseTrackRate": 0.25,
+      "positionErrorAvg": 2080.045230324556,
+      "classificationAccuracy": 0.4
+    },
+    "grades": [
+      {
+        "stage": "S1: Bearing Generation",
+        "score": 100,
+        "grade": "A",
+        "issues": []
+      },
+      {
+        "stage": "S2: Correlation",
+        "score": 70,
+        "grade": "B",
+        "issues": [
+          "Low group purity: 0%"
+        ]
+      },
+      {
+        "stage": "S3: Triangulation",
+        "score": 70,
+        "grade": "B",
+        "issues": [
+          "High pos error: 7052m"
+        ]
+      },
+      {
+        "stage": "S4: Track Management",
+        "score": 85,
+        "grade": "A",
+        "issues": [
+          "GT coverage: 67%"
+        ]
+      },
+      {
+        "stage": "S5: Quality Assessment",
+        "score": 67,
+        "grade": "C",
+        "issues": []
+      }
+    ],
+    "compositeScore": 78,
+    "compositeGrade": "B"
+  }
+]

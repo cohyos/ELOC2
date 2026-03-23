@@ -24,6 +24,7 @@ export { ballistic } from './scenarios/ballistic.js';
 export { gradBarrage } from './scenarios/grad-barrage.js';
 export { droneSwarm } from './scenarios/drone-swarm.js';
 export { combined } from './scenarios/combined.js';
+export { eoStaringDefense } from './scenarios/eo-staring-defense.js';
 
 export {
   singleTargetConfirm,
@@ -58,6 +59,7 @@ import { ballistic } from './scenarios/ballistic.js';
 import { gradBarrage } from './scenarios/grad-barrage.js';
 import { droneSwarm } from './scenarios/drone-swarm.js';
 import { combined } from './scenarios/combined.js';
+import { eoStaringDefense } from './scenarios/eo-staring-defense.js';
 import { simpleScenarios } from './scenarios/simple-scenarios.js';
 
 const allScenarios: readonly ScenarioDefinition[] = [
@@ -68,6 +70,7 @@ const allScenarios: readonly ScenarioDefinition[] = [
   gradBarrage,
   droneSwarm,
   combined,
+  eoStaringDefense,
   ...simpleScenarios,
 ];
 

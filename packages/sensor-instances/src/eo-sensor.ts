@@ -20,11 +20,12 @@ import type {
 } from '@eloc2/sensor-bus';
 import { SensorBus } from '@eloc2/sensor-bus';
 import { haversineDistanceM, bearingDeg } from '@eloc2/shared-utils';
-import { generateEoBearing } from '@eloc2/simulator';
+// Default generator imported from simulator — can be overridden via constructor DI
+import { generateEoBearing as defaultGenerateEoBearing } from '@eloc2/simulator';
 import type { SensorDefinition, FaultDefinition } from '@eloc2/simulator';
 
 import { SensorInstance } from './base-sensor.js';
-import type { SensorInstanceConfig, SensorTickResult } from './types.js';
+import type { SensorInstanceConfig, SensorTickResult, EoBearingGenerator, SensorSpec } from './types.js';
 
 // ---------------------------------------------------------------------------
 // EoSensorInstance
@@ -49,7 +50,10 @@ export class EoSensorInstance extends SensorInstance {
   // Cue state
   private activeCue: CueCommand | null = null;
 
-  constructor(config: SensorInstanceConfig, bus: SensorBus) {
+  /** Pluggable bearing generator — defaults to simulator's generateEoBearing */
+  private bearingGenerator: EoBearingGenerator;
+
+  constructor(config: SensorInstanceConfig, bus: SensorBus, bearingGenerator?: EoBearingGenerator) {
     // EO sensors don't maintain local position tracks — minimal TrackManager config
     super(config, bus, {
       confirmAfter: 3,
@@ -60,6 +64,7 @@ export class EoSensorInstance extends SensorInstance {
       associationMode: 'nn',
       enableIMM: false,
     });
+    this.bearingGenerator = bearingGenerator ?? defaultGenerateEoBearing as unknown as EoBearingGenerator;
   }
 
   // ── tick() ──────────────────────────────────────────────────────────────
@@ -80,15 +85,15 @@ export class EoSensorInstance extends SensorInstance {
     const elapsed = simTimeSec - this.lastUpdateSimSec;
     this.updateGimbal(elapsed > 0 ? elapsed : dtSec);
 
-    // Build a SensorDefinition compatible with the simulator's EO model
+    // Build a SensorSpec for the bearing generator
     const sensorDef = this.buildSensorDefinition();
     const faults: FaultDefinition[] = [];
     const baseTimestamp = 0;
     const bearings: BearingMeasurementReport[] = [];
 
     for (const [targetId, target] of this.visibleTargets) {
-      const result = generateEoBearing(
-        sensorDef,
+      const result = this.bearingGenerator(
+        sensorDef as unknown as SensorSpec,
         target.position,
         simTimeSec,
         baseTimestamp,

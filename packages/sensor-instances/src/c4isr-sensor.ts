@@ -12,16 +12,18 @@
 import type { SensorId, Timestamp, SourceObservation } from '@eloc2/domain';
 import type { GroundTruthTarget } from '@eloc2/sensor-bus';
 import { SensorBus } from '@eloc2/sensor-bus';
-import { generateC4isrObservation } from '@eloc2/simulator';
+import { generateC4isrObservation as defaultGenerateC4isrObservation } from '@eloc2/simulator';
 import type { SensorDefinition } from '@eloc2/simulator';
 
 import { SensorInstance } from './base-sensor.js';
-import type { SensorInstanceConfig, SensorTickResult } from './types.js';
+import type { SensorInstanceConfig, SensorTickResult, C4isrObservationGenerator, SensorSpec } from './types.js';
 
 export class C4isrSensorInstance extends SensorInstance {
   private tickCounter: number = 0;
+  /** Pluggable observation generator — defaults to simulator's generateC4isrObservation */
+  private observationGenerator: C4isrObservationGenerator;
 
-  constructor(config: SensorInstanceConfig, bus: SensorBus) {
+  constructor(config: SensorInstanceConfig, bus: SensorBus, observationGenerator?: C4isrObservationGenerator) {
     super(config, bus, {
       confirmAfter: 2, // C4ISR tracks confirm faster (already pre-processed)
       dropAfterMisses: 3, // Drop faster too
@@ -34,6 +36,7 @@ export class C4isrSensorInstance extends SensorInstance {
       associationMode: 'nn',
       enableIMM: false, // No maneuver detection for C4ISR
     });
+    this.observationGenerator = observationGenerator ?? defaultGenerateC4isrObservation as unknown as C4isrObservationGenerator;
   }
 
   // ── Coverage ────────────────────────────────────────────────────────────
@@ -73,7 +76,7 @@ export class C4isrSensorInstance extends SensorInstance {
 
       // Process each visible target (all active targets — no coverage filter)
       for (const [_targetId, target] of this.visibleTargets) {
-        const obs: SourceObservation | undefined = generateC4isrObservation(
+        const obs: SourceObservation | undefined = (this.observationGenerator as any)(
           sensorDef,
           target.position,
           target.velocity,

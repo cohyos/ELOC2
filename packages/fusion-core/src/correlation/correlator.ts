@@ -128,8 +128,11 @@ export function correlate(
 
     // Apply covariance floor: prevent covariance from collapsing after many
     // consecutive fusions. Without this, the Mahalanobis gate becomes so tight
-    // that normal observation noise causes intermittent correlation failures
-    // (~25% failure rate), creating ghost tracks that get merged back.
+    // that normal observation noise causes intermittent correlation failures.
+    // Floor prevents covariance collapse after many fusions.
+    // At 5000m² (σ≈70m), the effective gate radius is ~316m with threshold=20.
+    // Note: formation targets at ~300m spacing cannot be resolved by the
+    // correlator alone — this is a physical radar resolution limitation.
     const covFloor = 5000; // m² floor (~70m std dev minimum per axis)
     for (let i = 0; i < 3; i++) {
       if (predCov[i][i] < covFloor) {

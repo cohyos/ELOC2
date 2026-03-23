@@ -744,6 +744,24 @@ export class TrackManager {
           ),
         ];
       }
+
+      // Hard drop safety net: after very long period with no updates,
+      // force drop even if existence probability hasn't fully decayed.
+      // Uses 2x max coasting time to survive sensor outages and transient
+      // coverage gaps while still cleaning up genuinely stale tracks.
+      // Applies to all non-dropped tracks including tentative — the Bayesian
+      // Pe decay from near-1.0 is too slow for timely cleanup.
+      const hardDropMisses = coastThreshold + maxCoastingSec * 2;
+      if (track.status !== 'dropped' && meta.missCount >= hardDropMisses) {
+        track.status = 'dropped';
+        track.lineage = [
+          ...track.lineage,
+          createLineageEntry(
+            'track.dropped',
+            `Dropped: hard limit of ${hardDropMisses} consecutive misses (Pe=${meta.existenceProbability.toFixed(3)})`,
+          ),
+        ];
+      }
     } else {
       // Legacy miss-count drop
       if (meta.missCount >= this.config.dropAfterMisses) {
@@ -897,7 +915,9 @@ export class TrackManager {
     // ALWAYS cluster observations spatially, regardless of whether tracks exist.
     // This prevents multiple sensors reporting the same target from creating
     // separate tracks when processed individually.
-    const clusters = this.clusterObservations(observations, 5000); // 5km radius
+    // Cluster radius: large enough to merge duplicate observations of the same
+    // target from multiple sensors (~1km positional error between radar & EO).
+    const clusters = this.clusterObservations(observations, 5000);
 
     const results: ProcessObservationResult[] = [];
     for (const cluster of clusters) {

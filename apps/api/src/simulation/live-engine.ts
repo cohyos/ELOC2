@@ -1319,6 +1319,12 @@ export class LiveEngine {
       // Update sensor status
       this.updateSensorStatus(result.activeFaults);
 
+      // Core EO detector MUST run BEFORE markStaleTracksAsMissed so
+      // EO-triangulated tracks get their lastUpdateTick refreshed before
+      // the stale check would mark them as missed (same order as finalizeTick)
+      this.state.tracks = this.trackManager.getAllTracks().filter(tr => tr.status !== 'dropped');
+      this.processCoreEoDetector();
+
       // Tick-based stale detection (same as finalizeTick)
       this.trackManager.markStaleTracksAsMissed(result.currentTimeSec, 3);
 
@@ -1326,8 +1332,7 @@ export class LiveEngine {
       this.processAccumulatedBearings();
       this.expireStaleEoCues();
       this.computeGeometryEstimates();
-      this.processCoreEoDetector();
-      // Update state.tracks AFTER core EO detector so EO-created tracks appear
+      // Final track snapshot after all processing
       this.state.tracks = this.trackManager.getAllTracks().filter(tr => tr.status !== 'dropped');
 
       if (result.currentTimeSec - this.lastEoTaskingSec >= EO_TASKING_INTERVAL_SEC) {
@@ -1838,6 +1843,13 @@ export class LiveEngine {
     // Update sensor online status based on active faults
     this.updateSensorStatus(result.activeFaults);
 
+    // Core EO Target Detector: correlate staring sensor az/el detections,
+    // triangulate when ≥2 sensors overlap → create 3D EO targets → promote to system tracks.
+    // MUST run BEFORE markStaleTracksAsMissed so EO-triangulated tracks get their
+    // lastUpdateTick refreshed before the stale check would mark them as missed.
+    this.state.tracks = this.trackManager.getAllTracks().filter(t => t.status !== 'dropped');
+    this.processCoreEoDetector();
+
     // Tick-based stale detection: mark tracks not updated this tick as missed.
     // Uses monotonic tick counter (elapsedSec) instead of Date.now() which
     // diverges from simulation time at >1x speed, causing either:
@@ -1848,17 +1860,12 @@ export class LiveEngine {
     // Post-tick merge sweep to eliminate ghost tracks
     this.trackManager.mergeCloseTracks();
 
-    // Snapshot tracks from track manager
-    this.state.tracks = this.trackManager.getAllTracks().filter(t => t.status !== 'dropped');
-
-    // Core EO Target Detector: correlate staring sensor az/el detections,
-    // triangulate when ≥2 sensors overlap → create 3D EO targets → promote to system tracks.
-    // Single-sensor detections fall back to enhanced cueing against existing tracks.
-    this.processCoreEoDetector();
-
     // Phase 5: Process accumulated bearings (slewing sensors) and run EO tasking
     this.processAccumulatedBearings();
     this.expireStaleEoCues();
+
+    // Snapshot tracks after all processing (EO + radar + merge)
+    this.state.tracks = this.trackManager.getAllTracks().filter(t => t.status !== 'dropped');
 
     // Phase 6: Compute geometry estimates from EO bearings
     this.computeGeometryEstimates();
@@ -2077,7 +2084,7 @@ export class LiveEngine {
           // ── Staring sensor: route through Core EO Target Detector ──
           // Each staring sensor independently manages az/el detections.
           // Cross-sensor correlation and triangulation happens in finalizeTick.
-          this.coreEoDetector.ingestBearing(bearingObs, sensor.position);
+          this.coreEoDetector.ingestBearing(bearingObs, sensor.position, this.state.elapsedSec);
 
           this.pushEvent(
             'eo.detection.ingested',
@@ -3129,7 +3136,7 @@ export class LiveEngine {
     );
     if (staringSensors.length === 0) return;
 
-    const result = this.coreEoDetector.processTick(staringSensors, this.state.tracks);
+    const result = this.coreEoDetector.processTick(staringSensors, this.state.tracks, this.state.elapsedSec);
 
     // ── 1. New 3D EO targets → fuse or create system track ──
     for (const target of result.newTargets) {
@@ -3243,17 +3250,29 @@ export class LiveEngine {
       systemTrackId: eoTrackId,
       state: { ...target.position },
       velocity: undefined,
-      covariance: [
-        [2500, 0, 0],   // ~50m uncertainty in each axis (from triangulation)
-        [0, 2500, 0],
-        [0, 0, 10000],  // altitude less certain from EO
-      ],
+      // Adaptive covariance from triangulation quality:
+      // miss distance and sensor count determine horizontal uncertainty,
+      // intersection angle determines how well-conditioned the geometry is
+      covariance: (() => {
+        const missSq = Math.max(100, target.missDistanceM * target.missDistanceM);
+        const angleFactor = target.intersectionAngleDeg > 30 ? 1.0 :
+          target.intersectionAngleDeg > 10 ? 2.0 : 5.0;
+        const sensorFactor = target.sensorIds.length >= 5 ? 0.5 :
+          target.sensorIds.length >= 3 ? 0.8 : 1.5;
+        const horizVar = missSq * angleFactor * sensorFactor;
+        const vertVar = horizVar * 4; // altitude 2x less certain from EO
+        return [
+          [horizVar, 0, 0],
+          [0, horizVar, 0],
+          [0, 0, vertVar],
+        ];
+      })(),
       confidence: target.classification === 'confirmed_3d' ? 0.6 : 0.4,
       status: 'tentative',
       lineage: [
         createLineageEntry(
           'eo.target.created',
-          `EO 3D track: ${target.classification} from ${target.sensorIds.length} staring sensors (angle=${target.intersectionAngleDeg.toFixed(1)}°)`,
+          `EO 3D track: ${target.classification} from ${target.sensorIds.length} staring sensors (angle=${target.intersectionAngleDeg.toFixed(1)}°, DRI=${target.bestDriTier ?? 'unknown'}, IQ=${(target.bestImageQuality ?? 0).toFixed(1)})`,
         ),
       ],
       lastUpdated: now,
@@ -3370,7 +3389,24 @@ export class LiveEngine {
     if (!target.promotedTrackId) return;
 
     // Search in TrackManager (not state.tracks which may be stale during seek)
-    const eoTrack = this.trackManager.getTrack(target.promotedTrackId as SystemTrackId);
+    let eoTrack = this.trackManager.getTrack(target.promotedTrackId as SystemTrackId);
+
+    // If the track was dropped (e.g. stale during seek), revive it in-place.
+    // EO-triangulated tracks are continuously refreshed by the core detector
+    // and should persist as long as the detector maintains the 3D target.
+    if (eoTrack && eoTrack.status === 'dropped') {
+      eoTrack.status = 'tentative';
+      eoTrack.state = { ...target.position };
+      eoTrack.confidence = target.classification === 'confirmed_3d' ? 0.6 : 0.4;
+      // Revive by updating metadata directly instead of re-injecting
+      // (prevents duplicate track accumulation)
+      const meta = (this.trackManager as any).meta?.get(target.promotedTrackId);
+      if (meta) {
+        meta.lastUpdateTick = this.state.elapsedSec;
+        meta.missCount = 0;
+      }
+    }
+
     if (eoTrack && eoTrack.status !== 'dropped') {
       // Use sim-consistent timestamp
       const simNow = ((this.runner as any).baseTimestamp
@@ -3384,6 +3420,26 @@ export class LiveEngine {
         eoTrack.velocity,
         simNow as number,
       );
+
+      // ── Velocity estimation from consecutive triangulations ──
+      // EO tracks originally have no velocity. By comparing positions between
+      // consecutive updates, we can estimate velocity for display and prediction.
+      const prevPos = eoTrack.state;
+      const prevTime = eoTrack.lastUpdated as number;
+      const dtMs = (simNow as number) - prevTime;
+      if (dtMs > 500 && dtMs < 30_000 && prevPos) {
+        // Convert geodetic delta to approximate velocity (m/s)
+        const dLatM = (target.position.lat - prevPos.lat) * 110540;
+        const dLonM = (target.position.lon - prevPos.lon) * 111320 *
+          Math.cos(prevPos.lat * Math.PI / 180);
+        const dAltM = target.position.alt - prevPos.alt;
+        const dtSec = dtMs / 1000;
+        eoTrack.velocity = {
+          vx: dLonM / dtSec,   // east velocity (m/s)
+          vy: dLatM / dtSec,   // north velocity (m/s)
+          vz: dAltM / dtSec,   // vertical velocity (m/s)
+        };
+      }
 
       eoTrack.state = { ...target.position };
       eoTrack.lastUpdated = simNow;
