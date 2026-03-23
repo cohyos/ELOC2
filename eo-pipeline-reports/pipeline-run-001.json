@@ -1,7 +1,7 @@
 [
   {
     "runId": 1,
-    "timestamp": "2026-03-23T21:46:09.825Z",
+    "timestamp": "2026-03-23T22:16:04.473Z",
     "simTimeSec": 200,
     "phase": "Phase 1: Fighter (t=200)",
     "bearing": {
@@ -82,7 +82,7 @@
       "fusedWithRadarCount": 0
     },
     "quality": {
-      "pictureAccuracy": 100,
+      "pictureAccuracy": 90,
       "coveragePercent": 1,
       "falseTrackRate": 0,
       "positionErrorAvg": 68.78646827321377,
@@ -117,17 +117,17 @@
       },
       {
         "stage": "S5: Quality Assessment",
-        "score": 100,
+        "score": 90,
         "grade": "A",
         "issues": []
       }
     ],
-    "compositeScore": 94,
+    "compositeScore": 92,
     "compositeGrade": "A"
   },
   {
     "runId": 1,
-    "timestamp": "2026-03-23T21:46:11.332Z",
+    "timestamp": "2026-03-23T22:16:06.270Z",
     "simTimeSec": 450,
     "phase": "Phase 2: Formation (t=450)",
     "bearing": {
@@ -208,12 +208,12 @@
       "gtCoverage": 0.6,
       "avgTrackAgeSec": 0,
       "trackContinuity": 0,
-      "avgConfidence": 0.6954284809140724,
+      "avgConfidence": 0.5625,
       "proliferationCount": 0,
       "fusedWithRadarCount": 0
     },
     "quality": {
-      "pictureAccuracy": 85,
+      "pictureAccuracy": 81,
       "coveragePercent": 0.8,
       "falseTrackRate": 0,
       "positionErrorAvg": 1453.859932049229,
@@ -254,17 +254,17 @@
       },
       {
         "stage": "S5: Quality Assessment",
-        "score": 85,
-        "grade": "A",
+        "score": 81,
+        "grade": "B",
         "issues": []
       }
     ],
-    "compositeScore": 80,
+    "compositeScore": 79,
     "compositeGrade": "B"
   },
   {
     "runId": 1,
-    "timestamp": "2026-03-23T21:46:14.362Z",
+    "timestamp": "2026-03-23T22:16:10.187Z",
     "simTimeSec": 660,
     "phase": "Phase 3: Ballistic (t=660)",
     "bearing": {
@@ -397,7 +397,7 @@
   },
   {
     "runId": 1,
-    "timestamp": "2026-03-23T21:46:21.512Z",
+    "timestamp": "2026-03-23T22:16:18.896Z",
     "simTimeSec": 1050,
     "phase": "Phase 4a: Dense Early (t=1050)",
     "bearing": {
@@ -483,7 +483,7 @@
       "fusedWithRadarCount": 0
     },
     "quality": {
-      "pictureAccuracy": 95,
+      "pictureAccuracy": 87,
       "coveragePercent": 1,
       "falseTrackRate": 0.14285714285714285,
       "positionErrorAvg": 1212.3622438116497,
@@ -522,17 +522,17 @@
       },
       {
         "stage": "S5: Quality Assessment",
-        "score": 95,
+        "score": 87,
         "grade": "A",
         "issues": []
       }
     ],
-    "compositeScore": 85,
-    "compositeGrade": "A"
+    "compositeScore": 83,
+    "compositeGrade": "B"
   },
   {
     "runId": 1,
-    "timestamp": "2026-03-23T21:46:39.659Z",
+    "timestamp": "2026-03-23T22:16:40.078Z",
     "simTimeSec": 1300,
     "phase": "Phase 4b: Dense Mid (t=1300)",
     "bearing": {
@@ -617,12 +617,12 @@
       "gtCoverage": 0.6666666666666666,
       "avgTrackAgeSec": 0,
       "trackContinuity": 0,
-      "avgConfidence": 0.775,
+      "avgConfidence": 0.59375,
       "proliferationCount": 2,
       "fusedWithRadarCount": 0
     },
     "quality": {
-      "pictureAccuracy": 75,
+      "pictureAccuracy": 67,
       "coveragePercent": 0.6666666666666666,
       "falseTrackRate": 0.25,
       "positionErrorAvg": 2080.045230324556,
@@ -661,12 +661,12 @@
       },
       {
         "stage": "S5: Quality Assessment",
-        "score": 75,
-        "grade": "B",
+        "score": 67,
+        "grade": "C",
         "issues": []
       }
     ],
-    "compositeScore": 80,
+    "compositeScore": 78,
     "compositeGrade": "B"
   }
 ]
