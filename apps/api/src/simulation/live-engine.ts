@@ -70,6 +70,7 @@ import {
 } from '@eloc2/fusion-core';
 import { EoManagementModule } from '@eloc2/eo-management';
 import type { EoModuleStatus } from '@eloc2/eo-management';
+import { getElevation } from '@eloc2/terrain';
 import { CoreEoTargetDetector } from './core-eo-detector.js';
 import type { EoDetection, EoTarget3D, CoreDetectorResult } from './core-eo-detector.js';
 import { SimulationStateMachine } from './state-machine.js';
@@ -712,6 +713,9 @@ export class LiveEngine {
 
   constructor(scenarioId?: string) {
     this.scenario = (scenarioId ? getScenarioById(scenarioId) : undefined) ?? centralIsrael;
+    // Adjust sensor altitudes: scenario alt = height above ground (mast/tower).
+    // Add terrain elevation to get true altitude above sea level.
+    this.adjustSensorAltitudes();
     this.runner = new ScenarioRunner(this.scenario);
     this.trackManager = new TrackManager({
       confirmAfter: 3,
@@ -1263,6 +1267,7 @@ export class LiveEngine {
       const s = getScenarioById(scenarioId);
       if (s) this.scenario = s;
     }
+    this.adjustSensorAltitudes();
     this.resetInternalState();
     resetAccumulator();
     // Complete the reset: resetting → idle
@@ -1501,6 +1506,7 @@ export class LiveEngine {
       this.timer = null;
     }
     this.scenario = def;
+    this.adjustSensorAltitudes();
     this.resetInternalState();
     // Complete: resetting → idle
     this.stateMachine.tryTransition('reset');
@@ -4017,22 +4023,40 @@ export class LiveEngine {
     };
   }
 
+  /**
+   * Adjust sensor altitudes in the scenario definition.
+   * Scenario alt is treated as height above ground (mast/tower height).
+   * This adds terrain elevation to get true altitude above sea level,
+   * ensuring consistent altitude reference across the system.
+   */
+  private adjustSensorAltitudes(): void {
+    for (const sensor of this.scenario.sensors) {
+      const terrainElev = getElevation(sensor.position.lat, sensor.position.lon) ?? 0;
+      sensor.position = {
+        ...sensor.position,
+        alt: terrainElev + (sensor.position.alt ?? 0),
+      };
+    }
+  }
+
   private buildSensorStates(): SensorState[] {
-    return this.scenario.sensors.map(s => ({
-      sensorId: s.sensorId as SensorId,
-      sensorType: s.type as 'radar' | 'eo' | 'c4isr',
-      position: { ...s.position },
-      gimbal: s.type === 'eo' ? {
-        azimuthDeg: 0,
-        elevationDeg: 0,
-        slewRateDegPerSec: s.slewRateDegPerSec ?? 30,
-        currentTargetId: undefined,
-      } : undefined,
-      fov: s.fov ? { halfAngleHDeg: s.fov.halfAngleHDeg, halfAngleVDeg: s.fov.halfAngleVDeg } : undefined,
-      coverage: { ...s.coverage },
-      online: true,
-      lastUpdateTime: Date.now() as Timestamp,
-    }));
+    return this.scenario.sensors.map(s => {
+      return {
+        sensorId: s.sensorId as SensorId,
+        sensorType: s.type as 'radar' | 'eo' | 'c4isr',
+        position: { ...s.position }, // already adjusted by adjustSensorAltitudes()
+        gimbal: s.type === 'eo' ? {
+          azimuthDeg: 0,
+          elevationDeg: 0,
+          slewRateDegPerSec: s.slewRateDegPerSec ?? 30,
+          currentTargetId: undefined,
+        } : undefined,
+        fov: s.fov ? { halfAngleHDeg: s.fov.halfAngleHDeg, halfAngleVDeg: s.fov.halfAngleVDeg } : undefined,
+        coverage: { ...s.coverage },
+        online: true,
+        lastUpdateTime: Date.now() as Timestamp,
+      };
+    });
   }
 
   private updateSensorStatus(activeFaults: Array<{ sensorId: string; type: string }>): void {
