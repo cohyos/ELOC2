@@ -1,6 +1,18 @@
 // Types
 export type { SensorInstanceConfig, SensorTickResult } from './types.js';
 
+// Observation generator interfaces (for decoupling from simulator)
+export type {
+  SensorSpec,
+  FaultSpec,
+  EoBearingResult,
+  EoBearingGenerator,
+  RadarObservationResult,
+  RadarObservationGenerator,
+  C4isrObservationResult,
+  C4isrObservationGenerator,
+} from './types.js';
+
 // Base class
 export { SensorInstance } from './base-sensor.js';
 
