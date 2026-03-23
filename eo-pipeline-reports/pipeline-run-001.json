@@ -1,7 +1,7 @@
 [
   {
     "runId": 1,
-    "timestamp": "2026-03-23T21:42:34.766Z",
+    "timestamp": "2026-03-23T21:46:09.825Z",
     "simTimeSec": 200,
     "phase": "Phase 1: Fighter (t=200)",
     "bearing": {
@@ -127,7 +127,7 @@
   },
   {
     "runId": 1,
-    "timestamp": "2026-03-23T21:42:36.147Z",
+    "timestamp": "2026-03-23T21:46:11.332Z",
     "simTimeSec": 450,
     "phase": "Phase 2: Formation (t=450)",
     "bearing": {
@@ -264,7 +264,7 @@
   },
   {
     "runId": 1,
-    "timestamp": "2026-03-23T21:42:38.991Z",
+    "timestamp": "2026-03-23T21:46:14.362Z",
     "simTimeSec": 660,
     "phase": "Phase 3: Ballistic (t=660)",
     "bearing": {
@@ -397,7 +397,7 @@
   },
   {
     "runId": 1,
-    "timestamp": "2026-03-23T21:42:44.762Z",
+    "timestamp": "2026-03-23T21:46:21.512Z",
     "simTimeSec": 1050,
     "phase": "Phase 4a: Dense Early (t=1050)",
     "bearing": {
@@ -532,7 +532,7 @@
   },
   {
     "runId": 1,
-    "timestamp": "2026-03-23T21:42:57.511Z",
+    "timestamp": "2026-03-23T21:46:39.659Z",
     "simTimeSec": 1300,
     "phase": "Phase 4b: Dense Mid (t=1300)",
     "bearing": {
