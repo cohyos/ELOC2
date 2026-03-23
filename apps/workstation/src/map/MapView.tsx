@@ -117,6 +117,9 @@ export function MapView() {
     L.control.zoom({ position: 'topright' }).addTo(leafletMap);
     L.control.scale({ metric: true, imperial: false, position: 'bottomleft' }).addTo(leafletMap);
 
+    // Suppress browser context menu over the map
+    container.addEventListener('contextmenu', (e) => e.preventDefault());
+
     const adapter = new LeafletAdapter(leafletMap);
     adapterRef.current = adapter;
     leafletMapRef.current = leafletMap;
