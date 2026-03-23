@@ -1311,11 +1311,12 @@ export class LiveEngine {
       this.trackManager.markStaleTracksAsMissed(result.currentTimeSec, 3);
 
       this.trackManager.mergeCloseTracks();
-      this.state.tracks = this.trackManager.getAllTracks().filter(tr => tr.status !== 'dropped');
       this.processAccumulatedBearings();
       this.expireStaleEoCues();
       this.computeGeometryEstimates();
       this.processCoreEoDetector();
+      // Update state.tracks AFTER core EO detector so EO-created tracks appear
+      this.state.tracks = this.trackManager.getAllTracks().filter(tr => tr.status !== 'dropped');
 
       if (result.currentTimeSec - this.lastEoTaskingSec >= EO_TASKING_INTERVAL_SEC) {
         this.runEoTaskingCycle();
@@ -3204,7 +3205,10 @@ export class LiveEngine {
    * Returns the EO system track ID.
    */
   private fuseOrCreateTrackFromEoTarget(target: EoTarget3D): string {
-    const now = Date.now() as Timestamp;
+    // Use simulation-consistent timestamp (same as ScenarioRunner baseTimestamp + simSec)
+    const now = (this.runner as any).baseTimestamp
+      ? ((this.runner as any).baseTimestamp + this.state.elapsedSec * 1000) as Timestamp
+      : Date.now() as Timestamp;
     const EO_FUSION_GATE_M = 3000; // 3km gate for EO→radar track fusion
 
     // ── Step 1: Always create the EO 3D system track ──
@@ -3233,8 +3237,9 @@ export class LiveEngine {
       fusionMode: 'eo_triangulation',
     };
 
-    // Register EO track with TrackManager
-    this.trackManager.injectTrack(eoSystemTrack);
+    // Register EO track with TrackManager, passing current tick to prevent
+    // immediate stale-marking by markStaleTracksAsMissed
+    this.trackManager.injectTrack(eoSystemTrack, this.state.elapsedSec);
 
     // Store geometry estimate for the EO track
     this.state.geometryEstimates.set(eoTrackId as string, {
@@ -3338,23 +3343,31 @@ export class LiveEngine {
    */
   private updateTrackFromEoTarget(target: EoTarget3D): void {
     if (!target.promotedTrackId) return;
-    const now = Date.now() as Timestamp;
 
-    // Update the EO 3D system track directly
-    const eoTrack = this.state.tracks.find(
-      t => (t.systemTrackId as string) === target.promotedTrackId,
-    );
+    // Search in TrackManager (not state.tracks which may be stale during seek)
+    const eoTrack = this.trackManager.getTrack(target.promotedTrackId as SystemTrackId);
     if (eoTrack && eoTrack.status !== 'dropped') {
+      // Use sim-consistent timestamp
+      const simNow = ((this.runner as any).baseTimestamp
+        ? (this.runner as any).baseTimestamp + this.state.elapsedSec * 1000
+        : Date.now()) as Timestamp;
+
       // 6DOF consistency evaluation: compare new position against predicted
       const consistency = this.trackManager.consistencyEvaluator.evaluate(
         target.promotedTrackId,
         target.position,
         eoTrack.velocity,
-        now as number,
+        simNow as number,
       );
 
       eoTrack.state = { ...target.position };
-      eoTrack.lastUpdated = now;
+      eoTrack.lastUpdated = simNow;
+
+      // CRITICAL: refresh lastUpdateTick so the track isn't marked stale
+      this.trackManager.setTrackUpdateTick(
+        target.promotedTrackId as SystemTrackId,
+        this.state.elapsedSec,
+      );
 
       if (consistency) {
         // Apply consistency-based certainty delta

@@ -157,9 +157,10 @@ export const ABT_PROFILE: CategoryProfile = {
 export const DEFAULT_PROFILE: CategoryProfile = {
   correlator: {
     // Moderate gate: wide enough for both BM and ABT initial detection.
-    // Multi-scenario system-level optimized: 16 gateThreshold, 50 velocity.
-    gateThreshold: 16.0,
-    velocityGateThreshold: 50,
+    // Widened from 16→22 and 50→100 to reduce ghost track proliferation
+    // for unresolved targets before category classification.
+    gateThreshold: 22.0,
+    velocityGateThreshold: 100,
   },
 
   confirmAfter: 4,

@@ -378,6 +378,13 @@ export class TrackManager {
     // Use observation timestamp for consistent prediction at any playback speed
     track.lastUpdated = observation.timestamp;
 
+    // Update velocity from observation — critical for position prediction
+    // in the correlator. Without this, the track keeps using its initial
+    // velocity, causing prediction drift and correlation failures.
+    if (observation.velocity) {
+      track.velocity = { ...observation.velocity };
+    }
+
     // Propagate Doppler from fused state
     if (fusedState.radialVelocity !== undefined) {
       track.radialVelocity = fusedState.radialVelocity;
@@ -529,10 +536,13 @@ export class TrackManager {
     if (!track2) throw new Error(`Track ${trackId2} not found`);
 
     const newId = generateId() as SystemTrackId;
-    const now = Date.now() as Timestamp;
 
-    // Use the track with higher confidence as the primary state
-    const primary = track1.confidence >= track2.confidence ? track1 : track2;
+    // Use the most recently updated track as the primary state.
+    // Previously used highest-confidence track, but that causes the merged track
+    // to keep stale positions when an old confirmed track merges with a fresh
+    // observation-born track — the fresh position is discarded, the old drifts
+    // further every tick, and the correlation cascade fails permanently.
+    const primary = track1.lastUpdated >= track2.lastUpdated ? track1 : track2;
 
     // Combine source lists (deduplicate)
     const sources = [...new Set([...track1.sources, ...track2.sources])] as SensorId[];
@@ -553,7 +563,11 @@ export class TrackManager {
           [trackId1, trackId2],
         ),
       ],
-      lastUpdated: now,
+      // Use the most recent observation-based timestamp from the primary track,
+      // NOT Date.now(). Using wall-clock time corrupts the correlator's prediction
+      // dt calculation (obs.timestamp - track.lastUpdated), causing prediction to
+      // be skipped or wildly wrong at >1x playback speed → ghost track proliferation.
+      lastUpdated: Math.max(track1.lastUpdated, track2.lastUpdated) as Timestamp,
       sources,
       eoInvestigationStatus: 'none',
       radialVelocity: primary.radialVelocity,
@@ -606,7 +620,7 @@ export class TrackManager {
    * The track is registered with default metadata so it participates in
    * normal maintenance (miss-counting, merging, dropping).
    */
-  injectTrack(track: SystemTrack): void {
+  injectTrack(track: SystemTrack, currentTick?: number): void {
     this.tracks.set(track.systemTrackId, track);
     this.meta.set(track.systemTrackId, {
       updateCount: 1,
@@ -616,7 +630,10 @@ export class TrackManager {
       motionModelStatus: 'unknown',
       classifierState: createClassifierState(),
       targetCategory: 'unresolved',
-      lastUpdateTick: 0,
+      // Use current tick so the track isn't immediately marked stale.
+      // Previously defaulted to 0, causing injected EO tracks to be
+      // instantly dropped by markStaleTracksAsMissed.
+      lastUpdateTick: currentTick ?? 0,
     });
   }
 
