@@ -67,10 +67,10 @@ function makeStaringSensors(
       minAzDeg: 0,
       maxAzDeg: 360,      // full 360° panoramic
       minElDeg: -3,
-      maxElDeg: 25,        // 25° vertical — wider than green-pine's 20°
+      maxElDeg: 80,        // 80° vertical — covers high-altitude BMs
       maxRangeM: 35_000,   // 35 km instrumented range
     },
-    fov: { halfAngleHDeg: 180, halfAngleVDeg: 12.5 }, // full azimuth, 25° vertical
+    fov: { halfAngleHDeg: 180, halfAngleVDeg: 40 }, // full azimuth, 80° vertical
     slewRateDegPerSec: 0,   // staring — no gimbal
     maxDetectionRangeM: 55_000, // cooled MWIR: 55 km max detection
   }));

@@ -447,50 +447,90 @@ export class CoreEoTargetDetector {
    */
   private correlateBearings(
     detections: EoDetection[],
-    sensors: SensorState[],
+    _sensors: SensorState[],
   ): EoDetection[][] {
-    // Build adjacency: two detections correlate if from different sensors
-    // and their bearings plausibly point at the same target.
-    // We use a simple approach: for each pair of detections from different
-    // sensors, check if the ray intersection point is consistent.
+    // Multi-target correlation using angular clustering.
+    //
+    // Step 1: Group detections by sensor (each sensor may see multiple targets)
+    // Step 2: Pick the sensor with the most detections as the reference
+    // Step 3: For each reference detection, find the best-matching detection
+    //         from every other sensor (by ray intersection quality)
+    // Step 4: Each reference detection seeds a target group
+    //
+    // This avoids the Union-Find transitive merge problem where separate targets
+    // get merged because intermediate rays happen to intersect.
 
-    const n = detections.length;
-    const parent = Array.from({ length: n }, (_, i) => i);
+    if (detections.length === 0) return [];
 
-    function find(x: number): number {
-      while (parent[x] !== x) {
-        parent[x] = parent[parent[x]];
-        x = parent[x];
-      }
-      return x;
+    // Group detections by sensor
+    const bySensor = new Map<string, EoDetection[]>();
+    for (const det of detections) {
+      if (!bySensor.has(det.sensorId)) bySensor.set(det.sensorId, []);
+      bySensor.get(det.sensorId)!.push(det);
     }
-    function union(a: number, b: number): void {
-      const ra = find(a), rb = find(b);
-      if (ra !== rb) parent[ra] = rb;
+
+    // Pick reference sensor (most detections = sees the most targets)
+    let refSensorId = '';
+    let maxDets = 0;
+    for (const [sid, dets] of bySensor) {
+      if (dets.length > maxDets) { maxDets = dets.length; refSensorId = sid; }
     }
 
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        const di = detections[i];
-        const dj = detections[j];
-        if (di.sensorId === dj.sensorId) continue;
+    const refDets = bySensor.get(refSensorId) ?? [];
+    if (refDets.length === 0) return [detections]; // fallback: one group
 
-        // Check if bearings from these two sensors plausibly intersect
-        if (this.bearingsCorrelate(di, dj)) {
-          union(i, j);
+    // For each reference detection, build a target group by finding
+    // the best matching detection from each other sensor
+    const groups: EoDetection[][] = [];
+    const assigned = new Set<string>(); // detection IDs already assigned
+
+    for (const refDet of refDets) {
+      const group: EoDetection[] = [refDet];
+      assigned.add(refDet.detectionId);
+
+      for (const [sid, dets] of bySensor) {
+        if (sid === refSensorId) continue;
+
+        // Find best matching detection from this sensor
+        let bestDet: EoDetection | null = null;
+        let bestScore = Infinity; // lower = better (miss distance)
+
+        for (const det of dets) {
+          if (assigned.has(det.detectionId)) continue;
+          if (!this.bearingsCorrelate(refDet, det)) continue;
+
+          // Score by ray intersection quality
+          try {
+            const triResult = triangulateMultiple(
+              [refDet.sensorPosition, det.sensorPosition],
+              [refDet.bearing, det.bearing],
+            );
+            if (triResult.averageMissDistance < bestScore) {
+              bestScore = triResult.averageMissDistance;
+              bestDet = det;
+            }
+          } catch {
+            // Triangulation failed — skip
+          }
+        }
+
+        if (bestDet) {
+          group.push(bestDet);
+          assigned.add(bestDet.detectionId);
         }
       }
+
+      groups.push(group);
     }
 
-    // Collect groups
-    const groups = new Map<number, EoDetection[]>();
-    for (let i = 0; i < n; i++) {
-      const root = find(i);
-      if (!groups.has(root)) groups.set(root, []);
-      groups.get(root)!.push(detections[i]);
+    // Collect any unassigned detections as singleton groups
+    for (const det of detections) {
+      if (!assigned.has(det.detectionId)) {
+        groups.push([det]);
+      }
     }
 
-    return [...groups.values()];
+    return groups;
   }
 
   /**
@@ -599,7 +639,7 @@ export class CoreEoTargetDetector {
     // sensors cover 360° and would match ALL targets indiscriminately.
     const triResult = this.tryTriangulate(detections);
     if (triResult) {
-      const SPATIAL_GATE_M = 5000; // 5 km gate for same-target matching
+      const SPATIAL_GATE_M = 2500; // 2.5 km gate for same-target matching
       for (const target of this.eoTargets.values()) {
         const dLat = (triResult.position.lat - target.position.lat) * 110540;
         const dLon = (triResult.position.lon - target.position.lon) * 111320 *
