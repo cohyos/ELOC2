@@ -19,8 +19,8 @@ import type {
 } from '@eloc2/domain';
 import type { SensorTrackReport, LocalTrackReport } from '@eloc2/sensor-bus';
 import { SensorBus } from '@eloc2/sensor-bus';
-import { correlate, fuseObservation } from '@eloc2/fusion-core';
-import type { CorrelatorConfig } from '@eloc2/fusion-core';
+import { correlate, fuseObservation, getProfile } from '@eloc2/fusion-core';
+import type { CorrelatorConfig, TargetCategory } from '@eloc2/fusion-core';
 import { generateId, haversineDistanceM } from '@eloc2/shared-utils';
 
 import type {
@@ -113,8 +113,47 @@ export class SystemFuser {
     // Merge close tracks
     this.mergeCloseTracks();
 
+    // System-level classification and gating override
+    this.classifyAndOverride(simTimeSec);
+
     // Clear buffer
     this.pendingReports = [];
+  }
+
+  // ── System-Level Classification + Gating Override ─────────────────────
+
+  /**
+   * Aggregate classifier votes from all contributing sensors.
+   * When the system classification differs from a local sensor's,
+   * issue a GatingOverrideCommand to that sensor.
+   */
+  private classifyAndOverride(simTimeSec: number): void {
+    for (const track of this.systemTracks.values()) {
+      if (track.status === 'dropped') continue;
+
+      // Use the local track with highest classifier confidence
+      const category = track.targetCategory as TargetCategory;
+      if (category === 'unresolved') continue;
+
+      // Check if any contributing sensor has a different classification
+      // If so, issue gating override
+      const profile = getProfile(category);
+      for (const sensorId of track.sources) {
+        this.bus.sendCommand({
+          messageType: 'system.command',
+          commandId: generateId(),
+          targetSensorId: sensorId,
+          simTimeSec,
+          command: {
+            type: 'gating_override',
+            localTrackId: track.contributingLocalTrackIds[0] ?? '',
+            category,
+            gateThreshold: profile.correlator.gateThreshold,
+            velocityGateThreshold: profile.correlator.velocityGateThreshold,
+          },
+        });
+      }
+    }
   }
 
   // ── Track Creation ────────────────────────────────────────────────────

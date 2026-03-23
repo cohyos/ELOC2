@@ -7,7 +7,7 @@
  */
 
 import type { SensorId, Timestamp } from '@eloc2/domain';
-import type { GroundTruthTarget, LocalTrackReport } from '@eloc2/sensor-bus';
+import type { GroundTruthTarget, LocalTrackReport, GatingOverrideCommand } from '@eloc2/sensor-bus';
 import { SensorBus } from '@eloc2/sensor-bus';
 import { haversineDistanceM, bearingDeg } from '@eloc2/shared-utils';
 import { generateRadarObservation } from '@eloc2/simulator';
@@ -234,6 +234,22 @@ export class RadarSensorInstance extends SensorInstance {
         return 'new';
     }
   }
+
+  // ── Gating Override ────────────────────────────────────────────────────
+
+  protected override handleGatingOverride(cmd: GatingOverrideCommand): void {
+    // Store system-level category override for use in local track reports
+    // The gating parameters (gate threshold, velocity gate) inform future
+    // correlation within this sensor's TrackManager
+    if (cmd.localTrackId && cmd.category !== 'unresolved') {
+      this.categoryOverrides.set(cmd.localTrackId, cmd.category as 'bm' | 'abt');
+    }
+  }
+
+  /** System-level category overrides from the fuser */
+  private categoryOverrides: Map<string, 'bm' | 'abt'> = new Map();
+
+  // ── Private helpers ───────────────────────────────────────────────────
 
   /**
    * Convert SensorInstanceConfig to the simulator's SensorDefinition shape.

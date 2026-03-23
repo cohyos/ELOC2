@@ -269,4 +269,27 @@ describe('SystemFuser', () => {
     const active = fuser.getActiveTracks();
     expect(active.length).toBeLessThanOrEqual(2);
   });
+
+  it('system-level classification sends gating override commands', () => {
+    const cmdHandler = vi.fn();
+    bus.onCommand('RADAR-1', cmdHandler);
+
+    // Create a track with BM classification
+    bus.publishTrackReport(
+      makeTrackReport('RADAR-1', [
+        makeLocalTrack('LT-1', 31.7, 35.0, {
+          targetCategory: 'bm',
+          classifierConfidence: 0.8,
+        }),
+      ]),
+    );
+    fuser.tick(10);
+
+    // The fuser should have sent a gating override command
+    expect(cmdHandler).toHaveBeenCalled();
+    const cmd = cmdHandler.mock.calls[0][0];
+    expect(cmd.command.type).toBe('gating_override');
+    expect(cmd.command.category).toBe('bm');
+    expect(cmd.command.gateThreshold).toBeTypeOf('number');
+  });
 });

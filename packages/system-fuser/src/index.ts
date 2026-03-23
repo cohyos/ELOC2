@@ -14,3 +14,12 @@ export type {
   DistributedPipelineConfig,
   PipelineTickResult,
 } from './distributed-pipeline.js';
+
+// Lifecycle management
+export { LifecycleManager } from './lifecycle-manager.js';
+export type {
+  PipelineState,
+  LifecycleEvent,
+  LifecycleManagerConfig,
+  Disposable,
+} from './lifecycle-manager.js';
