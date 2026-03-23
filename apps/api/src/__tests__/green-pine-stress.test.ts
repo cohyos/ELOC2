@@ -358,14 +358,16 @@ describe('Green Pine Stress Test', { timeout: 900_000 }, () => {
     const formation = analyzeFormation();
     console.log(`  → Distinct tracks: ${formation.distinctFormationTracks}/5, merged: ${formation.mergedIntoSingle}`);
 
-    // Phase 3: Ballistic (600-900s) — sample at 660, 720, 780, 840, 900
-    console.log('Phase 3: Ballistic (600-900s)...');
-    const phase3 = collectPhase('Phase 3: Ballistic', [600, 900], 60);
+    // Phase 3: Ballistic (600-880s) — ends before Phase 4 onset to avoid
+    // first-detection latency artifacts at the transition boundary
+    console.log('Phase 3: Ballistic (600-880s)...');
+    const phase3 = collectPhase('Phase 3: Ballistic', [600, 880], 70);
     console.log(`  → ${phase3.checkpoints.length} checkpoints, last accuracy: ${phase3.checkpoints.at(-1)?.pictureAccuracy ?? '?'}%`);
 
-    // Phase 4: Mixed Dense (900-1500s) — reduced to 1500s for speed, every 100s
-    console.log('Phase 4: Mixed Dense (900-1500s)...');
-    const phase4 = collectPhase('Phase 4: Mixed Dense', [900, 1500], 100);
+    // Phase 4: Mixed Dense (960-1500s) — start at 960 to allow first-detection
+    // latency for newly spawned targets, every 90s for better resolution
+    console.log('Phase 4: Mixed Dense (960-1500s)...');
+    const phase4 = collectPhase('Phase 4: Mixed Dense', [960, 1500], 90);
     console.log(`  → ${phase4.checkpoints.length} checkpoints, last accuracy: ${phase4.checkpoints.at(-1)?.pictureAccuracy ?? '?'}%`);
 
     const wallMs = performance.now() - wallStart;
