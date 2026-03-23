@@ -160,22 +160,18 @@ export function correlate(
 
     if (distSquared <= trackConfig.gateThreshold) {
       // Velocity consistency gate: reject if Doppler radial velocity
-      // disagrees with the predicted radial velocity from the track state.
+      // disagrees significantly with the track's stored radial velocity.
+      // Previous implementation computed predicted Vr along the observation-to-track
+      // direction vector, which is noise-dominated when points are close together
+      // and has nothing to do with the actual sensor LOS — causing spurious
+      // rejections and massive track proliferation.
+      // Fix: directly compare observed vs stored Doppler radial velocities.
       if (
         observation.radialVelocity !== undefined &&
-        track.velocity &&
         track.radialVelocity !== undefined
       ) {
-        const dlat = track.state.lat - observation.position.lat;
-        const dlon = track.state.lon - observation.position.lon;
-        const dist2d = Math.sqrt(dlat * dlat + dlon * dlon);
-        if (dist2d > 1e-9) {
-          const ux = dlon / dist2d;
-          const uy = dlat / dist2d;
-          const predictedVr = track.velocity.vx * ux + track.velocity.vy * uy;
-          const vrDiff = Math.abs(observation.radialVelocity - predictedVr);
-          if (vrDiff > trackConfig.velocityGateThreshold) continue;
-        }
+        const vrDiff = Math.abs(observation.radialVelocity - track.radialVelocity);
+        if (vrDiff > trackConfig.velocityGateThreshold) continue;
       }
 
       candidates.push({ trackId: track.systemTrackId, distance: distSquared });

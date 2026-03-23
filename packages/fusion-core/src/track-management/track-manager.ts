@@ -529,7 +529,6 @@ export class TrackManager {
     if (!track2) throw new Error(`Track ${trackId2} not found`);
 
     const newId = generateId() as SystemTrackId;
-    const now = Date.now() as Timestamp;
 
     // Use the track with higher confidence as the primary state
     const primary = track1.confidence >= track2.confidence ? track1 : track2;
@@ -553,7 +552,11 @@ export class TrackManager {
           [trackId1, trackId2],
         ),
       ],
-      lastUpdated: now,
+      // Use the most recent observation-based timestamp from the primary track,
+      // NOT Date.now(). Using wall-clock time corrupts the correlator's prediction
+      // dt calculation (obs.timestamp - track.lastUpdated), causing prediction to
+      // be skipped or wildly wrong at >1x playback speed → ghost track proliferation.
+      lastUpdated: Math.max(track1.lastUpdated, track2.lastUpdated) as Timestamp,
       sources,
       eoInvestigationStatus: 'none',
       radialVelocity: primary.radialVelocity,
