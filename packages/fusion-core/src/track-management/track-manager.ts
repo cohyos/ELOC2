@@ -145,6 +145,9 @@ export class TrackManager {
   private correlatorConfig: CorrelatorConfig = { gateThreshold: 20.0, velocityGateThreshold: 75 };
   private mergeDistanceM: number = 8000;
 
+  /** Sequential counter for human-readable track IDs (STK-001, STK-002, ...) */
+  private nextTrackNumber: number = 1;
+
   /** 6DOF consistency evaluator — tracks position/velocity/acceleration/Doppler consistency. */
   readonly consistencyEvaluator = new ConsistencyEvaluator();
 
@@ -309,7 +312,10 @@ export class TrackManager {
     observation: SourceObservation,
     correlationResult: CorrelationResult,
   ): SystemTrack {
-    const id = generateId() as SystemTrackId;
+    const num = this.nextTrackNumber++;
+    const id = `STK-${String(num).padStart(3, '0')}` as SystemTrackId;
+
+    const sensorLabel = (observation.sensorId as string).replace(/^sensor-/i, '');
 
     const track: SystemTrack = {
       systemTrackId: id,
@@ -321,7 +327,7 @@ export class TrackManager {
       lineage: [
         createLineageEntry(
           'track.created',
-          `New track from observation ${observation.observationId} (${correlationResult.method})`,
+          `New track from ${sensorLabel}`,
         ),
       ],
       // Use observation timestamp (simulation time) for consistent prediction in correlator.
@@ -403,7 +409,7 @@ export class TrackManager {
       ...track.lineage,
       createLineageEntry(
         'track.updated',
-        `Fused observation ${observation.observationId} from sensor ${observation.sensorId}`,
+        `Updated from ${(observation.sensorId as string).replace(/^sensor-/i, '')}`,
       ),
     ];
 
@@ -535,7 +541,8 @@ export class TrackManager {
     if (!track1) throw new Error(`Track ${trackId1} not found`);
     if (!track2) throw new Error(`Track ${trackId2} not found`);
 
-    const newId = generateId() as SystemTrackId;
+    const num = this.nextTrackNumber++;
+    const newId = `STK-${String(num).padStart(3, '0')}` as SystemTrackId;
 
     // Use the most recently updated track as the primary state.
     // Previously used highest-confidence track, but that causes the merged track
@@ -559,7 +566,7 @@ export class TrackManager {
         ...track2.lineage,
         createLineageEntry(
           'track.merged',
-          `Merged tracks ${trackId1} and ${trackId2}`,
+          `Merged ${trackId1} + ${trackId2}`,
           [trackId1, trackId2],
         ),
       ],

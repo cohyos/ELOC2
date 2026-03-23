@@ -40,9 +40,15 @@ function sensorColorFn(type: string): string {
 
 function shortTrackLabel(track: SystemTrack): string {
   const id = track.systemTrackId as string;
-  const numMatch = id.match(/(\d+)/);
-  const num = numMatch ? parseInt(numMatch[1], 10) : 0;
-  let label = `T${num}`;
+  // New format: STK-001 → show as-is. Legacy UUID → extract number.
+  let label: string;
+  if (id.startsWith('STK-')) {
+    label = id; // Already human-readable
+  } else {
+    const numMatch = id.match(/(\d+)/);
+    const num = numMatch ? parseInt(numMatch[1], 10) : 0;
+    label = `T${num}`;
+  }
   const idSupport = (track as any).identificationSupport;
   if (idSupport && idSupport !== 'unknown' && idSupport !== 'none') {
     label += ` ${idSupport}`;

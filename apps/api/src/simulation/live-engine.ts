@@ -2001,7 +2001,7 @@ export class LiveEngine {
       const sensorId = tmResult.correlationEvent.data.observationId;
       this.pushEvent(
         'source.observation.reported',
-        `observation → ${decision === 'new_track' ? 'new' : 'update'} ${trackId}`,
+        decision === 'new_track' ? `New track ${trackId}` : `${trackId} updated`,
         { trackId, decision },
       );
     }
@@ -2052,7 +2052,7 @@ export class LiveEngine {
         const trackId = tmResult.track.systemTrackId;
         this.pushEvent(
           'source.observation.reported',
-          `${obs.sensorId} → ${decision === 'new_track' ? 'new' : 'update'} ${trackId}`,
+          decision === 'new_track' ? `${obs.sensorId}: new track ${trackId}` : `${obs.sensorId}: ${trackId} updated`,
           { sensorId: obs.sensorId, trackId, decision },
         );
         break;
@@ -2075,7 +2075,7 @@ export class LiveEngine {
 
           this.pushEvent(
             'eo.detection.ingested',
-            `${sensorId} az/el detection az=${bearingObs.bearing.azimuthDeg.toFixed(1)}° el=${bearingObs.bearing.elevationDeg.toFixed(1)}° → core detector`,
+            `${sensorId}: detection at ${bearingObs.bearing.azimuthDeg.toFixed(0)}°`,
             { sensorId, targetId: bearingObs.targetId, timeSec: simEvent.timeSec },
           );
         } else {
@@ -2091,7 +2091,7 @@ export class LiveEngine {
 
           this.pushEvent(
             'eo.bearing.measured',
-            `${sensorId} bearing az=${bearingObs.bearing.azimuthDeg.toFixed(1)}° → ${matchedCueId ? `cue ${matchedCueId.slice(0, 8)}` : 'unmatched'}`,
+            `${sensorId}: bearing ${bearingObs.bearing.azimuthDeg.toFixed(0)}°${matchedCueId ? '' : ' (no match)'}`,
             { sensorId, targetId: bearingObs.targetId, cueId: matchedCueId ?? undefined, timeSec: simEvent.timeSec },
           );
         }
@@ -2134,9 +2134,10 @@ export class LiveEngine {
           }
         }
 
+        const faultLabel = faultType === 'sensor_outage' ? 'Outage' : faultType === 'azimuth_bias' ? 'Bias fault' : faultType;
         this.pushEvent(
           'fault.started',
-          `Fault: ${faultType} on ${sensorId}`,
+          `${sensorId}: ${faultLabel}`,
           { sensorId, faultType },
         );
         break;
@@ -2178,7 +2179,7 @@ export class LiveEngine {
 
         this.pushEvent(
           'fault.ended',
-          `Fault cleared: ${faultType} on ${sensorId}`,
+          `${sensorId}: fault cleared`,
           { sensorId, faultType },
         );
         break;
@@ -2324,7 +2325,7 @@ export class LiveEngine {
 
           this.pushEvent(
             'eo.track.updated',
-            `EO track ${(existingTrack.eoTrackId as string).slice(0, 8)} updated from ${bearingObs.sensorId} az=${bearingObs.bearing.azimuthDeg.toFixed(1)}°`,
+            `${bearingObs.sensorId}: EO bearing updated at ${bearingObs.bearing.azimuthDeg.toFixed(0)}°`,
             { eoTrackId: existingTrack.eoTrackId, sensorId: bearingObs.sensorId, cueId },
           );
         } else {
@@ -2392,7 +2393,7 @@ export class LiveEngine {
 
                   this.pushEvent(
                     'track.classified',
-                    `Track ${systemTrackId.slice(0, 8)} classified as ${idResult.type} (${(idResult.confidence * 100).toFixed(0)}% confidence) via EO`,
+                    `${systemTrackId} classified: ${idResult.type} (${(idResult.confidence * 100).toFixed(0)}%)`,
                     {
                       systemTrackId,
                       classification: idResult.type,
@@ -2406,7 +2407,7 @@ export class LiveEngine {
 
             this.pushEvent(
               'eo.report.received',
-              `EO confirmed track ${systemTrackId.slice(0, 8)} via ${eoTrack.sensorId}`,
+              `${eoTrack.sensorId}: confirmed ${systemTrackId}`,
               { cueId, systemTrackId, outcome: 'confirmed', sensorId: eoTrack.sensorId },
             );
           }
@@ -2448,7 +2449,7 @@ export class LiveEngine {
 
             this.pushEvent(
               'eo.group.created',
-              `Unresolved group ${mergeResult.mergedGroup.groupId.slice(0, 8)} — ${cueEoTracks.length} targets for track ${systemTrackId.slice(0, 8)}`,
+              `${systemTrackId}: ${cueEoTracks.length} targets in FOV`,
               {
                 groupId: mergeResult.mergedGroup.groupId,
                 eoTrackCount: cueEoTracks.length,
@@ -2492,7 +2493,7 @@ export class LiveEngine {
 
             this.pushEvent(
               'eo.group.created',
-              `Unresolved group ${mergeResult.mergedGroup.groupId.slice(0, 8)} — ambiguous ${cueEoTracks.length} tracks`,
+              `Ambiguous: ${cueEoTracks.length} targets near ${systemTrackId}`,
               {
                 groupId: mergeResult.mergedGroup.groupId,
                 eoTrackCount: cueEoTracks.length,
@@ -2536,7 +2537,7 @@ export class LiveEngine {
 
     this.pushEvent(
       'eo.track.created',
-      `EO track ${eoTrackId.slice(0, 8)} from ${bearingObs.sensorId} az=${bearingObs.bearing.azimuthDeg.toFixed(1)}°`,
+      `${bearingObs.sensorId}: new EO contact at ${bearingObs.bearing.azimuthDeg.toFixed(0)}°`,
       { eoTrackId, sensorId: bearingObs.sensorId, cueId },
     );
 
@@ -2712,7 +2713,7 @@ export class LiveEngine {
     // 7. Log event: eo.cycling.next_target
     this.pushEvent(
       'eo.cycling.next_target',
-      `Cycling: ${sensorId} → track ${(track.systemTrackId as string).slice(0, 8)} (from ${previousTrackId.slice(0, 8)}, score ${best.score.total.toFixed(1)})`,
+      `${sensorId} → ${track.systemTrackId}`,
       {
         sensorId,
         previousTrackId,
@@ -2768,7 +2769,7 @@ export class LiveEngine {
 
         this.pushEvent(
           'eo.dwell.completed',
-          `Dwell completed: ${sensorId} on track ${dwell.targetTrackId.slice(0, 8)} after ${dwell.dwellDurationSec}s`,
+          `${sensorId}: dwell on ${dwell.targetTrackId} (${dwell.dwellDurationSec}s)`,
           { sensorId, targetTrackId: dwell.targetTrackId, dwellDurationSec: dwell.dwellDurationSec },
         );
 
@@ -4106,7 +4107,7 @@ export class LiveEngine {
       sensor.gimbal.currentTargetId = undefined;
     }
 
-    this.pushEvent('operator.sensor.locked', `Sensor ${sensorId} locked by operator`, {
+    this.pushEvent('operator.sensor.locked', `${sensorId}: locked`, {
       sensorId,
       targetTrackId: targetId,
       position,
@@ -4118,7 +4119,7 @@ export class LiveEngine {
   releaseSensor(sensorId: string): boolean {
     if (!this.operatorLockedSensors.has(sensorId)) return false;
     this.operatorLockedSensors.delete(sensorId);
-    this.pushEvent('operator.sensor.released', `Sensor ${sensorId} released by operator`, { sensorId });
+    this.pushEvent('operator.sensor.released', `${sensorId}: released`, { sensorId });
     return true;
   }
 
@@ -4139,7 +4140,7 @@ export class LiveEngine {
       }
     }
 
-    this.pushEvent('operator.priority.set', `Track ${trackId} priority set to ${priority}`, { trackId, priority });
+    this.pushEvent('operator.priority.set', `${trackId}: priority → ${priority}`, { trackId, priority });
     return true;
   }
 
@@ -4204,7 +4205,7 @@ export class LiveEngine {
         if (searchState?.active) {
           searchState.active = false;
           searchState.idleTickCount = 0;
-          this.pushEvent('eo.search.deactivated', `Search mode deactivated for ${sId} — targets available`);
+          this.pushEvent('eo.search.deactivated', `${sId}: search off, targets available`);
         } else if (searchState) {
           searchState.idleTickCount = 0;
         }
@@ -4232,7 +4233,7 @@ export class LiveEngine {
         // Activate search mode after 3 idle ticks
         searchState.active = true;
         searchState.currentAzimuth = sensor.gimbal.azimuthDeg ?? 0;
-        this.pushEvent('eo.search.activated', `Search mode activated for ${sId} — no targets for ${searchState.idleTickCount} ticks`);
+        this.pushEvent('eo.search.activated', `${sId}: search mode (idle)`);
       }
 
       if (searchState.active) {
@@ -4330,11 +4331,11 @@ export class LiveEngine {
     if (control.enabled && !searchState.active) {
       searchState.active = true;
       searchState.idleTickCount = 3; // force active
-      this.pushEvent('eo.search.activated', `Search mode manually activated for ${sensorId}`);
+      this.pushEvent('eo.search.activated', `${sensorId}: search mode on`);
     } else if (!control.enabled && searchState.active) {
       searchState.active = false;
       searchState.idleTickCount = 0;
-      this.pushEvent('eo.search.deactivated', `Search mode manually deactivated for ${sensorId}`);
+      this.pushEvent('eo.search.deactivated', `${sensorId}: search mode off`);
     }
 
     return true;
@@ -5388,7 +5389,7 @@ export class LiveEngine {
           severity: ratio > 5 ? 'critical' : 'warning',
           timeSec,
         });
-        this.pushEvent('pipeline.alert', `⚠ Track proliferation: ${this.state.tracks.length}/${gt.length} ratio`, { ratio, severity: ratio > 5 ? 'critical' : 'warning' });
+        this.pushEvent('pipeline.alert', `Track proliferation: ${this.state.tracks.length} tracks / ${gt.length} targets`, { ratio, severity: ratio > 5 ? 'critical' : 'warning' });
       }
     }
 
@@ -5401,7 +5402,7 @@ export class LiveEngine {
         severity: 'critical',
         timeSec,
       });
-      this.pushEvent('pipeline.alert', '⚠ EO bearing gap: no bearings matching cues', { received: ph.bearingsReceived, matched: 0 });
+      this.pushEvent('pipeline.alert', 'EO: no bearings matched to cues', { received: ph.bearingsReceived, matched: 0 });
     }
 
     // EO track creation gap: warn if cues exist but no EO tracks for >30s
