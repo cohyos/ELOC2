@@ -202,6 +202,37 @@ See `Knowledge_Base_and_Agents_instructions/Instructor_Operator_UX_Plan.md` for 
 | REQ-22 | Operator Mode Restrictions | ✅ Complete |
 | REQ-23 | User Management Page | ✅ Complete |
 
+### EO-Only Pipeline Stress Testing (2026-03-23, branch `claude/eloc2-development-QxD7P`)
+
+| Component | Score | Notes |
+|-----------|-------|-------|
+| EO Stress Test (overall) | **B 84/100** | Up from 48/100 initial; 0 critical issues |
+| S1: Bearing Generation | **A 90/100** | 0.1° noise, DRI-based detection, 80° elevation |
+| S2: Correlation | **B 82/100** | Angular clustering replaces Union-Find for multi-target |
+| S3: Triangulation | **B 70/100** | 89° intersection angle, 53m miss at best; limited by false groups |
+| S4: Track Management | **B 74/100** | Core detector→stale order fix; dropped-track revival |
+| S5: Quality Assessment | **B 77/100** | Follows S4 coverage |
+| Green Pine (radar+EO) | **B 74/100** | Slight regression from correlation change |
+
+**Key files:**
+- `apps/api/src/__tests__/eo-staring-stress.test.ts` — EO-only scenario stress test
+- `apps/api/src/__tests__/eo-pipeline-stages.test.ts` — Per-stage pipeline grading test
+- `packages/scenario-library/src/scenarios/eo-staring-defense.ts` — 19-sensor EO-only scenario
+- `eo-stress-test-reports/` — JSON reports per iteration
+- `eo-pipeline-reports/` — Per-stage grading reports
+
+**EO Module Portability:**
+| Package | Portability | Notes |
+|---------|-------------|-------|
+| `@eloc2/geometry` | **PORTABLE** | Pure math, zero coupling |
+| `@eloc2/sensor-bus` | **PORTABLE** | EventEmitter-based, framework-agnostic |
+| `@eloc2/eo-core` | **PORTABLE** | Bearing aggregation + triangulation |
+| `@eloc2/eo-investigation` | **PORTABLE** | Gimbal/FOV/ambiguity logic |
+| `@eloc2/eo-tasking` | **PORTABLE** | Pure scoring/assignment algorithms |
+| `@eloc2/sensor-instances` | **CONDITIONAL** | Needs `EoBearingGenerator` interface (defined, not yet injected) |
+| `@eloc2/system-fuser` | **CONDITIONAL** | Transitive coupling via sensor-instances; needs tests |
+| `@eloc2/eo-management` | **CONDITIONAL** | Monolithic design; needs service extraction |
+
 ### Distributed Sensor Architecture (2026-03-23, branch `claude/eloc2-development-QxD7P`)
 
 | Milestone | Status | Tests | Key Deliverables |
