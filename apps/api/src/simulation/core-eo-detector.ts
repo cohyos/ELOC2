@@ -190,9 +190,18 @@ export class CoreEoTargetDetector {
 
   // ── Public API ──────────────────────────────────────────────────────────
 
+  /** Track which detections were updated this tick (for frame-aware matching). */
+  private updatedThisTick = new Set<string>();
+  private lastIngestTick = -1;
+
   /**
    * Ingest a bearing observation from a staring sensor.
-   * The detector manages it as an independent bearing-only detection.
+   *
+   * WFOV frame-aware: A staring sensor's 360° MWIR array detects ALL targets
+   * in a single frame at 24Hz. When multiple bearings arrive from the same
+   * sensor in the same tick, they represent DISTINCT targets in the same frame.
+   * We must NOT merge them into the same detection — each bearing gets matched
+   * only to detections NOT already updated this tick.
    */
   ingestBearing(obs: EoBearingObservation, sensorPosition: Position3D, simTimeSec?: number): EoDetection {
     const sensorId = obs.sensorId;
@@ -200,18 +209,33 @@ export class CoreEoTargetDetector {
       this.sensorDetections.set(sensorId, new Map());
     }
 
+    // Reset per-tick tracking when a new tick starts
+    const currentTick = simTimeSec ?? -1;
+    if (currentTick !== this.lastIngestTick) {
+      this.updatedThisTick.clear();
+      this.lastIngestTick = currentTick;
+    }
+
     const sensorStore = this.sensorDetections.get(sensorId)!;
 
-    // Try to match to existing detection from same sensor (same target az/el)
-    const existing = this.findMatchingDetection(sensorStore, obs.bearing.azimuthDeg, obs.bearing.elevationDeg);
+    // Try to match to existing detection from same sensor (same target az/el).
+    // WFOV frame-aware: skip detections already updated this tick to prevent
+    // merging distinct targets from the same 360° frame. However, only skip
+    // if the existing detection's bearing is significantly different (>1°),
+    // since very close targets may genuinely be the same detection updated.
+    const existing = this.findMatchingDetection(
+      sensorStore, obs.bearing.azimuthDeg, obs.bearing.elevationDeg,
+      this.updatedThisTick,
+    );
 
     if (existing) {
-      // Update existing detection
+      // Update existing detection with new bearing
       existing.bearing = obs.bearing;
       existing.imageQuality = obs.imageQuality;
       existing.lastUpdated = Date.now();
       existing.lastUpdatedSimSec = simTimeSec ?? existing.lastUpdatedSimSec;
       existing.updateCount++;
+      this.updatedThisTick.add(existing.detectionId);
       return existing;
     }
 
@@ -230,6 +254,7 @@ export class CoreEoTargetDetector {
     };
 
     sensorStore.set(detection.detectionId, detection);
+    this.updatedThisTick.add(detection.detectionId);
     return detection;
   }
 
@@ -473,8 +498,12 @@ export class CoreEoTargetDetector {
     sensorStore: Map<string, EoDetection>,
     azimuthDeg: number,
     elevationDeg: number,
+    excludeIds?: Set<string>,
   ): EoDetection | undefined {
     for (const det of sensorStore.values()) {
+      // Skip detections already matched this tick (WFOV frame-aware)
+      if (excludeIds?.has(det.detectionId)) continue;
+
       let azDiff = Math.abs(azimuthDeg - det.bearing.azimuthDeg);
       if (azDiff > 180) azDiff = 360 - azDiff;
       const elDiff = Math.abs(elevationDeg - det.bearing.elevationDeg);
