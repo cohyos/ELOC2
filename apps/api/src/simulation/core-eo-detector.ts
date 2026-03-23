@@ -314,8 +314,12 @@ export class CoreEoTargetDetector {
         result.updatedTargets.push(existingTarget);
       } else {
         // Decide: clear triangulation or ambiguous candidate?
+        // With good multi-sensor geometry (pentagon layout), real targets
+        // should have miss distance < 1 km. Higher values indicate
+        // cross-contaminated groups (bearings from different targets merged).
         const isAmbiguous = triResult.missDistanceM > this.config.ambiguousMissDistanceM
-          || triResult.intersectionAngleDeg < 10;
+          || triResult.intersectionAngleDeg < 10
+          || (selected.length >= 3 && triResult.missDistanceM > 1000);
 
         if (isAmbiguous) {
           // Route to ambiguity candidate pool for consistency resolution
