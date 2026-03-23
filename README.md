@@ -40,27 +40,31 @@ In **development**, Vite runs the workstation on `:3000` with hot reload and pro
 | `apps/workstation` | React 19 tactical workstation with Leaflet map + Zustand 5 stores |
 | `apps/simulator` | Scenario execution engine (radar/EO/C4ISR models, fault injection) |
 
-### Packages (17)
+### Packages (21)
 
-| Package | Description |
-|---------|-------------|
-| `packages/domain` | Branded types & interfaces (SystemTrack, SensorState, Position3D, etc.) |
-| `packages/events` | Event envelope definitions for the domain event bus |
-| `packages/schemas` | Zod validation schemas for API payloads |
-| `packages/shared-utils` | Geodetic math, matrix ops, UUID generation, simulation clock |
-| `packages/fusion-core` | Sensor fusion: ingestion, correlation, track management, replay |
-| `packages/registration` | Spatial/temporal registration, bias estimation, health scoring |
-| `packages/geometry` | Bearing triangulation, time alignment, geometry quality scoring |
-| `packages/eo-investigation` | EO investigation: cue handling, gimbal control, FOV, identification |
-| `packages/eo-tasking` | EO tasking workflow: candidate scoring, policy engine, assignment |
-| `packages/eo-management` | Modular EO module (pipelines, mode controller, sub-pixel/image) |
-| `packages/projections` | View builders (RAP, sensor health, EO cues, task timeline) |
-| `packages/validation` | System assertions: track continuity, registration safety, replay fidelity |
-| `packages/scenario-library` | Predefined scenarios with flight paths, sensors, and fault scripts |
-| `packages/deployment-planner` | Sensor deployment optimization (grid, scorers, LP optimizer) |
-| `packages/terrain` | SRTM DEM line-of-sight checker |
-| `packages/asterix-adapter` | CAT-048/CAT-062 binary parsing + export adapter |
-| `packages/database` | PostgreSQL user/session management |
+| Package | Description | Portable? |
+|---------|-------------|-----------|
+| `packages/domain` | Branded types & interfaces (SystemTrack, SensorState, Position3D, etc.) | Yes |
+| `packages/events` | Event envelope definitions for the domain event bus | Yes |
+| `packages/schemas` | Zod validation schemas for API payloads | Yes |
+| `packages/shared-utils` | Geodetic math, matrix ops, UUID generation, simulation clock | Yes |
+| `packages/fusion-core` | Sensor fusion: ingestion, correlation, track management, replay | Yes |
+| `packages/registration` | Spatial/temporal registration, bias estimation, health scoring | Yes |
+| `packages/geometry` | Bearing triangulation, time alignment, geometry quality scoring | **Yes** |
+| `packages/eo-investigation` | EO investigation: cue handling, gimbal control, FOV, identification | **Yes** |
+| `packages/eo-tasking` | EO tasking workflow: candidate scoring, policy engine, assignment | **Yes** |
+| `packages/eo-management` | Modular EO module (pipelines, mode controller, sub-pixel/image) | Conditional |
+| `packages/eo-core` | EO CORE: bearing aggregation, cross-sensor triangulation, EO tracks | **Yes** |
+| `packages/sensor-bus` | EventEmitter-based message bus for distributed sensor architecture | **Yes** |
+| `packages/sensor-instances` | Independent sensor classes (Radar, EO, C4ISR) with observation gen | Conditional |
+| `packages/system-fuser` | Track-to-track fusion, distributed pipeline orchestrator, lifecycle | Conditional |
+| `packages/projections` | View builders (RAP, sensor health, EO cues, task timeline) | Yes |
+| `packages/validation` | System assertions: track continuity, registration safety, replay fidelity | Yes |
+| `packages/scenario-library` | 8 predefined scenarios incl. EO-only defense (19 sensors) | Yes |
+| `packages/deployment-planner` | Sensor deployment optimization (grid, scorers, LP optimizer) | Yes |
+| `packages/terrain` | SRTM DEM line-of-sight checker | Yes |
+| `packages/asterix-adapter` | CAT-048/CAT-062 binary parsing + export adapter | Yes |
+| `packages/database` | PostgreSQL user/session management | Yes |
 
 ## Prerequisites
 
