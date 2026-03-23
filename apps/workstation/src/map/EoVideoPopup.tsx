@@ -181,7 +181,7 @@ export function EoVideoPopup({
           width: '100%',
           height: '100%',
           pointerEvents: 'none',
-          zIndex: 24,
+          zIndex: 10000,
           overflow: 'visible',
         }}
       >
@@ -213,7 +213,7 @@ export function EoVideoPopup({
           fontFamily: 'system-ui, sans-serif',
           color: '#e0e0e0',
           fontSize: '11px',
-          zIndex: 25,
+          zIndex: 10001,
           pointerEvents: 'auto',
           boxShadow: `0 4px 20px rgba(0,0,0,0.6), 0 0 8px ${borderColor}33`,
         }}
