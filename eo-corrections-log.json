@@ -1,0 +1,82 @@
+[
+  {
+    "runId": 1,
+    "timestamp": "2026-03-23T20:54:06.370Z",
+    "issuesSummary": "9 critical, 21 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 49
+  },
+  {
+    "runId": 2,
+    "timestamp": "2026-03-23T20:57:36.820Z",
+    "issuesSummary": "10 critical, 23 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 48
+  },
+  {
+    "runId": 3,
+    "timestamp": "2026-03-23T21:03:50.974Z",
+    "issuesSummary": "6 critical, 8 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 67
+  },
+  {
+    "runId": 4,
+    "timestamp": "2026-03-23T21:07:08.741Z",
+    "issuesSummary": "4 critical, 8 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 68
+  },
+  {
+    "runId": 5,
+    "timestamp": "2026-03-23T21:08:14.252Z",
+    "issuesSummary": "4 critical, 8 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 68
+  },
+  {
+    "runId": 6,
+    "timestamp": "2026-03-23T21:09:10.613Z",
+    "issuesSummary": "4 critical, 8 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 68
+  },
+  {
+    "runId": 7,
+    "timestamp": "2026-03-23T21:11:00.335Z",
+    "issuesSummary": "4 critical, 8 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 68
+  },
+  {
+    "runId": 8,
+    "timestamp": "2026-03-23T21:12:55.814Z",
+    "issuesSummary": "4 critical, 8 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 68
+  },
+  {
+    "runId": 9,
+    "timestamp": "2026-03-23T21:16:28.819Z",
+    "issuesSummary": "4 critical, 10 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 67
+  },
+  {
+    "runId": 10,
+    "timestamp": "2026-03-23T21:17:28.527Z",
+    "issuesSummary": "4 critical, 8 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 68
+  }
+]

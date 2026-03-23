@@ -14,5 +14,53 @@
     "corrections": [],
     "parameterChanges": {},
     "scoreBefore": 79
+  },
+  {
+    "runId": 3,
+    "timestamp": "2026-03-23T21:04:27.782Z",
+    "issuesSummary": "4 critical, 3 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 78
+  },
+  {
+    "runId": 4,
+    "timestamp": "2026-03-23T21:08:40.643Z",
+    "issuesSummary": "4 critical, 3 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 78
+  },
+  {
+    "runId": 5,
+    "timestamp": "2026-03-23T21:09:19.768Z",
+    "issuesSummary": "4 critical, 3 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 78
+  },
+  {
+    "runId": 6,
+    "timestamp": "2026-03-23T21:10:59.899Z",
+    "issuesSummary": "4 critical, 3 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 78
+  },
+  {
+    "runId": 7,
+    "timestamp": "2026-03-23T21:12:55.246Z",
+    "issuesSummary": "4 critical, 3 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 78
+  },
+  {
+    "runId": 8,
+    "timestamp": "2026-03-23T21:17:26.870Z",
+    "issuesSummary": "4 critical, 3 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 78
   }
 ]

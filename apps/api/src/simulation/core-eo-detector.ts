@@ -588,18 +588,26 @@ export class CoreEoTargetDetector {
   private findExistingTarget(detections: EoDetection[]): EoTarget3D | undefined {
     const detIds = new Set(detections.map(d => d.detectionId));
     for (const target of this.eoTargets.values()) {
-      // Match if any detection ID overlaps
+      // Match if any detection ID overlaps (same bearing group, same target)
       if (target.detectionIds.some(id => detIds.has(id))) {
         return target;
       }
     }
-    // Also match by sensor set overlap + spatial proximity
-    const sensorIds = new Set(detections.map(d => d.sensorId));
-    for (const target of this.eoTargets.values()) {
-      const targetSensors = new Set(target.sensorIds);
-      const overlap = [...sensorIds].filter(s => targetSensors.has(s));
-      if (overlap.length >= 2) {
-        return target;
+
+    // Also match by spatial proximity: triangulate the new group and compare
+    // to existing targets. Sensor overlap alone is insufficient because staring
+    // sensors cover 360° and would match ALL targets indiscriminately.
+    const triResult = this.tryTriangulate(detections);
+    if (triResult) {
+      const SPATIAL_GATE_M = 5000; // 5 km gate for same-target matching
+      for (const target of this.eoTargets.values()) {
+        const dLat = (triResult.position.lat - target.position.lat) * 110540;
+        const dLon = (triResult.position.lon - target.position.lon) * 111320 *
+          Math.cos(target.position.lat * Math.PI / 180);
+        const dist = Math.sqrt(dLat * dLat + dLon * dLon);
+        if (dist < SPATIAL_GATE_M) {
+          return target;
+        }
       }
     }
     return undefined;

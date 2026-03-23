@@ -1319,6 +1319,12 @@ export class LiveEngine {
       // Update sensor status
       this.updateSensorStatus(result.activeFaults);
 
+      // Core EO detector MUST run BEFORE markStaleTracksAsMissed so
+      // EO-triangulated tracks get their lastUpdateTick refreshed before
+      // the stale check would mark them as missed (same order as finalizeTick)
+      this.state.tracks = this.trackManager.getAllTracks().filter(tr => tr.status !== 'dropped');
+      this.processCoreEoDetector();
+
       // Tick-based stale detection (same as finalizeTick)
       this.trackManager.markStaleTracksAsMissed(result.currentTimeSec, 3);
 
@@ -1326,8 +1332,7 @@ export class LiveEngine {
       this.processAccumulatedBearings();
       this.expireStaleEoCues();
       this.computeGeometryEstimates();
-      this.processCoreEoDetector();
-      // Update state.tracks AFTER core EO detector so EO-created tracks appear
+      // Final track snapshot after all processing
       this.state.tracks = this.trackManager.getAllTracks().filter(tr => tr.status !== 'dropped');
 
       if (result.currentTimeSec - this.lastEoTaskingSec >= EO_TASKING_INTERVAL_SEC) {
@@ -1838,6 +1843,13 @@ export class LiveEngine {
     // Update sensor online status based on active faults
     this.updateSensorStatus(result.activeFaults);
 
+    // Core EO Target Detector: correlate staring sensor az/el detections,
+    // triangulate when ≥2 sensors overlap → create 3D EO targets → promote to system tracks.
+    // MUST run BEFORE markStaleTracksAsMissed so EO-triangulated tracks get their
+    // lastUpdateTick refreshed before the stale check would mark them as missed.
+    this.state.tracks = this.trackManager.getAllTracks().filter(t => t.status !== 'dropped');
+    this.processCoreEoDetector();
+
     // Tick-based stale detection: mark tracks not updated this tick as missed.
     // Uses monotonic tick counter (elapsedSec) instead of Date.now() which
     // diverges from simulation time at >1x speed, causing either:
@@ -1848,17 +1860,12 @@ export class LiveEngine {
     // Post-tick merge sweep to eliminate ghost tracks
     this.trackManager.mergeCloseTracks();
 
-    // Snapshot tracks from track manager
-    this.state.tracks = this.trackManager.getAllTracks().filter(t => t.status !== 'dropped');
-
-    // Core EO Target Detector: correlate staring sensor az/el detections,
-    // triangulate when ≥2 sensors overlap → create 3D EO targets → promote to system tracks.
-    // Single-sensor detections fall back to enhanced cueing against existing tracks.
-    this.processCoreEoDetector();
-
     // Phase 5: Process accumulated bearings (slewing sensors) and run EO tasking
     this.processAccumulatedBearings();
     this.expireStaleEoCues();
+
+    // Snapshot tracks after all processing (EO + radar + merge)
+    this.state.tracks = this.trackManager.getAllTracks().filter(t => t.status !== 'dropped');
 
     // Phase 6: Compute geometry estimates from EO bearings
     this.computeGeometryEstimates();
@@ -3370,7 +3377,24 @@ export class LiveEngine {
     if (!target.promotedTrackId) return;
 
     // Search in TrackManager (not state.tracks which may be stale during seek)
-    const eoTrack = this.trackManager.getTrack(target.promotedTrackId as SystemTrackId);
+    let eoTrack = this.trackManager.getTrack(target.promotedTrackId as SystemTrackId);
+
+    // If the track was dropped (e.g. stale during seek), revive it in-place.
+    // EO-triangulated tracks are continuously refreshed by the core detector
+    // and should persist as long as the detector maintains the 3D target.
+    if (eoTrack && eoTrack.status === 'dropped') {
+      eoTrack.status = 'tentative';
+      eoTrack.state = { ...target.position };
+      eoTrack.confidence = target.classification === 'confirmed_3d' ? 0.6 : 0.4;
+      // Revive by updating metadata directly instead of re-injecting
+      // (prevents duplicate track accumulation)
+      const meta = (this.trackManager as any).meta?.get(target.promotedTrackId);
+      if (meta) {
+        meta.lastUpdateTick = this.state.elapsedSec;
+        meta.missCount = 0;
+      }
+    }
+
     if (eoTrack && eoTrack.status !== 'dropped') {
       // Use sim-consistent timestamp
       const simNow = ((this.runner as any).baseTimestamp
