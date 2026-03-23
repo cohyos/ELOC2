@@ -116,11 +116,12 @@ export type DriTier = 'detection' | 'recognition' | 'identification';
 
 /**
  * DRI target size category — determines effective EO detection range.
- * Aircraft targets are largest (detected at full sensor range),
+ * Ballistic missiles/rockets have hot exhaust plumes (150km detection on 40km base),
+ * aircraft are large (detected at full sensor range),
  * helicopters use the default/base range,
- * and small targets (UAVs, missiles) are hardest to detect.
+ * and small targets (UAVs, drones) are hardest to detect.
  */
-export type DriTargetCategory = 'aircraft' | 'helicopter' | 'small';
+export type DriTargetCategory = 'ballistic' | 'aircraft' | 'helicopter' | 'small';
 
 /**
  * Range multipliers relative to sensor's maxDetectionRangeM for each DRI tier.
@@ -134,6 +135,7 @@ export interface DriRangeProfile {
 
 /** DRI range profiles per target size category. */
 export const DRI_PROFILES: Record<DriTargetCategory, DriRangeProfile> = {
+  ballistic:  { detection: 3.75, recognition: 2.50, identification: 1.50 }, // 150km/100km/60km on 40km base
   aircraft:   { detection: 1.25, recognition: 0.80, identification: 0.50 },
   helicopter: { detection: 1.00, recognition: 0.60, identification: 0.35 },
   small:      { detection: 0.60, recognition: 0.35, identification: 0.15 },
@@ -154,11 +156,12 @@ export function getDriCategory(classification?: TargetClassification): DriTarget
       return 'aircraft';
     case 'helicopter':
       return 'helicopter';
+    case 'missile':
+    case 'rocket':
+      return 'ballistic';
     case 'uav':
     case 'small_uav':
     case 'drone':
-    case 'missile':
-    case 'rocket':
     case 'bird':
     case 'birds':
       return 'small';
