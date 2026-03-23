@@ -45,7 +45,45 @@ export function fuseObservation(
   observation: SourceObservation,
   track: SystemTrack,
 ): FusedState {
-  const invTrackCov = mat3x3Inverse(track.covariance);
+  // ── Predict track state forward to observation time ──
+  // Without prediction, the fuser uses the stale track position, causing
+  // the fused result to lag behind the true position by ~v*dt. After many
+  // fusions the track covariance shrinks, making the fused position cling
+  // to the stale position rather than the observation. This created a
+  // persistent ~1km position error for moving targets.
+  const DEG_TO_RAD = Math.PI / 180;
+  let predLat = track.state.lat;
+  let predLon = track.state.lon;
+  let predAlt = track.state.alt;
+  let predCov = track.covariance;
+
+  if (track.velocity && track.lastUpdated > 0) {
+    const dtSec = (observation.timestamp - track.lastUpdated) / 1000;
+    if (dtSec > 0 && dtSec < 30) {
+      const metersPerDegLat = 111_320;
+      const metersPerDegLon = metersPerDegLat * Math.cos(predLat * DEG_TO_RAD);
+      predLat += (track.velocity.vy * dtSec) / metersPerDegLat;
+      predLon += (track.velocity.vx * dtSec) / metersPerDegLon;
+      predAlt += (track.velocity.vz ?? 0) * dtSec;
+
+      // Grow covariance with process noise (same as correlator)
+      const speed = Math.sqrt(
+        (track.velocity.vx ?? 0) ** 2 +
+        (track.velocity.vy ?? 0) ** 2 +
+        (track.velocity.vz ?? 0) ** 2,
+      );
+      const baseQ = 500;
+      const speedFactor = 1 + speed / 200;
+      const qDiag = baseQ * speedFactor * dtSec;
+      predCov = [
+        [track.covariance[0][0] + qDiag, track.covariance[0][1], track.covariance[0][2]],
+        [track.covariance[1][0], track.covariance[1][1] + qDiag, track.covariance[1][2]],
+        [track.covariance[2][0], track.covariance[2][1], track.covariance[2][2] + qDiag],
+      ] as Covariance3x3;
+    }
+  }
+
+  const invTrackCov = mat3x3Inverse(predCov);
 
   // Downweight observations with blind Doppler quality by inflating covariance 4x
   const obsCov = observation.dopplerQuality === 'blind'
@@ -58,7 +96,7 @@ export function fuseObservation(
     return fallbackAverage(observation, track);
   }
 
-  // Information matrix = P_track^-1 + P_obs^-1
+  // Information matrix = P_predicted^-1 + P_obs^-1
   const infoMatrix = mat3x3Add(invTrackCov, invObsCov);
   const fusedCov = mat3x3Inverse(infoMatrix);
 
@@ -67,8 +105,11 @@ export function fuseObservation(
     return fallbackAverage(observation, track);
   }
 
-  // State vectors
-  const xTrack = [track.state.lat, track.state.lon, track.state.alt];
+  // State vectors — use PREDICTED track position, not stored position.
+  // The correlator uses predicted position for the gate check; the fuser
+  // must be consistent to avoid a bias between what passes the gate and
+  // what gets fused.
+  const xTrack = [predLat, predLon, predAlt];
   const xObs = [observation.position.lat, observation.position.lon, observation.position.alt];
 
   // Information-weighted state: P_track^-1 * x_track + P_obs^-1 * x_obs

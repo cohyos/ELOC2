@@ -3394,6 +3394,9 @@ export class LiveEngine {
     // Also update any radar track this was fused into
     // (search for tracks that have an "eo.target.fused" lineage entry referencing this EO track)
     const eoTrackIdShort = target.promotedTrackId.slice(0, 8);
+    const radarUpdateTs = ((this.runner as any).baseTimestamp
+      ? (this.runner as any).baseTimestamp + this.state.elapsedSec * 1000
+      : Date.now()) as Timestamp;
     for (const track of this.state.tracks) {
       if (track.status === 'dropped') continue;
       if (track.fusionMode === 'eo_triangulation') continue; // skip EO tracks
@@ -3408,7 +3411,7 @@ export class LiveEngine {
         lon: existingWeight * track.state.lon + eoWeight * target.position.lon,
         alt: existingWeight * track.state.alt + eoWeight * target.position.alt,
       };
-      track.lastUpdated = now;
+      track.lastUpdated = radarUpdateTs;
 
       // Copy geometry estimate to radar track
       this.state.geometryEstimates.set(track.systemTrackId as string, {
