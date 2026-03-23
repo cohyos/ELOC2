@@ -390,15 +390,16 @@ export function MapView() {
   }, [selectedTrackId, tracks, sensors, eoTracks, activeCues, layersReady]);
 
   // ── Spawn-target click interception ───────────────────────────────────────
-  const spawnMarkerRef = useRef<HTMLDivElement | null>(null);
+  const spawnMarkerRef = useRef<L.Marker | null>(null);
 
   useEffect(() => {
     const adapter = adapterRef.current;
+    const lMap = leafletMapRef.current;
     if (!adapter || !layersReady) return;
 
     if (!spawnTargetActive) {
-      if (spawnMarkerRef.current) {
-        spawnMarkerRef.current.remove();
+      if (spawnMarkerRef.current && lMap) {
+        lMap.removeLayer(spawnMarkerRef.current);
         spawnMarkerRef.current = null;
       }
       adapter.getCanvas().style.cursor = '';
@@ -407,8 +408,14 @@ export function MapView() {
 
     adapter.getCanvas().style.cursor = 'crosshair';
 
+    const spawnIcon = L.divIcon({
+      className: '',
+      html: '<div style="width:16px;height:16px;border-radius:50%;background:#00cc44;border:2px solid #fff;box-shadow:0 0 8px rgba(0,204,68,0.6);"></div>',
+      iconSize: [16, 16],
+      iconAnchor: [8, 8],
+    });
+
     const handler = (e: any) => {
-      // Normalize click event to get lngLat
       let lng: number, lat: number;
       if (adapter.type === 'leaflet') {
         lng = e.latlng.lng;
@@ -419,24 +426,12 @@ export function MapView() {
       }
       setSpawnTargetPosition({ lat, lon: lng });
 
-      // Place / move a temporary HTML marker
-      const px = adapter.project([lng, lat]);
-      const container = adapter.getContainer();
-
-      if (!spawnMarkerRef.current) {
-        const el = document.createElement('div');
-        el.style.cssText = `
-          position:absolute; width:16px; height:16px; border-radius:50%;
-          background:#00cc44; border:2px solid #fff;
-          box-shadow:0 0 8px rgba(0,204,68,0.6);
-          pointer-events:none; z-index:1000;
-          transform:translate(-50%,-50%);
-        `;
-        container.appendChild(el);
-        spawnMarkerRef.current = el;
+      // Use a Leaflet marker so it follows zoom/pan natively
+      if (spawnMarkerRef.current && lMap) {
+        spawnMarkerRef.current.setLatLng([lat, lng]);
+      } else if (lMap) {
+        spawnMarkerRef.current = L.marker([lat, lng], { icon: spawnIcon, interactive: false }).addTo(lMap);
       }
-      spawnMarkerRef.current.style.left = `${px.x}px`;
-      spawnMarkerRef.current.style.top = `${px.y}px`;
     };
 
     adapter.on('click', handler);
@@ -447,8 +442,9 @@ export function MapView() {
   }, [spawnTargetActive, layersReady, setSpawnTargetPosition]);
 
   useEffect(() => {
-    if (!spawnTargetPosition && spawnMarkerRef.current) {
-      spawnMarkerRef.current.remove();
+    const lMap = leafletMapRef.current;
+    if (!spawnTargetPosition && spawnMarkerRef.current && lMap) {
+      lMap.removeLayer(spawnMarkerRef.current);
       spawnMarkerRef.current = null;
     }
   }, [spawnTargetPosition]);

@@ -145,6 +145,20 @@ export function DebugOverlay({
   const callbacksRef = useRef({ onSelectTrack, onSelectSensor, onSelectGroundTruth });
   callbacksRef.current = { onSelectTrack, onSelectSensor, onSelectGroundTruth };
 
+  // ── Suppress layer rebuilds during zoom animations to prevent flicker ─────
+  const zoomingRef = useRef(false);
+  useEffect(() => {
+    if (!map) return;
+    const onZoomStart = () => { zoomingRef.current = true; };
+    const onZoomEnd = () => { zoomingRef.current = false; };
+    map.on('zoomanim', onZoomStart);
+    map.on('zoomend', onZoomEnd);
+    return () => {
+      map.off('zoomanim', onZoomStart);
+      map.off('zoomend', onZoomEnd);
+    };
+  }, [map]);
+
   // ── Picture mode filtering ──────────────────────────────────────────────────
   const pictureMode = useUiStore(s => s.pictureMode);
 
@@ -591,6 +605,8 @@ export function DebugOverlay({
   useEffect(() => {
     const g = groupsRef.current?.trails;
     if (!g) return;
+    // Skip rebuild during zoom animation to prevent flicker
+    if (zoomingRef.current) return;
     g.clearLayers();
 
     const showTracks = showGroundTruth ? false : layerVisibility.tracks;
@@ -635,6 +651,8 @@ export function DebugOverlay({
   useEffect(() => {
     const g = groupsRef.current?.sensors;
     if (!g) return;
+    // Skip rebuild during zoom animation to prevent flicker
+    if (zoomingRef.current) return;
     g.clearLayers();
 
     const showSensors = layerVisibility.sensors;
@@ -688,6 +706,8 @@ export function DebugOverlay({
   useEffect(() => {
     const g = groupsRef.current?.tracks;
     if (!g) return;
+    // Skip rebuild during zoom animation to prevent flicker
+    if (zoomingRef.current) return;
     g.clearLayers();
 
     const showTracks = showGroundTruth ? false : layerVisibility.tracks;

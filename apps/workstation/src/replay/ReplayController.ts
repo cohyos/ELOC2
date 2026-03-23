@@ -23,6 +23,8 @@ export class ReplayController {
   private rafId: number | null = null;
   private _firstFlush = false;
   private _lastRole: 'instructor' | 'operator' | undefined = undefined;
+  /** Set when the server sends running=false; suppresses stale buffered messages */
+  private _pauseReceived = false;
 
   connect(role?: 'instructor' | 'operator') {
     if (this.ws) return;
@@ -110,6 +112,16 @@ export class ReplayController {
       return;
     }
     if (data.type === 'rap.snapshot' || data.type === 'rap.update') {
+      // After receiving a pause signal, suppress stale buffered messages
+      // until the server genuinely restarts (sends running=true).
+      if (this._pauseReceived && data.running === true) {
+        // Server restarted — clear the guard
+        this._pauseReceived = false;
+      } else if (this._pauseReceived && data.running !== false) {
+        // Stale buffered message from before pause — discard
+        return;
+      }
+
       // Merge into pending buffer — later messages overwrite earlier ones
       if (!this.pendingData) {
         this.pendingData = {};
@@ -122,6 +134,17 @@ export class ReplayController {
       }
       // Preserve snapshot type so first-connect snapshot is applied correctly
       this.pendingData._type = data.type;
+
+      // Pause signal: flush immediately to prevent buffered messages from advancing UI
+      if (data.running === false) {
+        this._pauseReceived = true;
+        if (this.rafId) {
+          cancelAnimationFrame(this.rafId);
+          this.rafId = null;
+        }
+        this.flushPendingData();
+        return;
+      }
 
       // Schedule flush on next animation frame
       if (!this.rafId) {
