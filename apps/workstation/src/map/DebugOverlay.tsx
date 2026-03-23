@@ -57,7 +57,10 @@ function shortTrackLabel(track: SystemTrack): string {
 }
 
 function shortSensorLabel(sensor: SensorState): string {
-  const prefix = sensor.sensorType === 'radar' ? 'R' : sensor.sensorType === 'eo' ? 'E' : 'C';
+  const isStaring = sensor.sensorType === 'eo' && sensor.gimbal?.slewRateDegPerSec === 0;
+  const prefix = sensor.sensorType === 'radar' ? 'R'
+    : sensor.sensorType === 'eo' ? (isStaring ? 'S' : 'E')
+    : 'C';
   const idNum = (sensor.sensorId as string).match(/(\d+)/)?.[1] ?? '?';
   return `${prefix}${idNum}`;
 }
@@ -240,25 +243,53 @@ export function DebugOverlay({
     if (!map) return;
     if (ctxRef.current.popup) { map.closePopup(ctxRef.current.popup); ctxRef.current.popup = null; }
 
-    // Build actions based on object type
-    type Action = { label: string; action: () => void };
+    // Build actions based on object type — all actions available to all users
+    type Action = { label: string; action: () => void; disabled?: boolean; separator?: boolean };
     const actions: Action[] = [];
+    const jsonHeaders = { 'Content-Type': 'application/json' };
+    const classify = (cls: string) => { fetch('/api/operator/classify', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ trackId: id, classification: cls }) }).catch(() => {}); };
 
     if (type === 'track') {
+      // Find track for investigation status check
+      const track = tracks.find(t => (t.systemTrackId as string) === id);
+      const eoStatus = track?.eoInvestigationStatus ?? 'none';
+      const hasEoInvestigation = eoStatus === 'confirmed' || eoStatus === 'in_progress';
+
       actions.push(
         { label: 'Select', action: () => callbacksRef.current.onSelectTrack?.(id) },
-        { label: 'Cue EO', action: () => { fetch('/api/operator/priority', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trackId: id, priority: 10 }) }).catch(() => {}); } },
-        { label: 'Mark Hostile', action: () => { fetch(`/api/tracks/${id}/classify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ classification: 'fighter_aircraft' }) }).catch(() => {}); } },
-        { label: 'Mark Friendly', action: () => { fetch(`/api/tracks/${id}/classify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ classification: 'civilian_aircraft' }) }).catch(() => {}); } },
-        { label: 'Set Priority', action: () => { fetch('/api/operator/priority', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trackId: id, priority: 5 }) }).catch(() => {}); } },
-        { label: 'Open EO Video', action: () => useUiStore.getState().setEoVideoPopupTrackId(id) },
+        { label: 'Cue EO', action: () => { fetch('/api/operator/priority', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ trackId: id, priority: true }) }).catch(() => {}); } },
+        { label: 'Set Priority', action: () => { fetch('/api/operator/set-priority', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ trackId: id, priority: 'high' }) }).catch(() => {}); } },
+      );
+
+      // EO Video — only available after EO investigation
+      if (hasEoInvestigation) {
+        actions.push({ label: 'Open EO Video', action: () => useUiStore.getState().setEoVideoPopupTrackId(id) });
+      } else {
+        actions.push({ label: 'Open EO Video', action: () => {}, disabled: true });
+      }
+
+      // Classification — all valid types, grouped
+      actions.push(
+        { label: '── Classify ──', action: () => {}, separator: true },
+        { label: '\u2022 Fighter', action: () => classify('fighter_aircraft') },
+        { label: '\u2022 Helicopter', action: () => classify('helicopter') },
+        { label: '\u2022 UAV / Drone', action: () => classify('uav') },
+        { label: '\u2022 Small UAV', action: () => classify('small_uav') },
+        { label: '\u2022 Missile', action: () => classify('missile') },
+        { label: '\u2022 Civilian', action: () => classify('civilian_aircraft') },
+        { label: '\u2022 Friendly', action: () => classify('ally') },
+        { label: '\u2022 Neutral', action: () => classify('neutral') },
+        { label: '\u2022 Unknown', action: () => classify('unknown') },
       );
     } else if (type === 'sensor') {
+      const sensor = sensors.find(s => (s.sensorId as string) === id);
+      const isOnline = sensor?.online ?? true;
+
       actions.push(
         { label: 'Select', action: () => callbacksRef.current.onSelectSensor?.(id) },
-        { label: 'Lock Sensor', action: () => { fetch('/api/operator/lock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sensorId: id }) }).catch(() => {}); } },
-        { label: 'Release Sensor', action: () => { fetch('/api/operator/release', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sensorId: id }) }).catch(() => {}); } },
-        { label: 'Toggle Search Mode', action: () => { fetch(`/api/sensors/${id}/search`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ activate: true }) }).catch(() => {}); } },
+        { label: isOnline ? 'Turn Off' : 'Turn On', action: () => { fetch('/api/operator/toggle-sensor', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ sensorId: id, online: !isOnline }) }).catch(() => {}); } },
+        { label: 'Release Sensor', action: () => { fetch('/api/operator/release-sensor', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ sensorId: id }) }).catch(() => {}); } },
+        { label: 'Toggle Search Mode', action: () => { fetch('/api/operator/toggle-search', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ sensorId: id }) }).catch(() => {}); } },
       );
     } else if (type === 'gt') {
       actions.push(
@@ -266,12 +297,20 @@ export function DebugOverlay({
       );
     }
 
-    const menuHtml = actions.map((a, i) =>
-      `<div class="ctx-action" data-idx="${i}" ` +
-      `style="padding:5px 12px;cursor:pointer;font:11px monospace;color:#e0e0e0;border-bottom:1px solid #333;" ` +
-      `onmouseover="this.style.background='#333'" onmouseout="this.style.background='transparent'">` +
-      `${a.label}</div>`
-    ).join('');
+    const menuHtml = actions.map((a, i) => {
+      const disabled = (a as any).disabled;
+      const isSep = (a as any).separator;
+      if (isSep) {
+        return `<div style="padding:3px 12px;font:bold 9px monospace;color:#666;border-bottom:1px solid #333;background:#1a1a1a;">${a.label}</div>`;
+      }
+      const style = disabled
+        ? `padding:5px 12px;cursor:not-allowed;font:11px monospace;color:#555;border-bottom:1px solid #333;`
+        : `padding:5px 12px;cursor:pointer;font:11px monospace;color:#e0e0e0;border-bottom:1px solid #333;`;
+      const hover = disabled ? '' : `onmouseover="this.style.background='#333'" onmouseout="this.style.background='transparent'"`;
+      const suffix = disabled ? ' <span style="color:#666;font-size:9px;">(no EO data)</span>' : '';
+      return `<div class="ctx-action" data-idx="${i}" data-disabled="${disabled ? '1' : '0'}" ` +
+        `style="${style}" ${hover}>${a.label}${suffix}</div>`;
+    }).join('');
 
     const popup = L.popup({
       closeButton: false,
@@ -292,6 +331,7 @@ export function DebugOverlay({
     if (el) {
       el.querySelectorAll('.ctx-action').forEach(itemEl => {
         itemEl.addEventListener('click', () => {
+          if (itemEl.getAttribute('data-disabled') === '1') return;
           const idx = parseInt(itemEl.getAttribute('data-idx') ?? '-1', 10);
           if (idx >= 0 && idx < actions.length) actions[idx].action();
           map.closePopup(popup);
@@ -477,27 +517,21 @@ export function DebugOverlay({
       }
     }
 
-    // EO field of view (FOV) cone
+    // EO field of view (FOV) cone — only for gimbal (non-staring) sensors
     if (layerVisibility.eoFov) {
       for (const sensor of sensors) {
         if (sensor.sensorType !== 'eo' || !sensor.online) continue;
         const cov = sensor.coverage;
         if (!cov || !sensor.gimbal || !sensor.fov) continue;
         if (!Number.isFinite(cov.maxRangeM) || cov.maxRangeM <= 0) continue;
-        const { lat, lon } = sensor.position;
+        // Skip staring sensors — their coverage is shown by the EO FOR circle
         const isStaring = sensor.gimbal.slewRateDegPerSec === 0;
-        let fovStartDeg: number;
-        let fovEndDeg: number;
-        if (isStaring) {
-          // Fixed/staring sensor — FOV matches the coverage arc, no gimbal movement
-          fovStartDeg = cov.minAzDeg;
-          fovEndDeg = cov.maxAzDeg;
-        } else {
-          const azDeg = sensor.gimbal.azimuthDeg;
-          const halfAngle = sensor.fov.halfAngleHDeg;
-          fovStartDeg = azDeg - halfAngle;
-          fovEndDeg = azDeg + halfAngle;
-        }
+        if (isStaring) continue;
+        const { lat, lon } = sensor.position;
+        const azDeg = sensor.gimbal.azimuthDeg;
+        const halfAngle = sensor.fov.halfAngleHDeg;
+        const fovStartDeg = azDeg - halfAngle;
+        const fovEndDeg = azDeg + halfAngle;
         L.polygon(sectorLatLngs(lat, lon, fovStartDeg, fovEndDeg, cov.maxRangeM, 12), {
           fillColor: '#ff8800', fillOpacity: 0.25,
           color: '#ff8800', opacity: 0.6, weight: 1, interactive: false,
@@ -824,10 +858,18 @@ export function DebugOverlay({
 
       if (showSensors) {
         let sensorHtml: string;
+        const isStaring = sensor.sensorType === 'eo' && sensor.gimbal?.slewRateDegPerSec === 0;
         if (useNato) {
           const sym = resolveSensorSymbol(sensor, false, 24);
           sensorHtml = `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;cursor:pointer;">${sym.svgHtml}</div>`;
+        } else if (isStaring) {
+          // Staring MWIR sensor: concentric rings icon (distinguishes from gimbal EO)
+          sensorHtml = `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;cursor:pointer;">` +
+            `<div style="width:16px;height:16px;border-radius:50%;border:2px solid ${color};display:flex;align-items:center;justify-content:center;">` +
+            `<div style="width:8px;height:8px;border-radius:50%;background:${color};"></div>` +
+            `</div></div>`;
         } else {
+          // Standard sensor: filled square (radar=blue, gimbal-eo=orange, c4isr=purple)
           sensorHtml = `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;cursor:pointer;"><div style="width:14px;height:14px;background:${color};border:2px solid #000;"></div></div>`;
         }
         const marker = L.marker([lat, lon], {
@@ -1055,20 +1097,42 @@ export function DebugOverlay({
     if (!eoVideoPopupTrackId || !map) return null;
     const track = tracks.find(t => (t.systemTrackId as string) === eoVideoPopupTrackId);
     if (!track) return null;
-    if (track.eoInvestigationStatus === 'none' && !track.classification) return null;
+
+    // Only show EO video after an EO investigation has been done on the target
+    const eoStatus = track.eoInvestigationStatus;
+    if (eoStatus !== 'confirmed' && eoStatus !== 'in_progress') return null;
+
     const { lon, lat } = track.state;
     if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
     const px = map.latLngToContainerPoint([lat, lon]);
     const color = statusColor(track.status);
+
+    // For demo: use GT classification to show "EO image" of what the sensor sees
+    let gtClassification: string | undefined;
+    if (groundTruthTargets) {
+      // Find closest GT target to this track position
+      let bestDist = Infinity;
+      for (const gt of groundTruthTargets) {
+        if (!gt.active) continue;
+        const dLat = gt.position.lat - track.state.lat;
+        const dLon = gt.position.lon - track.state.lon;
+        const dist = dLat * dLat + dLon * dLon;
+        if (dist < bestDist) {
+          bestDist = dist;
+          gtClassification = gt.classification;
+        }
+      }
+    }
+
     return {
       trackId: track.systemTrackId as string,
-      classification: (track as any).classification ?? 'unknown',
-      confidence: (track as any).classificationConfidence ?? 0.5,
+      classification: gtClassification ?? (track as any).classification ?? 'unknown',
+      confidence: (track as any).classificationConfidence ?? 0.85,
       statusColor: color,
       trackScreenX: px.x,
       trackScreenY: px.y,
     };
-  }, [eoVideoPopupTrackId, tracks, map]);
+  }, [eoVideoPopupTrackId, tracks, map, groundTruthTargets]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (

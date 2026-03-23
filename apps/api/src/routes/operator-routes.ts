@@ -108,6 +108,27 @@ export function registerOperatorRoutes(app: FastifyInstance, engine: LiveEngine)
     return { ok: true, trackId, priority };
   });
 
+  // POST /api/operator/toggle-sensor — Turn a sensor on or off
+  app.post<{
+    Body: { sensorId: string; online: boolean };
+  }>('/api/operator/toggle-sensor', { preHandler: operatorGuard() }, async (request, reply) => {
+    const { sensorId, online } = request.body ?? {};
+    if (!sensorId || typeof sensorId !== 'string') {
+      return reply.code(400).send({ error: 'sensorId is required' });
+    }
+    if (typeof online !== 'boolean') {
+      return reply.code(400).send({ error: 'online must be a boolean' });
+    }
+
+    const sensor = engine.getState().sensors.find(s => (s.sensorId as string) === sensorId);
+    if (!sensor) {
+      return reply.code(404).send({ error: `Sensor '${sensorId}' not found` });
+    }
+    sensor.online = online;
+    sensor.lastUpdateTime = Date.now() as any;
+    return { ok: true, sensorId, online };
+  });
+
   // GET /api/operator/overrides — Get all active operator overrides
   app.get('/api/operator/overrides', { preHandler: operatorGuard() }, async () => {
     return engine.getOperatorOverrides();

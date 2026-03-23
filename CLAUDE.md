@@ -147,6 +147,7 @@ The `Knowledge_Base_and_Agents_instructions/` folder contains **28 foundational 
 | `Claude_agent_build_prompts.md` | Detailed agent prompts with scope + done criteria | Agent execution |
 | `Raster_Map_Reimplementation_Design.md` | **Full spec for raster map renderer replacement, rollback strategy** | **Design** |
 | `ELOC2_System_Updates_Plan.md` | **System updates plan: bug fixes, libraries, editor/planner, implementation status** | **Current** |
+| `Symbology_and_Icon_Reference.md` | **Complete icon/symbol reference: track, sensor, NATO, EO popup, context menus, color palette** | **Reference** |
 | `Chunk_index.md` | Index of all knowledge base chunks for retrieval | Reference |
 
 ## Current Completion (as of 2026-03-21)

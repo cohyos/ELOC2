@@ -41,6 +41,8 @@ function classificationToTrackType(classification?: TargetClassification): Track
     case 'drone':
       return 'uav';
     case 'predator':
+    case 'missile':
+    case 'rocket':
       return 'missile';
     case 'bird':
     case 'birds':
@@ -130,8 +132,8 @@ export function resolveSensorSymbol(
       color = '#4488ff';
       break;
     case 'eo':
-      // Distinguish gimbal vs staring by presence of gimbal state
-      sensorType = sensor.gimbal ? 'eo_gimbal' : 'eo_staring';
+      // Distinguish gimbal vs staring by slew rate (0 = staring, >0 = gimbal)
+      sensorType = (sensor.gimbal && sensor.gimbal.slewRateDegPerSec > 0) ? 'eo_gimbal' : 'eo_staring';
       color = '#ff8800';
       break;
     case 'c4isr':

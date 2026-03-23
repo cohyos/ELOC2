@@ -21,40 +21,46 @@ import type { ScenarioDefinition } from '../types.js';
 const GP_LAT = 31.25;
 const GP_LON = 34.80;
 
-// ── 3 staring EO stations in equilateral triangle, ~8 km from Green Pine ──
-// Each station has 3 sensors covering 120° each → full 360° per station.
-// Station separation ~14 km provides excellent triangulation baseline.
-const STATION_DIST_DEG = 0.07; // ~8 km
-const STATIONS = [
-  { lat: GP_LAT + STATION_DIST_DEG, lon: GP_LON, id: 'N' },                                        // North
-  { lat: GP_LAT - STATION_DIST_DEG * 0.5, lon: GP_LON - STATION_DIST_DEG * 0.866, id: 'SW' },      // Southwest
-  { lat: GP_LAT - STATION_DIST_DEG * 0.5, lon: GP_LON + STATION_DIST_DEG * 0.866, id: 'SE' },      // Southeast
+// ── 3 clusters of 3 masts = 9 individual 360° MWIR staring sensors ──────
+// Clusters spread ~20 km from Green Pine for maximal area coverage.
+// Each cluster covers a different sector; overlapping 30 km detection
+// circles create cross-cluster triangulation baselines of ~35 km.
+// Within each cluster, 3 masts form a small triangle (~1.5 km sides)
+// for local triangulation accuracy.
+const CLUSTER_DIST_DEG = 0.18; // ~20 km from GP
+const MAST_SPREAD_DEG = 0.013; // ~1.5 km between masts within cluster
+const CLUSTERS = [
+  { lat: GP_LAT + CLUSTER_DIST_DEG, lon: GP_LON, id: 'N' },                                        // North
+  { lat: GP_LAT - CLUSTER_DIST_DEG * 0.5, lon: GP_LON - CLUSTER_DIST_DEG * 0.866, id: 'SW' },      // Southwest
+  { lat: GP_LAT - CLUSTER_DIST_DEG * 0.5, lon: GP_LON + CLUSTER_DIST_DEG * 0.866, id: 'SE' },      // Southeast
 ];
 
-// Helper: create 3 staring sensors per station covering 360° (120° each)
+// Helper: create 3 masts (each a 360° MWIR staring sensor) per cluster
 function makeStaringSensors(
-  stationId: string,
-  lat: number,
-  lon: number,
+  clusterId: string,
+  centerLat: number,
+  centerLon: number,
 ): ScenarioDefinition['sensors'] {
-  const sectors = [
-    { azStart: 0, azEnd: 130, label: 'A' },     // 0–130° (10° overlap each side)
-    { azStart: 110, azEnd: 250, label: 'B' },    // 110–250°
-    { azStart: 230, azEnd: 360, label: 'C' },    // 230–360°
+  // 3 masts in small equilateral triangle within the cluster
+  const masts = [
+    { lat: centerLat + MAST_SPREAD_DEG, lon: centerLon, label: '1' },
+    { lat: centerLat - MAST_SPREAD_DEG * 0.5, lon: centerLon - MAST_SPREAD_DEG * 0.866, label: '2' },
+    { lat: centerLat - MAST_SPREAD_DEG * 0.5, lon: centerLon + MAST_SPREAD_DEG * 0.866, label: '3' },
   ];
 
-  return sectors.map(s => ({
-    sensorId: `STARE-${stationId}-${s.label}`,
+  return masts.map(m => ({
+    sensorId: `STARE-${clusterId}-${m.label}`,
     type: 'eo' as const,
-    position: { lat, lon, alt: 15 }, // 15m mast (terrain elevation added at runtime)
+    position: { lat: m.lat, lon: m.lon, alt: 15 }, // 15m mast (terrain added at runtime)
     coverage: {
-      minAzDeg: s.azStart,
-      maxAzDeg: s.azEnd,
-      minElDeg: -5,
-      maxElDeg: 60,
+      minAzDeg: 0,
+      maxAzDeg: 360,    // full 360° per sensor
+      minElDeg: -3,
+      maxElDeg: 20,      // 20° vertical MWIR FOV
       maxRangeM: 30_000,
     },
-    fov: { halfAngleHDeg: 10, halfAngleVDeg: 10 }, // 20° wide staring FOV
+    fov: { halfAngleHDeg: 180, halfAngleVDeg: 10 }, // full azimuth, 20° vertical
+    slewRateDegPerSec: 0, // staring — no gimbal
     maxDetectionRangeM: 30_000,
   }));
 }
@@ -213,10 +219,10 @@ export const greenPineDefense: ScenarioDefinition = {
       maxDetectionRangeM: 40_000,
     },
 
-    // 9 staring WFOV EO — 3 stations × 3 sensors each
-    ...makeStaringSensors('N', STATIONS[0].lat, STATIONS[0].lon),
-    ...makeStaringSensors('SW', STATIONS[1].lat, STATIONS[1].lon),
-    ...makeStaringSensors('SE', STATIONS[2].lat, STATIONS[2].lon),
+    // 9 staring 360° MWIR EO — 3 clusters × 3 masts each
+    ...makeStaringSensors('N', CLUSTERS[0].lat, CLUSTERS[0].lon),
+    ...makeStaringSensors('SW', CLUSTERS[1].lat, CLUSTERS[1].lon),
+    ...makeStaringSensors('SE', CLUSTERS[2].lat, CLUSTERS[2].lon),
   ],
 
   // ── Targets ──────────────────────────────────────────────────────────────
