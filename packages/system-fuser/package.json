@@ -14,7 +14,9 @@
     "@eloc2/domain": "workspace:*",
     "@eloc2/sensor-bus": "workspace:*",
     "@eloc2/fusion-core": "workspace:*",
-    "@eloc2/shared-utils": "workspace:*"
+    "@eloc2/shared-utils": "workspace:*",
+    "@eloc2/sensor-instances": "workspace:*",
+    "@eloc2/eo-core": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.3.0",

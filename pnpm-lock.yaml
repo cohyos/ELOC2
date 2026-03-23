@@ -597,12 +597,18 @@ importers:
       '@eloc2/domain':
         specifier: workspace:*
         version: link:../domain
+      '@eloc2/eo-core':
+        specifier: workspace:*
+        version: link:../eo-core
       '@eloc2/fusion-core':
         specifier: workspace:*
         version: link:../fusion-core
       '@eloc2/sensor-bus':
         specifier: workspace:*
         version: link:../sensor-bus
+      '@eloc2/sensor-instances':
+        specifier: workspace:*
+        version: link:../sensor-instances
       '@eloc2/shared-utils':
         specifier: workspace:*
         version: link:../shared-utils

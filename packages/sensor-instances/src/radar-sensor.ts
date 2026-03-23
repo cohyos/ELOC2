@@ -192,7 +192,9 @@ export class RadarSensorInstance extends SensorInstance {
       const classifierState = this.localTrackManager.getClassifierState(
         track.systemTrackId,
       );
-      const classifierConfidence = classifierState?.confidence ?? 0;
+      const classifierConfidence = classifierState
+        ? Math.max(classifierState.bmScore, classifierState.abtScore)
+        : 0;
 
       return {
         localTrackId: trackId,
