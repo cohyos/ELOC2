@@ -24,6 +24,10 @@ COPY packages/eo-management/package.json packages/eo-management/
 COPY packages/asterix-adapter/package.json packages/asterix-adapter/
 COPY packages/terrain/package.json       packages/terrain/
 COPY packages/database/package.json      packages/database/
+COPY packages/sensor-bus/package.json    packages/sensor-bus/
+COPY packages/sensor-instances/package.json packages/sensor-instances/
+COPY packages/eo-core/package.json       packages/eo-core/
+COPY packages/system-fuser/package.json  packages/system-fuser/
 COPY apps/simulator/package.json         apps/simulator/
 COPY apps/api/package.json               apps/api/
 COPY apps/workstation/package.json       apps/workstation/
