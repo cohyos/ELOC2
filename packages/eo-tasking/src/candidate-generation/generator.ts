@@ -36,8 +36,13 @@ export function generateCandidates(
     (t) => t.status !== 'dropped' && t.eoInvestigationStatus !== 'confirmed',
   );
 
+  // Only investigator EO sensors (with gimbal slew capability) can be cued.
+  // Staring sensors (slewRate === 0) are fixed-pointing and cannot be tasked.
   const eligibleSensors = sensorStates.filter(
-    (s) => s.sensorType === 'eo' && s.online,
+    (s) =>
+      s.sensorType === 'eo' &&
+      s.online &&
+      (s.gimbal?.slewRateDegPerSec ?? 0) > 0,
   );
 
   const candidates: TaskCandidate[] = [];

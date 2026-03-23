@@ -250,23 +250,12 @@ export function DebugOverlay({
     const classify = (cls: string) => { fetch('/api/operator/classify', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ trackId: id, classification: cls }) }).catch(() => {}); };
 
     if (type === 'track') {
-      // Find track for investigation status check
-      const track = tracks.find(t => (t.systemTrackId as string) === id);
-      const eoStatus = track?.eoInvestigationStatus ?? 'none';
-      const hasEoInvestigation = eoStatus === 'confirmed' || eoStatus === 'in_progress';
-
       actions.push(
         { label: 'Select', action: () => callbacksRef.current.onSelectTrack?.(id) },
         { label: 'Cue EO', action: () => { fetch('/api/operator/priority', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ trackId: id, priority: true }) }).catch(() => {}); } },
         { label: 'Set Priority', action: () => { fetch('/api/operator/set-priority', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ trackId: id, priority: 'high' }) }).catch(() => {}); } },
+        { label: 'Open EO Video', action: () => useUiStore.getState().setEoVideoPopupTrackId(id) },
       );
-
-      // EO Video — only available after EO investigation
-      if (hasEoInvestigation) {
-        actions.push({ label: 'Open EO Video', action: () => useUiStore.getState().setEoVideoPopupTrackId(id) });
-      } else {
-        actions.push({ label: 'Open EO Video', action: () => {}, disabled: true });
-      }
 
       // Classification — all valid types, grouped
       actions.push(
@@ -875,9 +864,11 @@ export function DebugOverlay({
         const marker = L.marker([lat, lon], {
           icon: icon(sensorHtml, HIT_SIZE, HIT_ANCHOR),
           interactive: true,
+          draggable: false,
         });
         marker.bindTooltip(`${shortSensorLabel(sensor)} — ${sensor.sensorId}`, { direction: 'top', offset: [0, -14] });
-        marker.on('click', (e: L.LeafletMouseEvent) => addClickCandidate('sensor', sensor.sensorId as string, `${shortSensorLabel(sensor)} (${sensor.sensorType})`, color, e.latlng));
+        marker.on('click', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); addClickCandidate('sensor', sensor.sensorId as string, `${shortSensorLabel(sensor)} (${sensor.sensorType})`, color, e.latlng); });
+        marker.on('mousedown', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); L.DomEvent.preventDefault(e.originalEvent); });
         marker.on('contextmenu', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); showContextMenu('sensor', sensor.sensorId as string, shortSensorLabel(sensor), e.latlng); });
         marker.addTo(g);
       }
@@ -942,9 +933,11 @@ export function DebugOverlay({
           icon: icon(markerHtml, HIT_SIZE, HIT_ANCHOR),
           interactive: true,
           zIndexOffset: 200,
+          draggable: false,
         });
         marker.bindTooltip(title, { direction: 'top', offset: [0, -14] });
-        marker.on('click', (e: L.LeafletMouseEvent) => addClickCandidate('track', trackId, `${shortTrackLabel(track)} — ${track.status}`, color, e.latlng));
+        marker.on('click', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); addClickCandidate('track', trackId, `${shortTrackLabel(track)} — ${track.status}`, color, e.latlng); });
+        marker.on('mousedown', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); L.DomEvent.preventDefault(e.originalEvent); });
         marker.on('contextmenu', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); showContextMenu('track', trackId, shortTrackLabel(track), e.latlng); });
         marker.on('dblclick', () => useUiStore.getState().setEoVideoPopupTrackId(trackId));
         marker.addTo(g);
@@ -1004,9 +997,11 @@ export function DebugOverlay({
         ),
         interactive: true,
         zIndexOffset: 300,
+        draggable: false,
       });
       marker.bindTooltip(`GT: ${target.name} — ${target.classification ?? 'unclassified'}`, { direction: 'top', offset: [0, -12] });
-      marker.on('click', (e: L.LeafletMouseEvent) => addClickCandidate('gt', gtId, `GT: ${target.name}`, '#00ffff', e.latlng));
+      marker.on('click', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); addClickCandidate('gt', gtId, `GT: ${target.name}`, '#00ffff', e.latlng); });
+      marker.on('mousedown', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); L.DomEvent.preventDefault(e.originalEvent); });
       marker.on('contextmenu', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); showContextMenu('gt', gtId, `GT: ${target.name}`, e.latlng); });
       marker.addTo(g);
 
@@ -1097,10 +1092,6 @@ export function DebugOverlay({
     if (!eoVideoPopupTrackId || !map) return null;
     const track = tracks.find(t => (t.systemTrackId as string) === eoVideoPopupTrackId);
     if (!track) return null;
-
-    // Only show EO video after an EO investigation has been done on the target
-    const eoStatus = track.eoInvestigationStatus;
-    if (eoStatus !== 'confirmed' && eoStatus !== 'in_progress') return null;
 
     const { lon, lat } = track.state;
     if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
