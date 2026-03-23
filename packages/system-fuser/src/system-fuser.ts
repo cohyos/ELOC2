@@ -31,6 +31,7 @@ import { DEFAULT_SYSTEM_FUSER_CONFIG } from './types.js';
 import {
   classifyByTrajectory,
   shouldApplyTrajectoryClassification,
+  gradeClassificationQuality,
 } from './trajectory-classifier.js';
 
 // ---------------------------------------------------------------------------
@@ -178,8 +179,22 @@ export class SystemFuser {
       if (track.updateCount < 3) continue; // need stable velocity
 
       const result = classifyByTrajectory(track.state, track.velocity);
-      if (!result) continue;
+      if (!result) {
+        // Grade quality even without trajectory result
+        track.classificationQuality = gradeClassificationQuality(
+          track.classification,
+          track.classificationConfidence,
+          track.trajectoryClassification,
+          track.trajectoryConfidence,
+        );
+        continue;
+      }
 
+      // Always store trajectory classification separately for quality grading
+      track.trajectoryClassification = result.classification;
+      track.trajectoryConfidence = result.confidence;
+
+      // Apply as primary classification only if allowed
       if (
         shouldApplyTrajectoryClassification(
           track.classification,
@@ -192,6 +207,14 @@ export class SystemFuser {
         track.classificationSource = result.source;
         track.classificationConfidence = result.confidence;
       }
+
+      // Grade quality: compare primary classification vs trajectory classification
+      track.classificationQuality = gradeClassificationQuality(
+        track.classification,
+        track.classificationConfidence,
+        track.trajectoryClassification,
+        track.trajectoryConfidence,
+      );
     }
   }
 
@@ -220,6 +243,9 @@ export class SystemFuser {
       classification: undefined,
       classificationSource: undefined,
       classificationConfidence: undefined,
+      classificationQuality: 'unclassified',
+      trajectoryClassification: undefined,
+      trajectoryConfidence: undefined,
     };
     this.systemTracks.set(trackId as string, track);
     return track;

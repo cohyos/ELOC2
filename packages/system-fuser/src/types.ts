@@ -36,6 +36,17 @@ export interface FusedSystemTrack {
   classificationSource?: ClassificationSource;
   /** Confidence in the classification [0, 1] */
   classificationConfidence?: number;
+  /**
+   * Classification quality grade based on source agreement.
+   * - 'high': trajectory + EO/operator agree
+   * - 'medium': single source classification
+   * - 'low': sources disagree or insufficient data
+   * - 'unclassified': no classification assigned
+   */
+  classificationQuality?: 'high' | 'medium' | 'low' | 'unclassified';
+  /** Trajectory classification (kept separately for agreement checking) */
+  trajectoryClassification?: TargetClassification;
+  trajectoryConfidence?: number;
 }
 
 /** Configuration for SystemFuser */

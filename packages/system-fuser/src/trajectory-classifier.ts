@@ -236,3 +236,75 @@ export function shouldApplyTrajectoryClassification(
   // Auto-assigned (c4isr, eo_identification) — override if higher confidence
   return newConfidence > (existingConfidence ?? 0);
 }
+
+// ---------------------------------------------------------------------------
+// Classification Quality Grading
+// ---------------------------------------------------------------------------
+
+/**
+ * DRI category grouping for agreement checking.
+ * Two classifications "agree" if they belong to the same group.
+ */
+const CLASSIFICATION_GROUP: Record<string, string> = {
+  missile: 'ballistic',
+  rocket: 'ballistic',
+  fighter_aircraft: 'aircraft',
+  civilian_aircraft: 'aircraft',
+  passenger_aircraft: 'aircraft',
+  light_aircraft: 'aircraft',
+  predator: 'aircraft',
+  ally: 'aircraft',
+  helicopter: 'helicopter',
+  uav: 'small',
+  small_uav: 'small',
+  drone: 'small',
+  bird: 'small',
+  birds: 'small',
+  neutral: 'unknown',
+  unknown: 'unknown',
+};
+
+function getGroup(c: TargetClassification | undefined): string {
+  if (!c) return 'unknown';
+  return CLASSIFICATION_GROUP[c] ?? 'unknown';
+}
+
+/**
+ * Grade the classification quality based on agreement between the
+ * primary classification and the trajectory-based classification.
+ *
+ * - 'high':         primary + trajectory agree (same group), both confident
+ * - 'medium':       only one source available, or weak agreement
+ * - 'low':          sources disagree (different groups)
+ * - 'unclassified': no classification at all
+ */
+export function gradeClassificationQuality(
+  primaryClassification: TargetClassification | undefined,
+  primaryConfidence: number | undefined,
+  trajectoryClassification: TargetClassification | undefined,
+  trajectoryConfidence: number | undefined,
+): 'high' | 'medium' | 'low' | 'unclassified' {
+  // No classification at all
+  if (!primaryClassification || primaryClassification === 'unknown') {
+    if (!trajectoryClassification) return 'unclassified';
+    return (trajectoryConfidence ?? 0) >= 0.7 ? 'medium' : 'low';
+  }
+
+  // Primary exists but no trajectory — single source
+  if (!trajectoryClassification) {
+    return (primaryConfidence ?? 0) >= 0.7 ? 'medium' : 'low';
+  }
+
+  // Both exist — check agreement
+  const primaryGroup = getGroup(primaryClassification);
+  const trajectoryGroup = getGroup(trajectoryClassification);
+
+  if (primaryGroup === trajectoryGroup) {
+    // Sources agree
+    const minConf = Math.min(primaryConfidence ?? 0, trajectoryConfidence ?? 0);
+    return minConf >= 0.5 ? 'high' : 'medium';
+  }
+
+  // Sources disagree
+  return 'low';
+}

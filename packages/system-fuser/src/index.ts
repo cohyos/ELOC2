@@ -19,6 +19,7 @@ export type {
 export {
   classifyByTrajectory,
   shouldApplyTrajectoryClassification,
+  gradeClassificationQuality,
 } from './trajectory-classifier.js';
 export type { TrajectoryClassificationResult } from './trajectory-classifier.js';
 
