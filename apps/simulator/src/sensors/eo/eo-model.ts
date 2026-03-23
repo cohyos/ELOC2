@@ -149,10 +149,25 @@ export function generateEoBearing(
     return undefined;
   }
 
-  // Add bearing noise: +/-0.1 deg
+  // Add bearing noise with frame integration.
+  // Real MWIR staring sensors sample at 24 Hz. Between simulation ticks
+  // (typically 2s), the sensor integrates ~48 frames. This reduces bearing
+  // noise by sqrt(N_frames) compared to single-frame noise.
+  // Single-frame noise: σ = 0.1° (Gaussian)
+  // Staring sensor (slewRate=0): full 48-frame integration → σ/√48 ≈ 0.014°
+  // Gimbal sensor (slewRate>0): partial integration (target moves in FOV) → σ/√12 ≈ 0.029°
+  const FRAME_RATE_HZ = 24;
+  const UPDATE_INTERVAL_SEC = 2;
+  const singleFrameNoiseDeg = 0.1;
+  const isStaring = (sensor.slewRateDegPerSec ?? 0) === 0;
+  const integrationFrames = isStaring
+    ? FRAME_RATE_HZ * UPDATE_INTERVAL_SEC          // staring: full integration
+    : Math.min(12, FRAME_RATE_HZ * UPDATE_INTERVAL_SEC * 0.25); // gimbal: partial (target drifts in FOV)
+  const effectiveNoiseDeg = singleFrameNoiseDeg / Math.sqrt(integrationFrames);
+
   const r = rng ?? Math.random;
-  const noisyAzDeg = trueAzDeg + gaussianNoise(0.1, r);
-  const noisyElDeg = trueElDeg + gaussianNoise(0.1, r);
+  const noisyAzDeg = trueAzDeg + gaussianNoise(effectiveNoiseDeg, r);
+  const noisyElDeg = trueElDeg + gaussianNoise(effectiveNoiseDeg, r);
 
   // Apply azimuth bias fault
   const biasedAzDeg = applyAzimuthBias(noisyAzDeg, sensorFaults);
