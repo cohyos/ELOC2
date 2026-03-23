@@ -1,10 +1,10 @@
 {
-  "runId": 1,
-  "timestamp": "2026-03-23T20:16:08.176Z",
+  "runId": 2,
+  "timestamp": "2026-03-23T20:16:22.198Z",
   "scenario": "green-pine-defense",
   "totalSimSec": 1500,
-  "wallClockMs": 6409.236731999999,
-  "avgTickMs": 0.42728244879999994,
+  "wallClockMs": 7193.021162,
+  "avgTickMs": 0.47953474413333336,
   "phases": [
     {
       "phase": "Phase 1: Fighter",
@@ -125,8 +125,8 @@
           "pictureAccuracy": 62,
           "coveragePercent": 0.2,
           "falseTrackRate": 0,
-          "positionErrorAvg": 444.32895835160025,
-          "positionErrorMax": 444.32895835160025,
+          "positionErrorAvg": 383.24520954199005,
+          "positionErrorMax": 383.24520954199005,
           "classificationAccuracy": 1,
           "lostTargets": 0,
           "lostTargetIds": [],

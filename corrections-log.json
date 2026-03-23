@@ -1,10 +1,18 @@
 [
   {
     "runId": 1,
-    "timestamp": "2026-03-23T20:12:19.825Z",
-    "issuesSummary": "8 critical, 3 major, 0 minor",
+    "timestamp": "2026-03-23T20:16:08.177Z",
+    "issuesSummary": "5 critical, 0 major, 0 minor",
     "corrections": [],
     "parameterChanges": {},
-    "scoreBefore": 70
+    "scoreBefore": 78
+  },
+  {
+    "runId": 2,
+    "timestamp": "2026-03-23T20:16:22.199Z",
+    "issuesSummary": "5 critical, 0 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 78
   }
 ]
