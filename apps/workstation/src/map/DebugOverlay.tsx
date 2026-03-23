@@ -542,13 +542,17 @@ export function DebugOverlay({
     const showEoLayers = pictureMode !== 'radar';
 
     // EO gimbal rays (skip staring/fixed sensors — they don't slew)
+    // Only show for sensors that are actively tracking a target (have currentTargetId)
     if (layerVisibility.eoRays && showEoLayers) {
       for (const sensor of sensors) {
         if (sensor.sensorType !== 'eo' || !sensor.gimbal || !sensor.online) continue;
         if (sensor.gimbal.slewRateDegPerSec === 0) continue; // staring — no gimbal ray
         if (!Number.isFinite(sensor.gimbal.azimuthDeg)) continue;
+        // Only draw gimbal ray when actively tracking (has a target assigned)
+        if (!sensor.gimbal.currentTargetId) continue;
         const { lon, lat } = sensor.position;
-        const [endLon, endLat] = geoOffset(lon, lat, sensor.gimbal.azimuthDeg, 40000);
+        const rayLen = Math.min(sensor.coverage.maxRangeM ?? 30000, 20000); // max 20km
+        const [endLon, endLat] = geoOffset(lon, lat, sensor.gimbal.azimuthDeg, rayLen);
         L.polyline([[lat, lon], [endLat, endLon]], {
           color: '#ff8800', weight: 2, opacity: 0.7, dashArray: '6,3', interactive: false,
         }).addTo(g);
@@ -606,7 +610,7 @@ export function DebugOverlay({
       }
     }
 
-    // Search mode sweep lines
+    // Search mode sweep lines — short, subtle indicator
     if (searchModeStates && searchModeStates.length > 0 && layerVisibility.sensors) {
       const searchMap = new Map(searchModeStates.map(s => [s.sensorId, s]));
       for (const sensor of sensors) {
@@ -614,18 +618,19 @@ export function DebugOverlay({
         const searchState = searchMap.get(sensor.sensorId as string);
         if (!searchState || !searchState.active) continue;
         const { lon, lat } = sensor.position;
-        const [endLon, endLat] = geoOffset(lon, lat, searchState.currentAzimuth, 30000);
+        // Short 8km ray — just enough to show scan direction without dominating the map
+        const [endLon, endLat] = geoOffset(lon, lat, searchState.currentAzimuth, 8000);
         L.polyline([[lat, lon], [endLat, endLon]], {
-          color: '#44aaff', weight: 2, opacity: 0.5, dashArray: '8,4', interactive: false,
+          color: '#44aaff', weight: 1.5, opacity: 0.35, dashArray: '4,6', interactive: false,
         }).addTo(g);
 
-        // "SEARCH" label near sensor (15% along the line)
-        const lblLat = lat + (endLat - lat) * 0.15;
-        const lblLon = lon + (endLon - lon) * 0.15;
+        // "SCAN" label near sensor
+        const lblLat = lat + (endLat - lat) * 0.4;
+        const lblLon = lon + (endLon - lon) * 0.4;
         L.marker([lblLat, lblLon], {
           icon: icon(
-            `<span style="font:9px monospace;color:#44aaff;opacity:0.7;">SEARCH</span>`,
-            [50, 12], [0, 12],
+            `<span style="font:8px monospace;color:#44aaff;opacity:0.5;">SCAN</span>`,
+            [40, 10], [0, 10],
           ),
           interactive: false,
         }).addTo(g);
