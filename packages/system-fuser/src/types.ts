@@ -52,5 +52,5 @@ export const DEFAULT_SYSTEM_FUSER_CONFIG: SystemFuserConfig = {
   coastingMissThreshold: 5,
   dropAfterMisses: 12,
   confirmAfter: 3,
-  mergeDistanceM: 500,
+  mergeDistanceM: 150, // Reduced from 500m to preserve formation member tracks
 };

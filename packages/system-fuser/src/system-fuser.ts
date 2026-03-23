@@ -266,6 +266,16 @@ export class SystemFuser {
         );
 
         if (dist < this.config.mergeDistanceM) {
+          // Skip merge if both tracks have velocity and are moving in different directions
+          if (a.velocity && b.velocity) {
+            const dotProduct = a.velocity.vx * b.velocity.vx + a.velocity.vy * b.velocity.vy;
+            const magA = Math.sqrt(a.velocity.vx ** 2 + a.velocity.vy ** 2);
+            const magB = Math.sqrt(b.velocity.vx ** 2 + b.velocity.vy ** 2);
+            if (magA > 1 && magB > 1) {
+              const cosAngle = dotProduct / (magA * magB);
+              if (cosAngle < 0.5) continue; // > 60° apart → not same target
+            }
+          }
           // Merge b into a (a has more updates or higher confidence)
           const keep = a.updateCount >= b.updateCount ? a : b;
           const drop = keep === a ? b : a;

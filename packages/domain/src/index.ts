@@ -23,7 +23,8 @@ export type {
   OperationalZone,
 } from './common-types.js';
 
-export { TARGET_RCS } from './common-types.js';
+export { TARGET_RCS, DRI_PROFILES, getDriCategory, computeDriTier } from './common-types.js';
+export type { DriTier, DriTargetCategory, DriRangeProfile } from './common-types.js';
 
 // Weather & clutter
 export type { WeatherCondition, ClutterZone } from './weather.js';

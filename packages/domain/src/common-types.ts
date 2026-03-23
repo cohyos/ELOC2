@@ -108,6 +108,91 @@ export type TargetClassification =
 export type ClassificationSource = 'operator' | 'eo_identification' | 'c4isr' | 'scenario';
 
 // ---------------------------------------------------------------------------
+// DRI (Detection, Recognition, Identification) ranges
+// ---------------------------------------------------------------------------
+
+/** DRI tier achieved by an EO sensor for a given target at a given range. */
+export type DriTier = 'detection' | 'recognition' | 'identification';
+
+/**
+ * DRI target size category — determines effective EO detection range.
+ * Aircraft targets are largest (detected at full sensor range),
+ * helicopters use the default/base range,
+ * and small targets (UAVs, missiles) are hardest to detect.
+ */
+export type DriTargetCategory = 'aircraft' | 'helicopter' | 'small';
+
+/**
+ * Range multipliers relative to sensor's maxDetectionRangeM for each DRI tier.
+ * Detection > Recognition > Identification.
+ */
+export interface DriRangeProfile {
+  detection: number;     // multiplier for detection range (e.g., 1.0 = full sensor range)
+  recognition: number;   // multiplier for recognition range
+  identification: number; // multiplier for identification range
+}
+
+/** DRI range profiles per target size category. */
+export const DRI_PROFILES: Record<DriTargetCategory, DriRangeProfile> = {
+  aircraft:   { detection: 1.25, recognition: 0.80, identification: 0.50 },
+  helicopter: { detection: 1.00, recognition: 0.60, identification: 0.35 },
+  small:      { detection: 0.60, recognition: 0.35, identification: 0.15 },
+};
+
+/** Map a TargetClassification to its DRI target size category. */
+export function getDriCategory(classification?: TargetClassification): DriTargetCategory {
+  if (!classification || classification === 'unknown' || classification === 'neutral') {
+    return 'helicopter'; // default
+  }
+  switch (classification) {
+    case 'fighter_aircraft':
+    case 'civilian_aircraft':
+    case 'passenger_aircraft':
+    case 'light_aircraft':
+    case 'predator':
+    case 'ally':
+      return 'aircraft';
+    case 'helicopter':
+      return 'helicopter';
+    case 'uav':
+    case 'small_uav':
+    case 'drone':
+    case 'missile':
+    case 'rocket':
+    case 'bird':
+    case 'birds':
+      return 'small';
+    default:
+      return 'helicopter'; // fallback
+  }
+}
+
+/**
+ * Compute the DRI tier achieved and effective ranges for a target classification
+ * at a given sensor base detection range.
+ * Returns the tier achieved and the actual range thresholds.
+ */
+export function computeDriTier(
+  rangeM: number,
+  baseDetectionRangeM: number,
+  classification?: TargetClassification,
+): { tier: DriTier | null; ranges: { detectionM: number; recognitionM: number; identificationM: number } } {
+  const category = getDriCategory(classification);
+  const profile = DRI_PROFILES[category];
+
+  const detectionM = baseDetectionRangeM * profile.detection;
+  const recognitionM = baseDetectionRangeM * profile.recognition;
+  const identificationM = baseDetectionRangeM * profile.identification;
+
+  let tier: DriTier | null = null;
+  if (rangeM <= identificationM) tier = 'identification';
+  else if (rangeM <= recognitionM) tier = 'recognition';
+  else if (rangeM <= detectionM) tier = 'detection';
+
+  return { tier, ranges: { detectionM, recognitionM, identificationM } };
+}
+
+// ---------------------------------------------------------------------------
 // Bearing measurement
 // ---------------------------------------------------------------------------
 

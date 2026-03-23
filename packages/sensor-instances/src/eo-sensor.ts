@@ -93,6 +93,7 @@ export class EoSensorInstance extends SensorInstance {
         faults,
         targetId,
         undefined, // rng — use Math.random
+        { targetClassification: target.classification },
       );
 
       if (result) {
@@ -101,6 +102,7 @@ export class EoSensorInstance extends SensorInstance {
           targetId,
           imageQuality: result.imageQuality,
           sensorPosition: { ...this.config.position },
+          driTier: result.driTier,
         });
       }
     }

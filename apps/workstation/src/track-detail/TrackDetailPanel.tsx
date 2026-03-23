@@ -283,6 +283,13 @@ export function TrackDetailPanel() {
         <div style={styles.sectionTitle}>Actions</div>
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
           <button
+            style={actionBtnStyle}
+            onClick={() => useUiStore.getState().requestCenter()}
+            title="Center map on this track"
+          >
+            Center
+          </button>
+          <button
             style={{
               ...actionBtnStyle,
               background: track.eoInvestigationStatus === 'in_progress' ? '#333' : '#4a9eff',

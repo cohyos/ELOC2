@@ -162,7 +162,7 @@ export class ScenarioRunner {
               sensorFaults,
               tgtId,
               this.rng,
-              { weather: this.scenario.weather },
+              { weather: this.scenario.weather, targetClassification: tgtDef?.classification },
             );
             if (bearing) {
               events.push({

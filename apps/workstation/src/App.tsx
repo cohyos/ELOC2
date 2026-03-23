@@ -585,7 +585,7 @@ export function App() {
   // InstructorButton is now a stable component defined outside App (prevents remount flicker)
 
   return (
-    <div style={{
+    <div onContextMenu={(e) => e.preventDefault()} style={{
       display: 'grid',
       height: '100vh',
       fontFamily: 'system-ui, -apple-system, sans-serif',
@@ -991,7 +991,7 @@ function MobileLayout() {
   const showPanel = detailPanelOpen && (detailView !== 'none' || true);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: colors.bg, color: colors.text, fontFamily: 'system-ui, -apple-system, sans-serif', overflow: 'hidden' }}>
+    <div onContextMenu={(e) => e.preventDefault()} style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: colors.bg, color: colors.text, fontFamily: 'system-ui, -apple-system, sans-serif', overflow: 'hidden' }}>
 
       {/* ── Mobile Header ─────────────────────────────────────── */}
       <header style={{ background: colors.headerBg, borderBottom: `1px solid ${colors.border}`, padding: '6px 10px', flexShrink: 0, zIndex: 10 }}>

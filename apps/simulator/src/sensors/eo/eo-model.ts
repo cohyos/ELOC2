@@ -7,7 +7,10 @@ import type {
   Timestamp,
   BearingMeasurement,
   WeatherCondition,
+  TargetClassification,
+  DriTier,
 } from '@eloc2/domain';
+import { computeDriTier } from '@eloc2/domain';
 import {
   bearingDeg,
   geodeticToENU,
@@ -28,6 +31,8 @@ export interface EoBearingObservation {
   targetId: string;
   bearing: BearingMeasurement;
   imageQuality: number;
+  /** DRI tier achieved at this range */
+  driTier?: DriTier;
 }
 
 /** Add Gaussian noise using Box-Muller transform. */
@@ -67,7 +72,7 @@ export function generateEoBearing(
   faults: FaultDefinition[],
   targetId: string = 'unknown',
   rng?: () => number,
-  options?: { terrainLos?: boolean; weather?: WeatherCondition },
+  options?: { terrainLos?: boolean; weather?: WeatherCondition; targetClassification?: TargetClassification },
 ): EoBearingObservation | undefined {
   const sensorFaults = faults.filter((f) => f.sensorId === sensor.sensorId);
 
@@ -110,17 +115,22 @@ export function generateEoBearing(
     return undefined;
   }
 
-  // Check EO max detection range with time-of-day modulation
+  // DRI-based detection range check with time-of-day and weather modulation
+  let driTier: DriTier | undefined;
   if (sensor.maxDetectionRangeM !== undefined) {
     const todModifier = timeOfDayRangeModifier(timeSec);
     // Weather visibility reduction: full range at 10km+, linear reduction below
     const weatherModifier = options?.weather
       ? Math.min(1, options.weather.visibilityKm / 10)
       : 1.0;
-    const effectiveEoRange = sensor.maxDetectionRangeM * todModifier * weatherModifier;
-    if (rangeM > effectiveEoRange) {
-      return undefined;
+    const effectiveBaseRange = sensor.maxDetectionRangeM * todModifier * weatherModifier;
+
+    // Compute DRI tier based on target classification and range
+    const dri = computeDriTier(rangeM, effectiveBaseRange, options?.targetClassification);
+    if (!dri.tier) {
+      return undefined; // Beyond detection range for this target type
     }
+    driTier = dri.tier;
   }
 
   // Check coverage arc (FOR — Field of Regard)
@@ -149,8 +159,18 @@ export function generateEoBearing(
   let timestampMs = baseTimestamp + timeSec * 1000;
   timestampMs = applyClockDrift(timestampMs, sensorFaults);
 
-  // Image quality: 0.8-1.0 with some randomness
-  const imageQuality = 0.8 + r() * 0.2;
+  // Image quality: DRI tier-dependent + randomness
+  // Identification: 0.8-1.0, Recognition: 0.5-0.7, Detection: 0.2-0.4
+  let imageQuality: number;
+  if (driTier === 'identification') {
+    imageQuality = 0.8 + r() * 0.2;
+  } else if (driTier === 'recognition') {
+    imageQuality = 0.5 + r() * 0.2;
+  } else if (driTier === 'detection') {
+    imageQuality = 0.2 + r() * 0.2;
+  } else {
+    imageQuality = 0.8 + r() * 0.2; // No DRI info — legacy behavior
+  }
 
   const bearing: BearingMeasurement = {
     azimuthDeg: biasedAzDeg,
@@ -164,5 +184,6 @@ export function generateEoBearing(
     targetId,
     bearing,
     imageQuality,
+    driTier,
   };
 }

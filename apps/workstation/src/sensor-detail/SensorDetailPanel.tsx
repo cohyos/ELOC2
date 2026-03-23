@@ -141,6 +141,20 @@ export function SensorDetailPanel() {
         </div>
       </div>
 
+      {/* Actions */}
+      <div style={styles.section}>
+        <div style={styles.sectionTitle}>Actions</div>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          <button
+            style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', background: '#4a9eff', color: '#fff', cursor: 'pointer', fontSize: '12px' }}
+            onClick={() => useUiStore.getState().requestCenter()}
+            title="Center map on this sensor"
+          >
+            Center
+          </button>
+        </div>
+      </div>
+
       {/* Position */}
       <div style={styles.section}>
         <div style={styles.sectionTitle}>Position</div>

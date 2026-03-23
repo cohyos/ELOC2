@@ -9,7 +9,7 @@ import type { TriangulationOutput, EoCoreTrack, EoCoreConfig } from './types.js'
 const DEFAULT_CONFIG: EoCoreConfig = {
   staleTimeoutSec: 10,
   dropTimeoutSec: 30,
-  trackAssociationDistanceM: 2000,
+  trackAssociationDistanceM: 500, // Reduced from 2000m to distinguish formation members
 };
 
 export class EoTrackManager {
@@ -23,7 +23,8 @@ export class EoTrackManager {
   /** Find nearest existing active/stale track to a triangulation result */
   findNearestTrack(result: TriangulationOutput): EoCoreTrack | null {
     let best: EoCoreTrack | null = null;
-    let bestDist = this.config.trackAssociationDistanceM;
+    let bestScore = Infinity;
+    const maxDist = this.config.trackAssociationDistanceM;
 
     for (const track of this.tracks.values()) {
       if (track.status === 'dropped') continue;
@@ -33,8 +34,32 @@ export class EoTrackManager {
         result.position.lat,
         result.position.lon,
       );
-      if (dist < bestDist) {
-        bestDist = dist;
+      if (dist >= maxDist) continue;
+
+      // Score: distance, penalized if track has velocity pointing away from result
+      let score = dist;
+      if (track.velocity && dist > 50) {
+        const dLat = result.position.lat - track.position.lat;
+        const dLon = result.position.lon - track.position.lon;
+        // Normalize position delta direction
+        const mag = Math.sqrt(dLat * dLat + dLon * dLon);
+        if (mag > 1e-10) {
+          const nx = dLon / mag;
+          const ny = dLat / mag;
+          // Normalize velocity direction
+          const vMag = Math.sqrt(track.velocity.vx ** 2 + track.velocity.vy ** 2);
+          if (vMag > 1) {
+            const vnx = track.velocity.vx / vMag;
+            const vny = track.velocity.vy / vMag;
+            const dot = nx * vnx + ny * vny;
+            // Penalize misaligned tracks: score *= 1 + penalty for backwards movement
+            if (dot < 0) score *= (1.5 - dot); // Up to 2.5x penalty
+          }
+        }
+      }
+
+      if (score < bestScore) {
+        bestScore = score;
         best = track;
       }
     }
@@ -64,6 +89,29 @@ export class EoTrackManager {
     result: TriangulationOutput,
     simTimeSec: number,
   ): void {
+    // Estimate velocity from position delta
+    const dt = simTimeSec - track.lastUpdateSec;
+    if (dt > 0.1) {
+      const dLat = result.position.lat - track.position.lat;
+      const dLon = result.position.lon - track.position.lon;
+      const dAlt = result.position.alt - track.position.alt;
+      // Convert lat/lon deltas to m/s (approximate)
+      const vy = (dLat * 111_320) / dt;   // north m/s
+      const vx = (dLon * 111_320 * Math.cos(track.position.lat * Math.PI / 180)) / dt; // east m/s
+      const vz = dAlt / dt;
+      // Low-pass blend if velocity already exists
+      if (track.velocity) {
+        const vAlpha = 0.6;
+        track.velocity = {
+          vx: vAlpha * vx + (1 - vAlpha) * track.velocity.vx,
+          vy: vAlpha * vy + (1 - vAlpha) * track.velocity.vy,
+          vz: vAlpha * vz + (1 - vAlpha) * track.velocity.vz,
+        };
+      } else {
+        track.velocity = { vx, vy, vz };
+      }
+    }
+
     // Weighted blend — 70% new, 30% old
     const alpha = 0.7;
     track.position = {
@@ -79,7 +127,7 @@ export class EoTrackManager {
     track.status = 'active';
     track.confidence = Math.min(
       1.0,
-      track.confidence + 0.05,
+      track.confidence + 0.10, // Faster confidence growth (was 0.05)
     );
   }
 
