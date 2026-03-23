@@ -1,6 +1,9 @@
 /**
  * Ctrl+Left-click+drag rectangle zoom for MapAdapter-wrapped maps.
  * Works with both MapLibre and Leaflet via the MapAdapter interface.
+ *
+ * Uses capture-phase listeners so we intercept before Leaflet's
+ * internal drag handler can consume the event.
  */
 import type { MapAdapter } from './map-adapter';
 
@@ -10,16 +13,17 @@ export function enableCtrlBoxZoom(adapter: MapAdapter): () => void {
   let box: HTMLDivElement | null = null;
   let active = false;
 
-  // Suppress context menu while Ctrl is held (prevents right-click menu during box zoom)
+  // Suppress context menu while Ctrl is held
   const onContextMenu = (e: MouseEvent) => {
     if (e.ctrlKey) e.preventDefault();
   };
 
   const onMouseDown = (e: MouseEvent) => {
-    // Ctrl + right-click (button 2) starts box zoom
-    if (!e.ctrlKey || e.button !== 2) return;
+    // Ctrl + left-click (button 0) starts box zoom
+    if (!e.ctrlKey || e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
+    e.stopImmediatePropagation();
 
     // Disable map drag while box-zooming
     adapter.disableDragPan();
@@ -42,6 +46,7 @@ export function enableCtrlBoxZoom(adapter: MapAdapter): () => void {
   const onMouseMove = (e: MouseEvent) => {
     if (!active || !startPoint || !box) return;
     e.preventDefault();
+    e.stopPropagation();
 
     const rect = container.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -60,6 +65,8 @@ export function enableCtrlBoxZoom(adapter: MapAdapter): () => void {
 
   const onMouseUp = (e: MouseEvent) => {
     if (!active || !startPoint) return;
+    e.preventDefault();
+    e.stopPropagation();
 
     const rect = container.getBoundingClientRect();
     const endX = e.clientX - rect.left;
@@ -110,17 +117,18 @@ export function enableCtrlBoxZoom(adapter: MapAdapter): () => void {
     }
   };
 
-  container.addEventListener('mousedown', onMouseDown);
-  container.addEventListener('contextmenu', onContextMenu);
-  window.addEventListener('mousemove', onMouseMove);
-  window.addEventListener('mouseup', onMouseUp);
+  // Use capture phase to intercept before Leaflet's internal handlers
+  container.addEventListener('mousedown', onMouseDown, true);
+  container.addEventListener('contextmenu', onContextMenu, true);
+  container.addEventListener('mousemove', onMouseMove, true);
+  container.addEventListener('mouseup', onMouseUp, true);
   window.addEventListener('keyup', onKeyUp);
 
   return () => {
-    container.removeEventListener('mousedown', onMouseDown);
-    container.removeEventListener('contextmenu', onContextMenu);
-    window.removeEventListener('mousemove', onMouseMove);
-    window.removeEventListener('mouseup', onMouseUp);
+    container.removeEventListener('mousedown', onMouseDown, true);
+    container.removeEventListener('contextmenu', onContextMenu, true);
+    container.removeEventListener('mousemove', onMouseMove, true);
+    container.removeEventListener('mouseup', onMouseUp, true);
     window.removeEventListener('keyup', onKeyUp);
     if (box) box.remove();
   };

@@ -81,6 +81,9 @@ export function DeploymentMap() {
     L.control.zoom({ position: 'topright' }).addTo(map);
     L.control.scale({ metric: true, imperial: false, position: 'bottomleft' }).addTo(map);
 
+    // Suppress browser context menu over the map
+    mapContainerRef.current.addEventListener('contextmenu', (e: Event) => e.preventDefault());
+
     // Ctrl+drag box zoom
     const adapter = new LeafletAdapter(map);
     const cleanupBoxZoom = enableCtrlBoxZoom(adapter);

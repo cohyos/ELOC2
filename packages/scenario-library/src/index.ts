@@ -17,6 +17,7 @@ export type {
 export { composeScenario } from './types.js';
 
 // ── Scenarios ──────────────────────────────────────────────────────────────
+export { greenPineDefense } from './scenarios/green-pine-defense.js';
 export { centralIsrael } from './scenarios/central-israel.js';
 export { fusionDemo } from './scenarios/fusion-demo.js';
 export { ballistic } from './scenarios/ballistic.js';
@@ -50,6 +51,7 @@ export { threats, getThreatById } from './threats/index.js';
 
 // ── Lookup ─────────────────────────────────────────────────────────────────
 import type { ScenarioDefinition } from './types.js';
+import { greenPineDefense } from './scenarios/green-pine-defense.js';
 import { centralIsrael } from './scenarios/central-israel.js';
 import { fusionDemo } from './scenarios/fusion-demo.js';
 import { ballistic } from './scenarios/ballistic.js';
@@ -59,6 +61,7 @@ import { combined } from './scenarios/combined.js';
 import { simpleScenarios } from './scenarios/simple-scenarios.js';
 
 const allScenarios: readonly ScenarioDefinition[] = [
+  greenPineDefense,
   centralIsrael,
   fusionDemo,
   ballistic,
