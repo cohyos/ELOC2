@@ -173,9 +173,13 @@ describe('C4isrSensorInstance', () => {
     const firstStatus = report.localTracks[0].status;
     expect(firstStatus).toBe('new'); // tentative → mapped to 'new'
 
-    // Second update at t=24 — track should be confirmed (maintained)
+    // Second update at t=24
     sensor.tick(24, 1);
-    report = handler.mock.calls[1][0];
+
+    // Third update at t=36 — with existence-based promotion (Pe needs ≥0.8),
+    // confirmation may require 3 updates depending on Pd/Pfa parameters
+    sensor.tick(36, 1);
+    report = handler.mock.calls[handler.mock.calls.length - 1][0];
     const confirmedTrack = report.localTracks.find(
       (t) => t.status === 'maintained',
     );
