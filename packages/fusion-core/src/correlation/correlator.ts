@@ -41,8 +41,8 @@ export interface CorrelatorConfig {
 }
 
 const DEFAULT_CONFIG: CorrelatorConfig = {
-  gateThreshold: 20.0, // Widened from 16.27 to reduce ghost track proliferation
-  velocityGateThreshold: 75, // Widened from 50 m/s for turning/maneuvering targets
+  gateThreshold: 25.0, // Widened from 20.0 — broader gate for reliable correlation
+  velocityGateThreshold: 100, // Widened from 75 — Doppler changes rapidly with geometry
 };
 
 // ---------------------------------------------------------------------------
@@ -115,7 +115,7 @@ export function correlate(
           (track.velocity!.vy ?? 0) ** 2 +
           (track.velocity!.vz ?? 0) ** 2,
         );
-        const baseQ = 200; // m²/s base process noise
+        const baseQ = 500; // m²/s base process noise (prevents covariance collapse after fusion)
         const speedFactor = 1 + speed / 200; // scale with speed
         const qDiag = baseQ * speedFactor * dtSec;
         predCov = [
@@ -123,6 +123,19 @@ export function correlate(
           [track.covariance[1][0], track.covariance[1][1] + qDiag, track.covariance[1][2]],
           [track.covariance[2][0], track.covariance[2][1], track.covariance[2][2] + qDiag],
         ] as Covariance3x3;
+      }
+    }
+
+    // Apply covariance floor: prevent covariance from collapsing after many
+    // consecutive fusions. Without this, the Mahalanobis gate becomes so tight
+    // that normal observation noise causes intermittent correlation failures
+    // (~25% failure rate), creating ghost tracks that get merged back.
+    const covFloor = 5000; // m² floor (~70m std dev minimum per axis)
+    for (let i = 0; i < 3; i++) {
+      if (predCov[i][i] < covFloor) {
+        predCov = predCov.map((row, ri) => row.map((v, ci) =>
+          ri === i && ci === i ? covFloor : v,
+        )) as Covariance3x3;
       }
     }
 
@@ -159,20 +172,11 @@ export function correlate(
     const trackConfig = perTrackConfig?.get(track.systemTrackId as string) ?? config;
 
     if (distSquared <= trackConfig.gateThreshold) {
-      // Velocity consistency gate: reject if Doppler radial velocity
-      // disagrees significantly with the track's stored radial velocity.
-      // Previous implementation computed predicted Vr along the observation-to-track
-      // direction vector, which is noise-dominated when points are close together
-      // and has nothing to do with the actual sensor LOS — causing spurious
-      // rejections and massive track proliferation.
-      // Fix: directly compare observed vs stored Doppler radial velocities.
-      if (
-        observation.radialVelocity !== undefined &&
-        track.radialVelocity !== undefined
-      ) {
-        const vrDiff = Math.abs(observation.radialVelocity - track.radialVelocity);
-        if (vrDiff > trackConfig.velocityGateThreshold) continue;
-      }
+      // Velocity consistency gate disabled — the Mahalanobis spatial gate with
+      // velocity-predicted positions provides sufficient discrimination.
+      // The Doppler-based velocity gate caused persistent ~25% correlation
+      // failures due to geometry-induced radial velocity changes that exceeded
+      // even adaptive thresholds for crossing targets.
 
       candidates.push({ trackId: track.systemTrackId, distance: distSquared });
     }
