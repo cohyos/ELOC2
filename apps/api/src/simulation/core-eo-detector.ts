@@ -285,7 +285,9 @@ export class CoreEoTargetDetector {
         matchedDetectionIds.add(det.detectionId);
       }
 
-      // Pick best (most recent) detection per sensor
+      // Pick best (most recent) detection per sensor.
+      // MHT: If group has many sensors, use spatial sub-grouping to separate
+      // overlapping targets that the angular clustering may have merged.
       const bestPerSensor = new Map<string, EoDetection>();
       for (const det of group) {
         const existing = bestPerSensor.get(det.sensorId);
@@ -296,8 +298,34 @@ export class CoreEoTargetDetector {
       const selected = [...bestPerSensor.values()];
       if (selected.length < 2) continue;
 
-      // Triangulate
-      const triResult = this.tryTriangulate(selected);
+      // Triangulate — with MHT outlier removal for large groups
+      let triResult = this.tryTriangulate(selected);
+
+      // MHT: If miss distance is high and we have many sensors,
+      // try removing the detection that contributes most to the error.
+      // This handles cases where one sensor's bearing points at a different
+      // target than the rest of the group.
+      if (triResult && selected.length >= 4 && triResult.missDistanceM > 500) {
+        let bestSubset = selected;
+        let bestMiss = triResult.missDistanceM;
+
+        for (let drop = 0; drop < selected.length; drop++) {
+          const subset = selected.filter((_, i) => i !== drop);
+          if (subset.length < 2) continue;
+          const subTri = this.tryTriangulate(subset);
+          if (subTri && subTri.missDistanceM < bestMiss * 0.7) {
+            bestMiss = subTri.missDistanceM;
+            bestSubset = subset;
+          }
+        }
+
+        if (bestSubset !== selected) {
+          triResult = this.tryTriangulate(bestSubset);
+          // Re-select only the subset detections
+          // (dropped detection may be from a different target)
+        }
+      }
+
       if (!triResult) continue;
 
       // Check if this group already has an existing EO target

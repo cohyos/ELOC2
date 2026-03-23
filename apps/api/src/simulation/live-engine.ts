@@ -3434,11 +3434,35 @@ export class LiveEngine {
           Math.cos(prevPos.lat * Math.PI / 180);
         const dAltM = target.position.alt - prevPos.alt;
         const dtSec = dtMs / 1000;
-        eoTrack.velocity = {
+        const newVel = {
           vx: dLonM / dtSec,   // east velocity (m/s)
           vy: dLatM / dtSec,   // north velocity (m/s)
           vz: dAltM / dtSec,   // vertical velocity (m/s)
         };
+
+        // ── IMM: Interacting Multiple Model motion detection ──
+        // Compare current velocity to previous to detect maneuvering
+        const prevVel = eoTrack.velocity as { vx: number; vy: number; vz: number } | undefined;
+        if (prevVel) {
+          const speedH = Math.sqrt(newVel.vx ** 2 + newVel.vy ** 2);
+          const speedV = Math.abs(newVel.vz);
+          // Turn rate: angular change between consecutive velocity vectors
+          const dot = prevVel.vx * newVel.vx + prevVel.vy * newVel.vy;
+          const prevSpeedH = Math.sqrt(prevVel.vx ** 2 + prevVel.vy ** 2);
+          const turnRate = prevSpeedH > 1 && speedH > 1
+            ? Math.acos(Math.min(1, Math.max(-1, dot / (prevSpeedH * speedH)))) * 180 / Math.PI / dtSec
+            : 0;
+
+          if (speedV > speedH * 0.5 && speedV > 100) {
+            eoTrack.motionModelStatus = 'ballistic';
+          } else if (turnRate > 3) { // >3 deg/s turn rate = maneuvering
+            eoTrack.motionModelStatus = 'coordinated_turn';
+          } else {
+            eoTrack.motionModelStatus = 'constant_velocity';
+          }
+        }
+
+        eoTrack.velocity = newVel;
       }
 
       eoTrack.state = { ...target.position };
