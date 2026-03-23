@@ -103,10 +103,12 @@ const styles = {
     left: `${pct}%`,
     top: '50%',
     transform: 'translate(-50%, -50%)',
-    width: '12px',
-    height: '12px',
+    width: '14px',
+    height: '14px',
     borderRadius: '50%',
     background: '#4a9eff',
+    border: '2px solid #fff',
+    boxShadow: '0 0 4px rgba(74,158,255,0.5)',
     border: '2px solid #fff',
     boxShadow: '0 0 4px rgba(0,0,0,0.5)',
     pointerEvents: 'none' as const,
@@ -217,6 +219,8 @@ export function TimelinePanel() {
     const rect = bar.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     const timeSec = Math.round(pct * scenarioDurationSec);
+    // Optimistic: update timeline position immediately for responsive feel
+    useUiStore.getState().setReplayTime(timeSec);
     fetch('/api/replay/seek', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -225,6 +229,12 @@ export function TimelinePanel() {
   }, [scenarioDurationSec]);
 
   const handleScrubberMouseDown = useCallback((e: React.MouseEvent) => {
+    // If running, pause first so seek is allowed
+    if (isLive) {
+      useUiStore.getState().setReplayPlaying(false);
+      useUiStore.getState().setSimulationState('paused', ['resume', 'stop', 'reset', 'seek', 'inject']);
+      fetch('/api/scenario/pause', { method: 'POST' }).catch(() => {});
+    }
     setIsSeeking(true);
     seekToPosition(e.clientX);
 
@@ -236,7 +246,7 @@ export function TimelinePanel() {
     };
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  }, [seekToPosition]);
+  }, [seekToPosition, isLive]);
 
   return (
     <div style={styles.container} onWheel={(e) => e.stopPropagation()}>
@@ -306,11 +316,11 @@ export function TimelinePanel() {
         </span>
         <div
           ref={scrubberRef}
-          style={{ ...styles.scrubber, flex: 1, marginBottom: 0, height: '10px', padding: '3px 0', opacity: (canSeek && controlsEnabled) ? 1 : 0.4, cursor: (canSeek && controlsEnabled) ? 'pointer' : 'not-allowed' }}
-          onMouseDown={(canSeek && controlsEnabled) ? handleScrubberMouseDown : undefined}
-          title={(canSeek && controlsEnabled) ? 'Click or drag to seek' : 'Pause the simulation to seek'}
+          style={{ ...styles.scrubber, flex: 1, marginBottom: 0, height: '18px', padding: '5px 0', cursor: 'pointer' }}
+          onMouseDown={handleScrubberMouseDown}
+          title="Click or drag to seek (auto-pauses if running)"
         >
-          <div style={{ ...styles.scrubberFill(scenarioDurationSec > 0 ? (replayTime / scenarioDurationSec) * 100 : 0), height: '4px', position: 'relative', top: '50%', transform: 'translateY(-50%)' }} />
+          <div style={{ ...styles.scrubberFill(scenarioDurationSec > 0 ? (replayTime / scenarioDurationSec) * 100 : 0), height: '6px', position: 'relative', top: '50%', transform: 'translateY(-50%)', borderRadius: '3px' }} />
           <div style={styles.scrubberThumb(scenarioDurationSec > 0 ? (replayTime / scenarioDurationSec) * 100 : 0)} />
         </div>
         <span style={{ fontSize: '10px', color: '#666', fontFamily: '"Fira Code", monospace', width: '50px', textAlign: 'right' }}>

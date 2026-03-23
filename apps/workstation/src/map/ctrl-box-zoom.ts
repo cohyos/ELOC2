@@ -10,8 +10,14 @@ export function enableCtrlBoxZoom(adapter: MapAdapter): () => void {
   let box: HTMLDivElement | null = null;
   let active = false;
 
+  // Suppress context menu while Ctrl is held (prevents right-click menu during box zoom)
+  const onContextMenu = (e: MouseEvent) => {
+    if (e.ctrlKey) e.preventDefault();
+  };
+
   const onMouseDown = (e: MouseEvent) => {
-    if (!e.ctrlKey || e.button !== 0) return;
+    // Ctrl + right-click (button 2) starts box zoom
+    if (!e.ctrlKey || e.button !== 2) return;
     e.preventDefault();
     e.stopPropagation();
 
@@ -25,8 +31,8 @@ export function enableCtrlBoxZoom(adapter: MapAdapter): () => void {
     box = document.createElement('div');
     box.style.cssText = `
       position: absolute;
-      border: 2px dashed #4a9eff;
-      background: rgba(74, 158, 255, 0.15);
+      border: 2px dashed #ffffff;
+      background: rgba(255, 255, 255, 0.1);
       pointer-events: none;
       z-index: 100;
     `;
@@ -105,12 +111,14 @@ export function enableCtrlBoxZoom(adapter: MapAdapter): () => void {
   };
 
   container.addEventListener('mousedown', onMouseDown);
+  container.addEventListener('contextmenu', onContextMenu);
   window.addEventListener('mousemove', onMouseMove);
   window.addEventListener('mouseup', onMouseUp);
   window.addEventListener('keyup', onKeyUp);
 
   return () => {
     container.removeEventListener('mousedown', onMouseDown);
+    container.removeEventListener('contextmenu', onContextMenu);
     window.removeEventListener('mousemove', onMouseMove);
     window.removeEventListener('mouseup', onMouseUp);
     window.removeEventListener('keyup', onKeyUp);
