@@ -28,6 +28,11 @@ import type {
   SystemFuserConfig,
 } from './types.js';
 import { DEFAULT_SYSTEM_FUSER_CONFIG } from './types.js';
+import {
+  classifyByTrajectory,
+  shouldApplyTrajectoryClassification,
+  gradeClassificationQuality,
+} from './trajectory-classifier.js';
 
 // ---------------------------------------------------------------------------
 // SystemFuser
@@ -116,6 +121,9 @@ export class SystemFuser {
     // System-level classification and gating override
     this.classifyAndOverride(simTimeSec);
 
+    // Trajectory-based classification (only for unclassified/auto-classified tracks)
+    this.applyTrajectoryClassification();
+
     // Clear buffer
     this.pendingReports = [];
   }
@@ -156,6 +164,60 @@ export class SystemFuser {
     }
   }
 
+  // ── Trajectory-Based Classification ──────────────────────────────────
+
+  /**
+   * Apply trajectory-based classification to system tracks.
+   * Only classifies tracks that are:
+   * - Not classified yet, or classified by auto-system (not operator/scenario)
+   * - Have velocity information (≥2 updates)
+   * Operator and scenario classifications are never overridden.
+   */
+  private applyTrajectoryClassification(): void {
+    for (const track of this.systemTracks.values()) {
+      if (track.status === 'dropped') continue;
+      if (track.updateCount < 3) continue; // need stable velocity
+
+      const result = classifyByTrajectory(track.state, track.velocity);
+      if (!result) {
+        // Grade quality even without trajectory result
+        track.classificationQuality = gradeClassificationQuality(
+          track.classification,
+          track.classificationConfidence,
+          track.trajectoryClassification,
+          track.trajectoryConfidence,
+        );
+        continue;
+      }
+
+      // Always store trajectory classification separately for quality grading
+      track.trajectoryClassification = result.classification;
+      track.trajectoryConfidence = result.confidence;
+
+      // Apply as primary classification only if allowed
+      if (
+        shouldApplyTrajectoryClassification(
+          track.classification,
+          track.classificationSource,
+          track.classificationConfidence,
+          result.confidence,
+        )
+      ) {
+        track.classification = result.classification;
+        track.classificationSource = result.source;
+        track.classificationConfidence = result.confidence;
+      }
+
+      // Grade quality: compare primary classification vs trajectory classification
+      track.classificationQuality = gradeClassificationQuality(
+        track.classification,
+        track.classificationConfidence,
+        track.trajectoryClassification,
+        track.trajectoryConfidence,
+      );
+    }
+  }
+
   // ── Track Creation ────────────────────────────────────────────────────
 
   private createSystemTrack(
@@ -179,6 +241,11 @@ export class SystemFuser {
       targetCategory: localTrack.targetCategory,
       classifierConfidence: localTrack.classifierConfidence,
       classification: undefined,
+      classificationSource: undefined,
+      classificationConfidence: undefined,
+      classificationQuality: 'unclassified',
+      trajectoryClassification: undefined,
+      trajectoryConfidence: undefined,
     };
     this.systemTracks.set(trackId as string, track);
     return track;
@@ -266,6 +333,16 @@ export class SystemFuser {
         );
 
         if (dist < this.config.mergeDistanceM) {
+          // Skip merge if both tracks have velocity and are moving in different directions
+          if (a.velocity && b.velocity) {
+            const dotProduct = a.velocity.vx * b.velocity.vx + a.velocity.vy * b.velocity.vy;
+            const magA = Math.sqrt(a.velocity.vx ** 2 + a.velocity.vy ** 2);
+            const magB = Math.sqrt(b.velocity.vx ** 2 + b.velocity.vy ** 2);
+            if (magA > 1 && magB > 1) {
+              const cosAngle = dotProduct / (magA * magB);
+              if (cosAngle < 0.5) continue; // > 60° apart → not same target
+            }
+          }
           // Merge b into a (a has more updates or higher confidence)
           const keep = a.updateCount >= b.updateCount ? a : b;
           const drop = keep === a ? b : a;

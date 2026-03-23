@@ -131,6 +131,9 @@ interface UiState {
   effectiveRole: 'instructor' | 'operator';
   instructorAvailable: boolean;
 
+  // Center-on-object request (incremented to trigger one-time center)
+  centerRequestSeq: number;
+
   // Actions
   selectTrack: (id: string | null) => void;
   selectSensor: (id: string | null) => void;
@@ -196,6 +199,9 @@ interface UiState {
   setSelectedRole: (role: 'instructor' | 'operator') => void;
   setEffectiveRole: (role: 'instructor' | 'operator') => void;
   setInstructorAvailable: (available: boolean) => void;
+
+  // Center-on-object action
+  requestCenter: () => void;
 }
 
 export interface SelectionBearingRay {
@@ -278,6 +284,8 @@ export const useUiStore = create<UiState>((set) => ({
   selectedRole: 'operator',
   effectiveRole: 'operator',
   instructorAvailable: true,
+
+  centerRequestSeq: 0,
 
   selectTrack: (id) =>
     set({ selectedTrackId: id, selectedSensorId: null, selectedCueId: null, selectedGroupId: null, selectedGeometryTrackId: null, detailView: id ? 'track' : 'none', detailPanelOpen: !!id }),
@@ -383,4 +391,6 @@ export const useUiStore = create<UiState>((set) => ({
   setSelectedRole: (role) => set({ selectedRole: role }),
   setEffectiveRole: (role) => set({ effectiveRole: role }),
   setInstructorAvailable: (available) => set({ instructorAvailable: available }),
+
+  requestCenter: () => set((s) => ({ centerRequestSeq: s.centerRequestSeq + 1 })),
 }));

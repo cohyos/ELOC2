@@ -48,6 +48,8 @@ export function MapView() {
   const setSpawnTargetPosition = useUiStore(s => s.setSpawnTargetPosition);
   const spawnTargetPosition = useUiStore(s => s.spawnTargetPosition);
   const darkMode = useUiStore(s => s.darkMode);
+  const selectedSensorId = useUiStore(s => s.selectedSensorId);
+  const centerRequestSeq = useUiStore(s => s.centerRequestSeq);
   const demoActive = useDemoStore(s => s.active);
   const viewMode = useDemoStore(s => s.viewMode);
   const groundTruthTargets = useGroundTruthStore(s => s.targets);
@@ -366,34 +368,39 @@ export function MapView() {
       });
     setSelectionBearingRays(rays);
 
-    // Camera fit
-    const points: [number, number][] = [[track.state.lon, track.state.lat]];
-    for (const sId of allSensorIds) {
-      const sensor = sensorMap.get(sId);
-      if (sensor) points.push([sensor.position.lon, sensor.position.lat]);
+    // No auto-zoom — user uses "Center" button in detail panel instead
+  }, [selectedTrackId, tracks, sensors, eoTracks, activeCues, layersReady]);
+
+  // ── One-time center on selected object when "Center" button clicked ────────
+  const lastCenterSeq = useRef(0);
+  useEffect(() => {
+    if (centerRequestSeq === lastCenterSeq.current) return;
+    lastCenterSeq.current = centerRequestSeq;
+    const adapter = adapterRef.current;
+    if (!adapter || !layersReady) return;
+
+    // Center on selected track
+    if (selectedTrackId) {
+      const track = tracks.find(t => t.systemTrackId === selectedTrackId);
+      if (track) {
+        try {
+          adapter.flyTo({ center: [track.state.lon, track.state.lat], zoom: 11, duration: 800 });
+        } catch { /* ignore */ }
+      }
+      return;
     }
 
-    if (points.length >= 2) {
-      let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
-      for (const [lon, lat] of points) {
-        if (lon < minLon) minLon = lon;
-        if (lon > maxLon) maxLon = lon;
-        if (lat < minLat) minLat = lat;
-        if (lat > maxLat) maxLat = lat;
+    // Center on selected sensor
+    if (selectedSensorId) {
+      const sensor = sensors.find(s => s.sensorId === selectedSensorId);
+      if (sensor) {
+        try {
+          adapter.flyTo({ center: [sensor.position.lon, sensor.position.lat], zoom: 11, duration: 800 });
+        } catch { /* ignore */ }
       }
-      try {
-        adapter.fitBounds([[minLon, minLat], [maxLon, maxLat]], { padding: 80, maxZoom: 12, duration: 1000 });
-      } catch (e) {
-        console.warn('[MapView] fitBounds failed:', e);
-      }
-    } else if (points.length === 1) {
-      try {
-        adapter.flyTo({ center: points[0], zoom: 10, duration: 1000 });
-      } catch (e) {
-        console.warn('[MapView] flyTo failed:', e);
-      }
+      return;
     }
-  }, [selectedTrackId, tracks, sensors, eoTracks, activeCues, layersReady]);
+  }, [centerRequestSeq, selectedTrackId, selectedSensorId, tracks, sensors, layersReady]);
 
   // ── Spawn-target click interception ───────────────────────────────────────
   const spawnMarkerRef = useRef<L.Marker | null>(null);

@@ -143,7 +143,7 @@ export class TrackManager {
   private readonly meta: Map<string, TrackMeta> = new Map();
   private readonly config: TrackManagerConfig;
   private correlatorConfig: CorrelatorConfig = { gateThreshold: 20.0, velocityGateThreshold: 75 };
-  private mergeDistanceM: number = 8000;
+  private mergeDistanceM: number = 2000; // Reduced from 8km to preserve formation member tracks
 
   /** Sequential counter for human-readable track IDs (STK-001, STK-002, ...) */
   private nextTrackNumber: number = 1;

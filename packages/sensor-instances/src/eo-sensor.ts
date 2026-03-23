@@ -8,6 +8,8 @@
  */
 
 import type { SensorId, Timestamp, BearingMeasurement } from '@eloc2/domain';
+import { DRI_PROFILES } from '@eloc2/domain';
+import type { DriTargetCategory } from '@eloc2/domain';
 import type {
   GroundTruthTarget,
   BearingMeasurementReport,
@@ -93,6 +95,7 @@ export class EoSensorInstance extends SensorInstance {
         faults,
         targetId,
         undefined, // rng — use Math.random
+        { targetClassification: target.classification },
       );
 
       if (result) {
@@ -101,6 +104,7 @@ export class EoSensorInstance extends SensorInstance {
           targetId,
           imageQuality: result.imageQuality,
           sensorPosition: { ...this.config.position },
+          driTier: result.driTier,
         });
       }
     }
@@ -129,14 +133,21 @@ export class EoSensorInstance extends SensorInstance {
     const sensorPos = this.config.position;
     const targetPos = target.position;
 
-    // Simple range check — the EO model itself handles coverage arc/elevation/LOS
     const rangeM = haversineDistanceM(
       sensorPos.lat,
       sensorPos.lon,
       targetPos.lat,
       targetPos.lon,
     );
-    return rangeM <= this.config.coverage.maxRangeM;
+
+    // Use max possible DRI detection range as ceiling (ballistic has highest multiplier)
+    // so that hot targets like missiles aren't pre-filtered before DRI evaluation
+    const baseRange = this.config.maxDetectionRangeM ?? this.config.coverage.maxRangeM;
+    const maxDriMultiplier = Math.max(
+      ...Object.values(DRI_PROFILES).map((p) => p.detection),
+    );
+    const maxPossibleRange = baseRange * maxDriMultiplier;
+    return rangeM <= maxPossibleRange;
   }
 
   // ── Command Handling (override) ────────────────────────────────────────

@@ -8,6 +8,7 @@ import type {
   TargetClassification,
   BearingMeasurement,
   SensorType,
+  DriTier,
 } from '@eloc2/domain';
 
 // ── Sensor → System Messages ──
@@ -81,6 +82,8 @@ export interface BearingMeasurementReport {
   targetId: string;
   imageQuality: number;
   sensorPosition: Position3D;
+  /** DRI tier achieved at this range (detection / recognition / identification) */
+  driTier?: DriTier;
 }
 
 /** EO bearing report containing one or more measurements */

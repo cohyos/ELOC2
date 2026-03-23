@@ -15,6 +15,14 @@ export type {
   PipelineTickResult,
 } from './distributed-pipeline.js';
 
+// Trajectory classifier
+export {
+  classifyByTrajectory,
+  shouldApplyTrajectoryClassification,
+  gradeClassificationQuality,
+} from './trajectory-classifier.js';
+export type { TrajectoryClassificationResult } from './trajectory-classifier.js';
+
 // Lifecycle management
 export { LifecycleManager } from './lifecycle-manager.js';
 export type {

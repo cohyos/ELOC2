@@ -14,7 +14,7 @@ import type { ScenarioDefinition } from '../types.js';
  *   Phase 3 (t=600–900s):  Ballistic missile from 150 km north
  *   Phase 4 (t=900–3600s): Random mixed threats (up to 15 simultaneous)
  *
- * Staring EO sensors detect targets by IR emission (maxDetectionRangeM = 30 km).
+ * Staring EO sensors detect targets by IR emission (maxDetectionRangeM = 40 km).
  */
 
 // ── Green Pine center position (Negev highlands) ─────────────────────────
@@ -61,7 +61,7 @@ function makeStaringSensors(
     },
     fov: { halfAngleHDeg: 180, halfAngleVDeg: 10 }, // full azimuth, 20° vertical
     slewRateDegPerSec: 0, // staring — no gimbal
-    maxDetectionRangeM: 30_000,
+    maxDetectionRangeM: 40_000,
   }));
 }
 
