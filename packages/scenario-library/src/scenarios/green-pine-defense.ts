@@ -55,6 +55,7 @@ function makeStaringSensors(
       maxRangeM: 30_000,
     },
     fov: { halfAngleHDeg: 10, halfAngleVDeg: 10 }, // 20° wide staring FOV
+    slewRateDegPerSec: 0, // staring sensor — no gimbal movement
     maxDetectionRangeM: 30_000,
   }));
 }
