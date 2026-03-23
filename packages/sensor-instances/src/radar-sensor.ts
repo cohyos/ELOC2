@@ -10,18 +10,21 @@ import type { SensorId, Timestamp } from '@eloc2/domain';
 import type { GroundTruthTarget, LocalTrackReport, GatingOverrideCommand } from '@eloc2/sensor-bus';
 import { SensorBus } from '@eloc2/sensor-bus';
 import { haversineDistanceM, bearingDeg } from '@eloc2/shared-utils';
-import { generateRadarObservation } from '@eloc2/simulator';
+import { generateRadarObservation as defaultGenerateRadarObservation } from '@eloc2/simulator';
 import type { SensorDefinition, FaultDefinition } from '@eloc2/simulator';
 
 import { SensorInstance } from './base-sensor.js';
-import type { SensorInstanceConfig, SensorTickResult } from './types.js';
+import type { SensorInstanceConfig, SensorTickResult, RadarObservationGenerator, SensorSpec } from './types.js';
 
 // ---------------------------------------------------------------------------
 // RadarSensorInstance
 // ---------------------------------------------------------------------------
 
 export class RadarSensorInstance extends SensorInstance {
-  constructor(config: SensorInstanceConfig, bus: SensorBus) {
+  /** Pluggable observation generator — defaults to simulator's generateRadarObservation */
+  private observationGenerator: RadarObservationGenerator;
+
+  constructor(config: SensorInstanceConfig, bus: SensorBus, observationGenerator?: RadarObservationGenerator) {
     super(config, bus, {
       confirmAfter: 3,
       dropAfterMisses: 8,
@@ -35,6 +38,7 @@ export class RadarSensorInstance extends SensorInstance {
       enableIMM: true,
     });
     this.localTrackManager.enableDualHypothesis = true;
+    this.observationGenerator = observationGenerator ?? defaultGenerateRadarObservation as unknown as RadarObservationGenerator;
   }
 
   // ── tick() ──────────────────────────────────────────────────────────────
@@ -60,8 +64,8 @@ export class RadarSensorInstance extends SensorInstance {
     let observationsGenerated = 0;
 
     for (const [targetId, target] of this.visibleTargets) {
-      const result = generateRadarObservation(
-        sensorDef,
+      const result = this.observationGenerator(
+        sensorDef as unknown as SensorSpec,
         target.position,
         target.velocity,
         simTimeSec,

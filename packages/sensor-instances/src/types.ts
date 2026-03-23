@@ -39,7 +39,7 @@ export interface EoBearingResult {
   targetId: string;
   bearing: BearingMeasurement;
   imageQuality: number;
-  driTier?: string;
+  driTier?: 'detection' | 'recognition' | 'identification';
 }
 
 /** Radar observation returned by radar generators. */
