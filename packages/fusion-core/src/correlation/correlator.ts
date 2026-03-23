@@ -172,12 +172,6 @@ export function correlate(
     const trackConfig = perTrackConfig?.get(track.systemTrackId as string) ?? config;
 
     if (distSquared <= trackConfig.gateThreshold) {
-      // Velocity consistency gate disabled — the Mahalanobis spatial gate with
-      // velocity-predicted positions provides sufficient discrimination.
-      // The Doppler-based velocity gate caused persistent ~25% correlation
-      // failures due to geometry-induced radial velocity changes that exceeded
-      // even adaptive thresholds for crossing targets.
-
       candidates.push({ trackId: track.systemTrackId, distance: distSquared });
     }
   }
