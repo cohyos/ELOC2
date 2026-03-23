@@ -7,6 +7,7 @@ import type {
   Timestamp,
   TrackStatus,
   TargetClassification,
+  ClassificationSource,
 } from '@eloc2/domain';
 
 /** System-level fused track produced by the SystemFuser */
@@ -26,11 +27,15 @@ export interface FusedSystemTrack {
   updateCount: number;
   /** Consecutive misses (no matching local track report) */
   missCount: number;
-  /** Target category from multi-sensor classification */
+  /** Target category from multi-sensor classification (bm/abt/unresolved) */
   targetCategory: string;
   classifierConfidence: number;
-  /** Classification label */
+  /** Classification label (e.g. 'fighter_aircraft', 'missile', 'drone') */
   classification?: TargetClassification;
+  /** Source that assigned the classification */
+  classificationSource?: ClassificationSource;
+  /** Confidence in the classification [0, 1] */
+  classificationConfidence?: number;
 }
 
 /** Configuration for SystemFuser */

@@ -28,6 +28,10 @@ import type {
   SystemFuserConfig,
 } from './types.js';
 import { DEFAULT_SYSTEM_FUSER_CONFIG } from './types.js';
+import {
+  classifyByTrajectory,
+  shouldApplyTrajectoryClassification,
+} from './trajectory-classifier.js';
 
 // ---------------------------------------------------------------------------
 // SystemFuser
@@ -116,6 +120,9 @@ export class SystemFuser {
     // System-level classification and gating override
     this.classifyAndOverride(simTimeSec);
 
+    // Trajectory-based classification (only for unclassified/auto-classified tracks)
+    this.applyTrajectoryClassification();
+
     // Clear buffer
     this.pendingReports = [];
   }
@@ -156,6 +163,38 @@ export class SystemFuser {
     }
   }
 
+  // ── Trajectory-Based Classification ──────────────────────────────────
+
+  /**
+   * Apply trajectory-based classification to system tracks.
+   * Only classifies tracks that are:
+   * - Not classified yet, or classified by auto-system (not operator/scenario)
+   * - Have velocity information (≥2 updates)
+   * Operator and scenario classifications are never overridden.
+   */
+  private applyTrajectoryClassification(): void {
+    for (const track of this.systemTracks.values()) {
+      if (track.status === 'dropped') continue;
+      if (track.updateCount < 3) continue; // need stable velocity
+
+      const result = classifyByTrajectory(track.state, track.velocity);
+      if (!result) continue;
+
+      if (
+        shouldApplyTrajectoryClassification(
+          track.classification,
+          track.classificationSource,
+          track.classificationConfidence,
+          result.confidence,
+        )
+      ) {
+        track.classification = result.classification;
+        track.classificationSource = result.source;
+        track.classificationConfidence = result.confidence;
+      }
+    }
+  }
+
   // ── Track Creation ────────────────────────────────────────────────────
 
   private createSystemTrack(
@@ -179,6 +218,8 @@ export class SystemFuser {
       targetCategory: localTrack.targetCategory,
       classifierConfidence: localTrack.classifierConfidence,
       classification: undefined,
+      classificationSource: undefined,
+      classificationConfidence: undefined,
     };
     this.systemTracks.set(trackId as string, track);
     return track;
