@@ -228,6 +228,78 @@ export function DebugOverlay({
     }, 50); // 50ms debounce — enough to collect overlapping clicks
   };
 
+  // ── Right-click context menu for operations ─────────────────────────────
+  const ctxRef = useRef<{ popup: L.Popup | null }>({ popup: null });
+
+  const showContextMenu = (
+    type: 'track' | 'sensor' | 'gt',
+    id: string,
+    label: string,
+    latlng: L.LatLng,
+  ) => {
+    if (!map) return;
+    if (ctxRef.current.popup) { map.closePopup(ctxRef.current.popup); ctxRef.current.popup = null; }
+
+    // Build actions based on object type
+    type Action = { label: string; action: () => void };
+    const actions: Action[] = [];
+
+    if (type === 'track') {
+      actions.push(
+        { label: 'Select', action: () => callbacksRef.current.onSelectTrack?.(id) },
+        { label: 'Cue EO', action: () => { fetch('/api/operator/priority', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trackId: id, priority: 10 }) }).catch(() => {}); } },
+        { label: 'Mark Hostile', action: () => { fetch(`/api/tracks/${id}/classify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ classification: 'fighter_aircraft' }) }).catch(() => {}); } },
+        { label: 'Mark Friendly', action: () => { fetch(`/api/tracks/${id}/classify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ classification: 'civilian_aircraft' }) }).catch(() => {}); } },
+        { label: 'Set Priority', action: () => { fetch('/api/operator/priority', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trackId: id, priority: 5 }) }).catch(() => {}); } },
+        { label: 'Open EO Video', action: () => useUiStore.getState().setEoVideoPopupTrackId(id) },
+      );
+    } else if (type === 'sensor') {
+      actions.push(
+        { label: 'Select', action: () => callbacksRef.current.onSelectSensor?.(id) },
+        { label: 'Lock Sensor', action: () => { fetch('/api/operator/lock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sensorId: id }) }).catch(() => {}); } },
+        { label: 'Release Sensor', action: () => { fetch('/api/operator/release', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sensorId: id }) }).catch(() => {}); } },
+        { label: 'Toggle Search Mode', action: () => { fetch(`/api/sensors/${id}/search`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ activate: true }) }).catch(() => {}); } },
+      );
+    } else if (type === 'gt') {
+      actions.push(
+        { label: 'Select', action: () => callbacksRef.current.onSelectGroundTruth?.(id) },
+      );
+    }
+
+    const menuHtml = actions.map((a, i) =>
+      `<div class="ctx-action" data-idx="${i}" ` +
+      `style="padding:5px 12px;cursor:pointer;font:11px monospace;color:#e0e0e0;border-bottom:1px solid #333;" ` +
+      `onmouseover="this.style.background='#333'" onmouseout="this.style.background='transparent'">` +
+      `${a.label}</div>`
+    ).join('');
+
+    const popup = L.popup({
+      closeButton: false,
+      className: 'ctx-menu-popup',
+      maxWidth: 200,
+      minWidth: 140,
+    })
+      .setLatLng(latlng)
+      .setContent(
+        `<div style="background:#1a1a1a;border:1px solid #555;border-radius:4px;overflow:hidden;margin:-13px -20px -13px -20px;">` +
+        `<div style="padding:4px 10px;font:bold 10px monospace;color:#aaa;border-bottom:1px solid #555;background:#222;">${label}</div>` +
+        `${menuHtml}</div>`
+      )
+      .openOn(map);
+    ctxRef.current.popup = popup;
+
+    const el = popup.getElement();
+    if (el) {
+      el.querySelectorAll('.ctx-action').forEach(itemEl => {
+        itemEl.addEventListener('click', () => {
+          const idx = parseInt(itemEl.getAttribute('data-idx') ?? '-1', 10);
+          if (idx >= 0 && idx < actions.length) actions[idx].action();
+          map.closePopup(popup);
+        });
+      });
+    }
+  };
+
   // ── Suppress layer rebuilds during zoom animations to prevent flicker ─────
   const zoomingRef = useRef(false);
   useEffect(() => {
@@ -762,6 +834,7 @@ export function DebugOverlay({
         });
         marker.bindTooltip(`${shortSensorLabel(sensor)} — ${sensor.sensorId}`, { direction: 'top', offset: [0, -14] });
         marker.on('click', (e: L.LeafletMouseEvent) => addClickCandidate('sensor', sensor.sensorId as string, `${shortSensorLabel(sensor)} (${sensor.sensorType})`, color, e.latlng));
+        marker.on('contextmenu', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); showContextMenu('sensor', sensor.sensorId as string, shortSensorLabel(sensor), e.latlng); });
         marker.addTo(g);
       }
 
@@ -828,6 +901,7 @@ export function DebugOverlay({
         });
         marker.bindTooltip(title, { direction: 'top', offset: [0, -14] });
         marker.on('click', (e: L.LeafletMouseEvent) => addClickCandidate('track', trackId, `${shortTrackLabel(track)} — ${track.status}`, color, e.latlng));
+        marker.on('contextmenu', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); showContextMenu('track', trackId, shortTrackLabel(track), e.latlng); });
         marker.on('dblclick', () => useUiStore.getState().setEoVideoPopupTrackId(trackId));
         marker.addTo(g);
 
@@ -889,6 +963,7 @@ export function DebugOverlay({
       });
       marker.bindTooltip(`GT: ${target.name} — ${target.classification ?? 'unclassified'}`, { direction: 'top', offset: [0, -12] });
       marker.on('click', (e: L.LeafletMouseEvent) => addClickCandidate('gt', gtId, `GT: ${target.name}`, '#00ffff', e.latlng));
+      marker.on('contextmenu', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); showContextMenu('gt', gtId, `GT: ${target.name}`, e.latlng); });
       marker.addTo(g);
 
       // Selection ring + GT-to-track connection line
