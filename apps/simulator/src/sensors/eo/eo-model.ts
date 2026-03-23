@@ -106,14 +106,11 @@ export function generateEoBearing(
   const horizDist = Math.sqrt(enu.east * enu.east + enu.north * enu.north);
   const trueElDeg = Math.atan2(enu.up, horizDist) * RAD_TO_DEG;
 
-  // Check range
+  // Check range — DRI detection range may exceed coverage.maxRangeM (e.g. ballistic missiles)
   const rangeM = haversineDistanceM(
     sensor.position.lat, sensor.position.lon,
     targetPos.lat, targetPos.lon,
   );
-  if (rangeM > sensor.coverage.maxRangeM) {
-    return undefined;
-  }
 
   // DRI-based detection range check with time-of-day and weather modulation
   let driTier: DriTier | undefined;
@@ -128,9 +125,14 @@ export function generateEoBearing(
     // Compute DRI tier based on target classification and range
     const dri = computeDriTier(rangeM, effectiveBaseRange, options?.targetClassification);
     if (!dri.tier) {
-      return undefined; // Beyond detection range for this target type
+      return undefined; // Beyond DRI detection range for this target type
     }
     driTier = dri.tier;
+  } else {
+    // No DRI configured — fall back to hard coverage range check
+    if (rangeM > sensor.coverage.maxRangeM) {
+      return undefined;
+    }
   }
 
   // Check coverage arc (FOR — Field of Regard)
