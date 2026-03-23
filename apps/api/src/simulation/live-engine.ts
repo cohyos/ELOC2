@@ -3250,17 +3250,29 @@ export class LiveEngine {
       systemTrackId: eoTrackId,
       state: { ...target.position },
       velocity: undefined,
-      covariance: [
-        [2500, 0, 0],   // ~50m uncertainty in each axis (from triangulation)
-        [0, 2500, 0],
-        [0, 0, 10000],  // altitude less certain from EO
-      ],
+      // Adaptive covariance from triangulation quality:
+      // miss distance and sensor count determine horizontal uncertainty,
+      // intersection angle determines how well-conditioned the geometry is
+      covariance: (() => {
+        const missSq = Math.max(100, target.missDistanceM * target.missDistanceM);
+        const angleFactor = target.intersectionAngleDeg > 30 ? 1.0 :
+          target.intersectionAngleDeg > 10 ? 2.0 : 5.0;
+        const sensorFactor = target.sensorIds.length >= 5 ? 0.5 :
+          target.sensorIds.length >= 3 ? 0.8 : 1.5;
+        const horizVar = missSq * angleFactor * sensorFactor;
+        const vertVar = horizVar * 4; // altitude 2x less certain from EO
+        return [
+          [horizVar, 0, 0],
+          [0, horizVar, 0],
+          [0, 0, vertVar],
+        ];
+      })(),
       confidence: target.classification === 'confirmed_3d' ? 0.6 : 0.4,
       status: 'tentative',
       lineage: [
         createLineageEntry(
           'eo.target.created',
-          `EO 3D track: ${target.classification} from ${target.sensorIds.length} staring sensors (angle=${target.intersectionAngleDeg.toFixed(1)}°)`,
+          `EO 3D track: ${target.classification} from ${target.sensorIds.length} staring sensors (angle=${target.intersectionAngleDeg.toFixed(1)}°, DRI=${target.bestDriTier ?? 'unknown'}, IQ=${(target.bestImageQuality ?? 0).toFixed(1)})`,
         ),
       ],
       lastUpdated: now,
@@ -3408,6 +3420,26 @@ export class LiveEngine {
         eoTrack.velocity,
         simNow as number,
       );
+
+      // ── Velocity estimation from consecutive triangulations ──
+      // EO tracks originally have no velocity. By comparing positions between
+      // consecutive updates, we can estimate velocity for display and prediction.
+      const prevPos = eoTrack.state;
+      const prevTime = eoTrack.lastUpdated as number;
+      const dtMs = (simNow as number) - prevTime;
+      if (dtMs > 500 && dtMs < 30_000 && prevPos) {
+        // Convert geodetic delta to approximate velocity (m/s)
+        const dLatM = (target.position.lat - prevPos.lat) * 110540;
+        const dLonM = (target.position.lon - prevPos.lon) * 111320 *
+          Math.cos(prevPos.lat * Math.PI / 180);
+        const dAltM = target.position.alt - prevPos.alt;
+        const dtSec = dtMs / 1000;
+        eoTrack.velocity = {
+          vx: dLonM / dtSec,   // east velocity (m/s)
+          vy: dLatM / dtSec,   // north velocity (m/s)
+          vz: dAltM / dtSec,   // vertical velocity (m/s)
+        };
+      }
 
       eoTrack.state = { ...target.position };
       eoTrack.lastUpdated = simNow;

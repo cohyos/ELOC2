@@ -63,6 +63,10 @@ export interface EoTarget3D {
   detectionIds: string[];
   /** Contributing sensor IDs. */
   sensorIds: string[];
+  /** Best DRI tier from contributing detections (for target-ID propagation). */
+  bestDriTier?: 'detection' | 'recognition' | 'identification';
+  /** Best image quality from contributing detections [0,1]. */
+  bestImageQuality: number;
   /** Triangulated 3D position. */
   position: Position3D;
   /** Triangulation quality metrics. */
@@ -311,6 +315,10 @@ export class CoreEoTargetDetector {
           uniqueSensors.size >= 3 && triResult.intersectionAngleDeg > 15
             ? 'confirmed_3d'
             : 'candidate_3d';
+        // Update DRI/image quality from latest detections
+        const updIq = Math.max(...selected.map(d => d.imageQuality));
+        existingTarget.bestImageQuality = updIq;
+        existingTarget.bestDriTier = updIq >= 0.8 ? 'identification' : updIq >= 0.5 ? 'recognition' : 'detection';
         result.updatedTargets.push(existingTarget);
       } else {
         // Decide: clear triangulation or ambiguous candidate?
@@ -330,6 +338,8 @@ export class CoreEoTargetDetector {
           );
         } else {
           // Clear triangulation — create target immediately
+          // Propagate best image quality from contributing detections
+          const bestIq = Math.max(...selected.map(d => d.imageQuality));
           const target: EoTarget3D = {
             eoTargetId: generateId(),
             detectionIds: selected.map(d => d.detectionId),
@@ -341,6 +351,8 @@ export class CoreEoTargetDetector {
               uniqueSensors.size >= 3 && triResult.intersectionAngleDeg > 15
                 ? 'confirmed_3d'
                 : 'candidate_3d',
+            bestDriTier: bestIq >= 0.8 ? 'identification' : bestIq >= 0.5 ? 'recognition' : 'detection',
+            bestImageQuality: bestIq,
             createdAt: now,
             lastUpdated: now,
             promotedTrackId: null,
@@ -863,6 +875,8 @@ export class CoreEoTargetDetector {
           classification: best.sensorIds.length >= 3 && best.intersectionAngleDeg > 15
             ? 'confirmed_3d'
             : 'candidate_3d',
+          bestImageQuality: 0.5, // default for ambiguity-resolved targets
+          bestDriTier: 'recognition',
           createdAt: best.createdAt,
           lastUpdated: now,
           promotedTrackId: null,
