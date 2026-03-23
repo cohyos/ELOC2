@@ -325,9 +325,13 @@ export class CoreEoTargetDetector {
         // With good multi-sensor geometry (pentagon layout), real targets
         // should have miss distance < 1 km. Higher values indicate
         // cross-contaminated groups (bearings from different targets merged).
+        // High-elevation targets (>50°) have inherently poor ground-based
+        // triangulation geometry — always route through ambiguity.
+        const avgElevation = selected.reduce((s, d) => s + Math.abs(d.bearing.elevationDeg), 0) / selected.length;
         const isAmbiguous = triResult.missDistanceM > this.config.ambiguousMissDistanceM
           || triResult.intersectionAngleDeg < 10
-          || (selected.length >= 3 && triResult.missDistanceM > 1000);
+          || (selected.length >= 3 && triResult.missDistanceM > 1000)
+          || avgElevation > 50;
 
         if (isAmbiguous) {
           // Route to ambiguity candidate pool for consistency resolution
@@ -655,12 +659,16 @@ export class CoreEoTargetDetector {
     // sensors cover 360° and would match ALL targets indiscriminately.
     const triResult = this.tryTriangulate(detections);
     if (triResult) {
-      const SPATIAL_GATE_M = 2500; // 2.5 km gate for same-target matching
+      // Spatial gate widens for high-altitude targets (BMs move fast and
+      // triangulation geometry is weaker at high elevation)
+      const altKm = triResult.position.alt / 1000;
+      const SPATIAL_GATE_M = altKm > 10 ? 5000 + altKm * 200 : 2500;
       for (const target of this.eoTargets.values()) {
         const dLat = (triResult.position.lat - target.position.lat) * 110540;
         const dLon = (triResult.position.lon - target.position.lon) * 111320 *
           Math.cos(target.position.lat * Math.PI / 180);
-        const dist = Math.sqrt(dLat * dLat + dLon * dLon);
+        const dAlt = triResult.position.alt - target.position.alt;
+        const dist = Math.sqrt(dLat * dLat + dLon * dLon + dAlt * dAlt);
         if (dist < SPATIAL_GATE_M) {
           return target;
         }
