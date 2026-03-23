@@ -193,7 +193,9 @@ export function TimelinePanel() {
   };
 
   const handlePause = () => {
+    // Optimistic pause: immediately update UI state
     setReplayPlaying(false);
+    useUiStore.getState().setSimulationState('paused', ['resume', 'stop', 'reset', 'seek', 'inject']);
     fetch('/api/scenario/pause', { method: 'POST' }).catch(() => {});
   };
 

@@ -400,9 +400,10 @@ export function App() {
   const selectedRole = useUiStore(s => s.selectedRole);
   const setSelectedRole = useUiStore(s => s.setSelectedRole);
 
-  const [simRunning, setSimRunning] = useState(false);
-  const [simSpeed, setSimSpeed] = useState(1);
-  const [simElapsed, setSimElapsed] = useState(0);
+  // Use WS-driven state from ui-store (updated in real-time via WebSocket)
+  const simRunning = useUiStore(s => s.replayPlaying);
+  const simSpeed = useUiStore(s => s.replaySpeed);
+  const simElapsed = useUiStore(s => s.replayTime);
   const [currentScenarioId, setCurrentScenarioId] = useState('');
   const [availableScenarios, setAvailableScenarios] = useState<Array<{ id: string; name: string; description: string }>>([]);
   const [reportModalOpen, setReportModalOpen] = useState(false);
@@ -426,28 +427,32 @@ export function App() {
     fetch('/api/scenarios').then(r => r.json()).then(data => setAvailableScenarios(data)).catch(() => {});
   }, []);
 
-  // Poll scenario status
+  // Poll scenario ID only (running/speed/elapsed come from WebSocket)
   useEffect(() => {
     const poll = setInterval(async () => {
       try {
         const res = await fetch('/api/scenario/status');
         if (res.ok) {
           const data = await res.json();
-          setSimRunning(data.running);
-          setSimSpeed(data.speed);
-          setSimElapsed(data.elapsedSec);
           setCurrentScenarioId(data.scenarioId || '');
         }
       } catch { /* ignore */ }
-    }, 1000);
+    }, 2000);
     return () => clearInterval(poll);
   }, []);
 
   const handleStartPause = useCallback(async () => {
+    if (simRunning) {
+      // Optimistic pause: immediately update UI to prevent stale-state lag
+      useUiStore.getState().setReplayPlaying(false);
+      useUiStore.getState().setSimulationState('paused', ['resume', 'stop', 'reset', 'seek', 'inject']);
+    }
     await fetch(simRunning ? '/api/scenario/pause' : '/api/scenario/start', { method: 'POST' });
   }, [simRunning]);
 
   const handleSpeed = useCallback(async (speed: number) => {
+    // Optimistic speed update
+    useUiStore.getState().setReplaySpeed(speed);
     await fetch('/api/scenario/speed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ speed }) });
   }, []);
 
@@ -930,9 +935,10 @@ function MobileLayout() {
   const simulationState = useUiStore(s => s.simulationState);
   const allowedActions = useUiStore(s => s.allowedActions);
 
-  const [simRunning, setSimRunning] = useState(false);
-  const [simSpeed, setSimSpeed] = useState(1);
-  const [simElapsed, setSimElapsed] = useState(0);
+  // Use WS-driven state from ui-store (updated in real-time via WebSocket)
+  const simRunning = useUiStore(s => s.replayPlaying);
+  const simSpeed = useUiStore(s => s.replaySpeed);
+  const simElapsed = useUiStore(s => s.replayTime);
   const [currentScenarioId, setCurrentScenarioId] = useState('');
   const [availableScenarios, setAvailableScenarios] = useState<Array<{ id: string; name: string; description: string }>>([]);
   const [showControls, setShowControls] = useState(false);
@@ -941,27 +947,32 @@ function MobileLayout() {
     fetch('/api/scenarios').then(r => r.json()).then(data => setAvailableScenarios(data)).catch(() => {});
   }, []);
 
+  // Poll scenario ID only (running/speed/elapsed come from WebSocket)
   useEffect(() => {
     const poll = setInterval(async () => {
       try {
         const res = await fetch('/api/scenario/status');
         if (res.ok) {
           const data = await res.json();
-          setSimRunning(data.running);
-          setSimSpeed(data.speed);
-          setSimElapsed(data.elapsedSec);
           setCurrentScenarioId(data.scenarioId || '');
         }
       } catch { /* ignore */ }
-    }, 1000);
+    }, 2000);
     return () => clearInterval(poll);
   }, []);
 
   const handleStartPause = useCallback(async () => {
+    if (simRunning) {
+      // Optimistic pause: immediately update UI to prevent stale-state lag
+      useUiStore.getState().setReplayPlaying(false);
+      useUiStore.getState().setSimulationState('paused', ['resume', 'stop', 'reset', 'seek', 'inject']);
+    }
     await fetch(simRunning ? '/api/scenario/pause' : '/api/scenario/start', { method: 'POST' });
   }, [simRunning]);
 
   const handleSpeed = useCallback(async (speed: number) => {
+    // Optimistic speed update
+    useUiStore.getState().setReplaySpeed(speed);
     await fetch('/api/scenario/speed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ speed }) });
   }, []);
 
