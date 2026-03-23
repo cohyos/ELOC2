@@ -1,3 +1,12 @@
-export { SensorInstance } from './base-sensor.js';
+// Types
 export type { SensorInstanceConfig, SensorTickResult } from './types.js';
-export { createSensorInstance, createSensorInstances, registerSensorType } from './sensor-factory.js';
+
+// Base class
+export { SensorInstance } from './base-sensor.js';
+
+// Factory
+export {
+  registerSensorType,
+  createSensorInstance,
+  createSensorInstances,
+} from './sensor-factory.js';

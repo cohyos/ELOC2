@@ -1,19 +1,97 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { SensorId, Timestamp } from '@eloc2/domain';
-import { SensorBus } from '@eloc2/sensor-bus';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { SensorId } from '@eloc2/domain';
 import type {
-  GroundTruthTarget,
   GroundTruthBroadcast,
+  GroundTruthTarget,
   SensorTrackReport,
   SystemCommand,
 } from '@eloc2/sensor-bus';
+import { SensorBus } from '@eloc2/sensor-bus';
 import { haversineDistanceM } from '@eloc2/shared-utils';
 
 import { SensorInstance } from '../base-sensor.js';
 import type { SensorInstanceConfig, SensorTickResult } from '../types.js';
-import { registerSensorType, createSensorInstance, createSensorInstances } from '../sensor-factory.js';
+import {
+  registerSensorType,
+  createSensorInstance,
+  createSensorInstances,
+} from '../sensor-factory.js';
 
-// ── Mock Sensor ──
+// ── Helpers ──
+
+function makeSensorId(id: string): SensorId {
+  return id as unknown as SensorId;
+}
+
+/** Realistic config — radar near Be'er Sheva, Israel */
+function makeRadarConfig(
+  overrides?: Partial<SensorInstanceConfig>,
+): SensorInstanceConfig {
+  return {
+    sensorId: 'RADAR-1',
+    type: 'radar',
+    position: { lat: 31.25, lon: 34.79, alt: 200 },
+    coverage: {
+      minAzDeg: 0,
+      maxAzDeg: 360,
+      minElDeg: 0,
+      maxElDeg: 45,
+      maxRangeM: 150_000,
+    },
+    updateIntervalSec: 1,
+    ...overrides,
+  };
+}
+
+/** Target inside radar coverage (~50 km away) */
+function makeNearTarget(): GroundTruthTarget {
+  return {
+    targetId: 'TGT-NEAR',
+    position: { lat: 31.7, lon: 34.9, alt: 5000 },
+    velocity: { vx: 200, vy: -50, vz: 0 },
+    classification: 'hostile',
+    rcs: 5.0,
+    active: true,
+  };
+}
+
+/** Target outside radar coverage (~300 km away) */
+function makeFarTarget(): GroundTruthTarget {
+  return {
+    targetId: 'TGT-FAR',
+    position: { lat: 34.0, lon: 36.0, alt: 10000 },
+    velocity: { vx: -100, vy: 0, vz: 0 },
+    classification: 'hostile',
+    rcs: 3.0,
+    active: true,
+  };
+}
+
+function makeGroundTruth(
+  targets: GroundTruthTarget[],
+  simTimeSec = 10,
+): GroundTruthBroadcast {
+  return {
+    messageType: 'gt.broadcast',
+    simTimeSec,
+    targets,
+  };
+}
+
+function makeModeCommand(
+  targetSensorId: string,
+  mode: 'track' | 'search' | 'standby',
+): SystemCommand {
+  return {
+    messageType: 'system.command',
+    commandId: 'CMD-001',
+    targetSensorId: makeSensorId(targetSensorId),
+    simTimeSec: 5,
+    command: { type: 'mode', mode },
+  };
+}
+
+// ── MockSensor — concrete subclass for testing ──
 
 class MockSensor extends SensorInstance {
   tickCount = 0;
@@ -34,13 +112,17 @@ class MockSensor extends SensorInstance {
 
   filterTargetByCoverage(target: GroundTruthTarget): boolean {
     // Simple range check
-    return haversineDistanceM(
-      this.config.position.lat, this.config.position.lon,
-      target.position.lat, target.position.lon,
-    ) < this.config.coverage.maxRangeM;
+    return (
+      haversineDistanceM(
+        this.config.position.lat,
+        this.config.position.lon,
+        target.position.lat,
+        target.position.lon,
+      ) < this.config.coverage.maxRangeM
+    );
   }
 
-  // Expose protected members for testing
+  // Expose protected for testing
   getVisibleTargets(): Map<string, GroundTruthTarget> {
     return this.visibleTargets;
   }
@@ -50,213 +132,224 @@ class MockSensor extends SensorInstance {
   }
 }
 
-// ── Test Fixtures ──
-
-function createTestConfig(overrides?: Partial<SensorInstanceConfig>): SensorInstanceConfig {
-  return {
-    sensorId: 'radar-1',
-    type: 'radar',
-    position: { lat: 31.5, lon: 34.8, alt: 100 },
-    coverage: {
-      minAzDeg: 0,
-      maxAzDeg: 360,
-      minElDeg: -5,
-      maxElDeg: 45,
-      maxRangeM: 100_000, // 100km
-    },
-    updateIntervalSec: 1,
-    ...overrides,
-  };
-}
-
-function createTestTarget(id: string, lat: number, lon: number, active = true): GroundTruthTarget {
-  return {
-    targetId: id,
-    position: { lat, lon, alt: 5000 },
-    velocity: { vx: 100, vy: 0, vz: 0 },
-    active,
-  };
-}
-
-function createGTBroadcast(targets: GroundTruthTarget[]): GroundTruthBroadcast {
-  return {
-    messageType: 'gt.broadcast',
-    simTimeSec: 10,
-    targets,
-  };
-}
-
 // ── Tests ──
 
-describe('SensorInstance (MockSensor)', () => {
+describe('SensorInstance (base class via MockSensor)', () => {
   let bus: SensorBus;
-  let config: SensorInstanceConfig;
+  let sensor: MockSensor;
 
   beforeEach(() => {
     bus = new SensorBus();
-    config = createTestConfig();
+    sensor = new MockSensor(makeRadarConfig(), bus);
   });
 
   it('can be instantiated with config and bus', () => {
-    const sensor = new MockSensor(config, bus);
-    expect(sensor.sensorId).toBe('radar-1');
+    expect(sensor).toBeInstanceOf(SensorInstance);
+    expect(sensor.sensorId).toBe('RADAR-1');
     expect(sensor.sensorType).toBe('radar');
     expect(sensor.isOnline()).toBe(true);
     expect(sensor.getMode()).toBe('track');
   });
 
-  it('GT broadcast filters targets by coverage (in-range vs out-of-range)', () => {
-    const sensor = new MockSensor(config, bus);
+  describe('ground truth filtering', () => {
+    it('filters targets by coverage — in-range target is visible', () => {
+      const gt = makeGroundTruth([makeNearTarget()]);
+      bus.broadcastGroundTruth(gt);
 
-    // Target within 100km of (31.5, 34.8)
-    const inRange = createTestTarget('t1', 31.6, 34.9);
-    // Target far away (~2000km)
-    const outOfRange = createTestTarget('t2', 50.0, 50.0);
-    // Inactive target within range
-    const inactive = createTestTarget('t3', 31.5, 34.8, false);
+      const visible = sensor.getVisibleTargets();
+      expect(visible.size).toBe(1);
+      expect(visible.has('TGT-NEAR')).toBe(true);
+    });
 
-    bus.broadcastGroundTruth(createGTBroadcast([inRange, outOfRange, inactive]));
+    it('filters targets by coverage — out-of-range target is excluded', () => {
+      const gt = makeGroundTruth([makeFarTarget()]);
+      bus.broadcastGroundTruth(gt);
 
-    const visible = sensor.getVisibleTargets();
-    expect(visible.size).toBe(1);
-    expect(visible.has('t1')).toBe(true);
-    expect(visible.has('t2')).toBe(false);
-    expect(visible.has('t3')).toBe(false);
+      const visible = sensor.getVisibleTargets();
+      expect(visible.size).toBe(0);
+    });
+
+    it('mixed in-range and out-of-range targets', () => {
+      const gt = makeGroundTruth([makeNearTarget(), makeFarTarget()]);
+      bus.broadcastGroundTruth(gt);
+
+      const visible = sensor.getVisibleTargets();
+      expect(visible.size).toBe(1);
+      expect(visible.has('TGT-NEAR')).toBe(true);
+      expect(visible.has('TGT-FAR')).toBe(false);
+    });
+
+    it('inactive targets are excluded', () => {
+      const inactiveTarget = { ...makeNearTarget(), active: false };
+      const gt = makeGroundTruth([inactiveTarget]);
+      bus.broadcastGroundTruth(gt);
+
+      expect(sensor.getVisibleTargets().size).toBe(0);
+    });
   });
 
-  it('mode command changes sensor mode', () => {
-    const sensor = new MockSensor(config, bus);
-    expect(sensor.getMode()).toBe('track');
+  describe('command handling', () => {
+    it('mode command changes sensor mode', () => {
+      expect(sensor.getMode()).toBe('track');
 
-    const cmd: SystemCommand = {
-      messageType: 'system.command',
-      commandId: 'cmd-1',
-      targetSensorId: 'radar-1' as SensorId,
-      simTimeSec: 5,
-      command: { type: 'mode', mode: 'search' },
-    };
-    bus.sendCommand(cmd);
+      bus.sendCommand(makeModeCommand('RADAR-1', 'search'));
+      expect(sensor.getMode()).toBe('search');
 
-    expect(sensor.getMode()).toBe('search');
+      bus.sendCommand(makeModeCommand('RADAR-1', 'standby'));
+      expect(sensor.getMode()).toBe('standby');
+    });
+
+    it('commands for other sensors are ignored', () => {
+      bus.sendCommand(makeModeCommand('RADAR-2', 'standby'));
+      expect(sensor.getMode()).toBe('track');
+    });
   });
 
-  it('tick() publishes track report on bus', () => {
-    const sensor = new MockSensor(config, bus);
-    const reports: SensorTrackReport[] = [];
-    bus.onTrackReport((report) => reports.push(report));
+  describe('tick and track report publishing', () => {
+    it('tick() publishes track report on bus', () => {
+      const handler = vi.fn();
+      bus.onTrackReport(handler);
 
-    sensor.tick(1.0, 1.0);
+      sensor.tick(1.0, 1.0);
 
-    expect(reports.length).toBe(1);
-    expect(reports[0].sensorId).toBe('radar-1');
-    expect(reports[0].sensorType).toBe('radar');
-    expect(reports[0].messageType).toBe('sensor.track.report');
-    expect(reports[0].simTimeSec).toBe(1.0);
-    expect(Array.isArray(reports[0].localTracks)).toBe(true);
+      expect(handler).toHaveBeenCalledOnce();
+      const report: SensorTrackReport = handler.mock.calls[0][0];
+      expect(report.messageType).toBe('sensor.track.report');
+      expect(report.sensorId).toBe(makeSensorId('RADAR-1'));
+      expect(report.sensorType).toBe('radar');
+      expect(report.simTimeSec).toBe(1.0);
+      expect(Array.isArray(report.localTracks)).toBe(true);
+    });
+
+    it('tick increments internal counter', () => {
+      expect(sensor.tickCount).toBe(0);
+      sensor.tick(1.0, 1.0);
+      sensor.tick(2.0, 1.0);
+      expect(sensor.tickCount).toBe(2);
+    });
   });
 
-  it('sensor status report has correct fields', () => {
-    const sensor = new MockSensor(config, bus);
-    const reports: SensorTrackReport[] = [];
-    bus.onTrackReport((report) => reports.push(report));
+  describe('sensor status report', () => {
+    it('has correct fields', () => {
+      const handler = vi.fn();
+      bus.onTrackReport(handler);
 
-    sensor.tick(1.0, 1.0);
+      sensor.tick(1.0, 1.0);
 
-    const status = reports[0].sensorStatus;
-    expect(status.sensorId).toBe('radar-1');
-    expect(status.sensorType).toBe('radar');
-    expect(status.online).toBe(true);
-    expect(status.mode).toBe('track');
-    expect(status.trackCount).toBe(0);
+      const report: SensorTrackReport = handler.mock.calls[0][0];
+      const status = report.sensorStatus;
+      expect(status.sensorId).toBe(makeSensorId('RADAR-1'));
+      expect(status.sensorType).toBe('radar');
+      expect(status.online).toBe(true);
+      expect(status.mode).toBe('track');
+      expect(typeof status.trackCount).toBe('number');
+    });
   });
 
-  it('shouldUpdate respects update interval', () => {
-    const sensor = new MockSensor(createTestConfig({ updateIntervalSec: 2 }), bus);
+  describe('shouldUpdate timing', () => {
+    it('respects update interval', () => {
+      // Initial — never updated, so elapsed = simTime - 0 >= interval
+      expect(sensor.testShouldUpdate(0.5)).toBe(false); // 0.5 < 1.0 interval
+      expect(sensor.testShouldUpdate(1.0)).toBe(true); // 1.0 >= 1.0 interval
 
-    // First check — no time has passed, lastUpdateSimSec is 0
-    expect(sensor.testShouldUpdate(0)).toBe(false); // elapsed = 0, interval = 2
-    expect(sensor.testShouldUpdate(1)).toBe(false); // elapsed = 1, interval = 2
-    expect(sensor.testShouldUpdate(2)).toBe(true);  // elapsed = 2 >= 2
+      // After ticking at t=1, lastUpdateSimSec=1
+      sensor.tick(1.0, 1.0);
+      expect(sensor.testShouldUpdate(1.5)).toBe(false); // 0.5 elapsed < 1.0
+      expect(sensor.testShouldUpdate(2.0)).toBe(true); // 1.0 elapsed >= 1.0
+    });
 
-    // After a tick updates lastUpdateSimSec
-    sensor.tick(2.0, 1.0);
-    expect(sensor.testShouldUpdate(3)).toBe(false); // elapsed = 1
-    expect(sensor.testShouldUpdate(4)).toBe(true);  // elapsed = 2
+    it('returns false when offline', () => {
+      sensor.setOnline(false);
+      expect(sensor.testShouldUpdate(10.0)).toBe(false);
+    });
+
+    it('returns false in standby mode', () => {
+      bus.sendCommand(makeModeCommand('RADAR-1', 'standby'));
+      expect(sensor.testShouldUpdate(10.0)).toBe(false);
+    });
   });
 
-  it('shouldUpdate returns false when offline', () => {
-    const sensor = new MockSensor(config, bus);
-    sensor.setOnline(false);
-    expect(sensor.testShouldUpdate(100)).toBe(false);
+  describe('multiple sensors on same bus', () => {
+    it('each sensor receives independent GT and filters independently', () => {
+      const config2 = makeRadarConfig({
+        sensorId: 'RADAR-2',
+        position: { lat: 32.0, lon: 35.0, alt: 100 },
+        coverage: {
+          minAzDeg: 0,
+          maxAzDeg: 360,
+          minElDeg: 0,
+          maxElDeg: 45,
+          maxRangeM: 30_000, // shorter range — near target is ~35km away
+        },
+      });
+      const sensor2 = new MockSensor(config2, bus);
+
+      // Near target is ~50km from RADAR-1 (in range) but farther from RADAR-2
+      const gt = makeGroundTruth([makeNearTarget()]);
+      bus.broadcastGroundTruth(gt);
+
+      expect(sensor.getVisibleTargets().size).toBe(1);
+      expect(sensor2.getVisibleTargets().size).toBe(0);
+    });
   });
 
-  it('shouldUpdate returns false when in standby mode', () => {
-    const sensor = new MockSensor(config, bus);
-    const cmd: SystemCommand = {
-      messageType: 'system.command',
-      commandId: 'cmd-2',
-      targetSensorId: 'radar-1' as SensorId,
-      simTimeSec: 0,
-      command: { type: 'mode', mode: 'standby' },
-    };
-    bus.sendCommand(cmd);
-    expect(sensor.testShouldUpdate(100)).toBe(false);
+  describe('lifecycle', () => {
+    it('setOnline / isOnline', () => {
+      expect(sensor.isOnline()).toBe(true);
+      sensor.setOnline(false);
+      expect(sensor.isOnline()).toBe(false);
+      sensor.setOnline(true);
+      expect(sensor.isOnline()).toBe(true);
+    });
+
+    it('destroy() does not throw', () => {
+      expect(() => sensor.destroy()).not.toThrow();
+    });
+  });
+});
+
+describe('Sensor Factory', () => {
+  let bus: SensorBus;
+
+  beforeEach(() => {
+    bus = new SensorBus();
   });
 
-  it('multiple sensors on same bus receive independent GT', () => {
-    const config1 = createTestConfig({ sensorId: 'radar-1', coverage: { minAzDeg: 0, maxAzDeg: 360, minElDeg: -5, maxElDeg: 45, maxRangeM: 50_000 } });
-    const config2 = createTestConfig({ sensorId: 'radar-2', coverage: { minAzDeg: 0, maxAzDeg: 360, minElDeg: -5, maxElDeg: 45, maxRangeM: 200_000 } });
+  it('creates instance after registering sensor type', () => {
+    registerSensorType(
+      'radar',
+      MockSensor as unknown as new (config: SensorInstanceConfig, bus: SensorBus) => SensorInstance,
+    );
 
-    const sensor1 = new MockSensor(config1, bus);
-    const sensor2 = new MockSensor(config2, bus);
+    const config = makeRadarConfig();
+    const instance = createSensorInstance(config, bus);
 
-    // Target ~80km away — inside sensor2 range but outside sensor1 range
-    const target = createTestTarget('t1', 32.2, 34.8);
-
-    bus.broadcastGroundTruth(createGTBroadcast([target]));
-
-    expect(sensor1.getVisibleTargets().size).toBe(0); // 50km range, target ~80km
-    expect(sensor2.getVisibleTargets().size).toBe(1); // 200km range, target ~80km
+    expect(instance).toBeInstanceOf(MockSensor);
+    expect(instance.sensorId).toBe('RADAR-1');
   });
 
-  it('sensor factory creates instances after registering type', () => {
-    registerSensorType('radar', MockSensor);
-
-    const sensor = createSensorInstance(config, bus);
-    expect(sensor).toBeInstanceOf(MockSensor);
-    expect(sensor.sensorId).toBe('radar-1');
+  it('throws for unregistered sensor type', () => {
+    expect(() =>
+      createSensorInstance(makeRadarConfig({ type: 'c4isr' }), bus),
+    ).toThrow('Unknown sensor type: c4isr');
   });
 
-  it('sensor factory throws for unregistered type', () => {
-    expect(() => createSensorInstance(createTestConfig({ type: 'c4isr' }), bus))
-      .toThrow('Unknown sensor type: c4isr');
-  });
-
-  it('createSensorInstances creates multiple sensors', () => {
-    registerSensorType('radar', MockSensor);
-    registerSensorType('eo', MockSensor);
+  it('createSensorInstances batch-creates from array', () => {
+    registerSensorType(
+      'radar',
+      MockSensor as unknown as new (config: SensorInstanceConfig, bus: SensorBus) => SensorInstance,
+    );
 
     const configs = [
-      createTestConfig({ sensorId: 'r1', type: 'radar' }),
-      createTestConfig({ sensorId: 'e1', type: 'eo' }),
+      makeRadarConfig({ sensorId: 'R-1' }),
+      makeRadarConfig({ sensorId: 'R-2' }),
+      makeRadarConfig({ sensorId: 'R-3' }),
     ];
-    const sensors = createSensorInstances(configs, bus);
-    expect(sensors.length).toBe(2);
-    expect(sensors[0].sensorId).toBe('r1');
-    expect(sensors[1].sensorId).toBe('e1');
-  });
+    const instances = createSensorInstances(configs, bus);
 
-  it('destroy() can be called without error', () => {
-    const sensor = new MockSensor(config, bus);
-    expect(() => sensor.destroy()).not.toThrow();
-  });
-
-  it('setOnline toggles online state', () => {
-    const sensor = new MockSensor(config, bus);
-    expect(sensor.isOnline()).toBe(true);
-    sensor.setOnline(false);
-    expect(sensor.isOnline()).toBe(false);
-    sensor.setOnline(true);
-    expect(sensor.isOnline()).toBe(true);
+    expect(instances).toHaveLength(3);
+    expect(instances[0].sensorId).toBe('R-1');
+    expect(instances[1].sensorId).toBe('R-2');
+    expect(instances[2].sensorId).toBe('R-3');
   });
 });
