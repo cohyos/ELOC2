@@ -2077,7 +2077,7 @@ export class LiveEngine {
           // ── Staring sensor: route through Core EO Target Detector ──
           // Each staring sensor independently manages az/el detections.
           // Cross-sensor correlation and triangulation happens in finalizeTick.
-          this.coreEoDetector.ingestBearing(bearingObs, sensor.position);
+          this.coreEoDetector.ingestBearing(bearingObs, sensor.position, this.state.elapsedSec);
 
           this.pushEvent(
             'eo.detection.ingested',
@@ -3129,7 +3129,7 @@ export class LiveEngine {
     );
     if (staringSensors.length === 0) return;
 
-    const result = this.coreEoDetector.processTick(staringSensors, this.state.tracks);
+    const result = this.coreEoDetector.processTick(staringSensors, this.state.tracks, this.state.elapsedSec);
 
     // ── 1. New 3D EO targets → fuse or create system track ──
     for (const target of result.newTargets) {

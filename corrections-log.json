@@ -1,0 +1,10 @@
+[
+  {
+    "runId": 1,
+    "timestamp": "2026-03-23T20:12:19.825Z",
+    "issuesSummary": "8 critical, 3 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 70
+  }
+]

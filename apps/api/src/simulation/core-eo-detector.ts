@@ -45,10 +45,12 @@ export interface EoDetection {
   imageQuality: number;
   /** GT target ID from simulator (for scoring, not used in correlation). */
   targetId: string;
-  /** When first detected (ms). */
+  /** When first detected (ms wall-clock). */
   firstSeen: number;
-  /** When last updated (ms). */
+  /** When last updated (ms wall-clock). */
   lastUpdated: number;
+  /** When last updated (simulation seconds) — used for speed-independent pruning. */
+  lastUpdatedSimSec: number;
   /** Consecutive update count. */
   updateCount: number;
 }
@@ -188,7 +190,7 @@ export class CoreEoTargetDetector {
    * Ingest a bearing observation from a staring sensor.
    * The detector manages it as an independent bearing-only detection.
    */
-  ingestBearing(obs: EoBearingObservation, sensorPosition: Position3D): EoDetection {
+  ingestBearing(obs: EoBearingObservation, sensorPosition: Position3D, simTimeSec?: number): EoDetection {
     const sensorId = obs.sensorId;
     if (!this.sensorDetections.has(sensorId)) {
       this.sensorDetections.set(sensorId, new Map());
@@ -204,6 +206,7 @@ export class CoreEoTargetDetector {
       existing.bearing = obs.bearing;
       existing.imageQuality = obs.imageQuality;
       existing.lastUpdated = Date.now();
+      existing.lastUpdatedSimSec = simTimeSec ?? existing.lastUpdatedSimSec;
       existing.updateCount++;
       return existing;
     }
@@ -218,6 +221,7 @@ export class CoreEoTargetDetector {
       targetId: obs.targetId,
       firstSeen: Date.now(),
       lastUpdated: Date.now(),
+      lastUpdatedSimSec: simTimeSec ?? 0,
       updateCount: 1,
     };
 
@@ -236,6 +240,7 @@ export class CoreEoTargetDetector {
   processTick(
     sensors: SensorState[],
     existingTracks: SystemTrack[],
+    simTimeSec?: number,
   ): CoreDetectorResult {
     const now = Date.now();
     const result: CoreDetectorResult = {
@@ -245,8 +250,8 @@ export class CoreEoTargetDetector {
       enhancedCueBearings: [],
     };
 
-    // 1. Prune stale detections
-    this.pruneStaleDetections(now);
+    // 1. Prune stale detections (use sim time if available for speed-independent pruning)
+    this.pruneStaleDetections(now, simTimeSec);
 
     // 2. Collect all live detections across sensors
     const allDetections: EoDetection[] = [];
@@ -650,11 +655,22 @@ export class CoreEoTargetDetector {
     return null;
   }
 
-  /** Remove detections older than maxDetectionAgeMs. */
-  private pruneStaleDetections(now: number): void {
+  /**
+   * Remove detections older than maxDetectionAgeMs.
+   * Uses simulation time when available for speed-independent pruning during seek/fast-forward.
+   * maxDetectionAgeMs = 15s → maxDetectionAgeSec = 15 in sim time.
+   */
+  private pruneStaleDetections(now: number, simTimeSec?: number): void {
+    const maxAgeSec = this.config.maxDetectionAgeMs / 1000; // convert ms to sim seconds
+
     for (const [sensorId, store] of this.sensorDetections) {
       for (const [detId, det] of store) {
-        if (now - det.lastUpdated > this.config.maxDetectionAgeMs) {
+        // Prefer simulation-time-based pruning (speed-independent)
+        const staleBySimTime = simTimeSec !== undefined && det.lastUpdatedSimSec > 0 &&
+          (simTimeSec - det.lastUpdatedSimSec) > maxAgeSec;
+        const staleByWallClock = (now - det.lastUpdated) > this.config.maxDetectionAgeMs;
+
+        if (staleBySimTime || staleByWallClock) {
           store.delete(detId);
         }
       }
