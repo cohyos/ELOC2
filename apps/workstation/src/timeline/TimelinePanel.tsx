@@ -303,8 +303,8 @@ export function TimelinePanel() {
         </span>
       </div>
 
-      {/* Event list */}
-      <div style={styles.eventList}>
+      {/* Event list — stop wheel propagation to prevent map zoom */}
+      <div style={styles.eventList} onWheel={(e) => e.stopPropagation()}>
         {filteredEvents.length === 0 ? (
           <p style={{ opacity: 0.4, textAlign: 'center', marginTop: '8px' }}>
             {replayPlaying ? 'Waiting for events...' : 'Press Play to start the scenario.'}

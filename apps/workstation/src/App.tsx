@@ -842,7 +842,7 @@ export function App() {
       )}
 
       {/* Map */}
-      <div style={{ gridArea: 'map', position: 'relative', overflow: 'hidden' }}>
+      <div style={{ gridArea: 'map', position: 'relative', overflow: 'hidden', userSelect: 'none', WebkitUserSelect: 'none' }}>
         <DegradedModeOverlay />
         <MapView />
         <ToggleOverlay />
