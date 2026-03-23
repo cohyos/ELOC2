@@ -168,6 +168,9 @@ export function TimelinePanel() {
   const simulationState = useUiStore(s => s.simulationState);
   const allowedActions = useUiStore(s => s.allowedActions);
   const canSeek = allowedActions.includes('seek');
+  /** Timeline controls are only interactive when simulation is NOT running */
+  const isLive = simulationState === 'running';
+  const controlsEnabled = !isLive; // paused, ended, idle — controls active
 
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set());
 
@@ -239,22 +242,32 @@ export function TimelinePanel() {
       <div style={styles.header}>
         <span style={styles.title}>Timeline</span>
         <span style={styles.separator}>|</span>
-        <button
-          style={styles.controlBtn(replayPlaying)}
-          onClick={replayPlaying ? handlePause : handlePlay}
-        >
-          {replayPlaying ? 'Pause' : 'Play'}
-        </button>
-        <span style={styles.separator}>|</span>
-        {SPEEDS.map(s => (
-          <button
-            key={s}
-            style={styles.speedBtn(replaySpeed === s)}
-            onClick={() => handleSpeedChange(s)}
-          >
-            {s}x
-          </button>
-        ))}
+        {isLive ? (
+          /* During live simulation: show LIVE indicator, controls disabled */
+          <span style={{ color: '#ff4444', fontWeight: 700, fontSize: '11px', letterSpacing: '1px', animation: 'none' }}>
+            LIVE
+          </span>
+        ) : (
+          /* Paused/Ended/Idle: interactive controls */
+          <>
+            <button
+              style={styles.controlBtn(replayPlaying)}
+              onClick={replayPlaying ? handlePause : handlePlay}
+            >
+              {replayPlaying ? 'Pause' : 'Play'}
+            </button>
+            <span style={styles.separator}>|</span>
+            {SPEEDS.map(s => (
+              <button
+                key={s}
+                style={styles.speedBtn(replaySpeed === s)}
+                onClick={() => handleSpeedChange(s)}
+              >
+                {s}x
+              </button>
+            ))}
+          </>
+        )}
         <span style={{ marginLeft: 'auto', opacity: 0.5, fontSize: '11px' }}>
           {eventLog.length} events
         </span>
@@ -291,9 +304,9 @@ export function TimelinePanel() {
         </span>
         <div
           ref={scrubberRef}
-          style={{ ...styles.scrubber, flex: 1, marginBottom: 0, height: '10px', padding: '3px 0', opacity: canSeek ? 1 : 0.4, cursor: canSeek ? 'pointer' : 'not-allowed' }}
-          onMouseDown={canSeek ? handleScrubberMouseDown : undefined}
-          title={canSeek ? 'Click or drag to seek' : 'Pause the simulation to seek'}
+          style={{ ...styles.scrubber, flex: 1, marginBottom: 0, height: '10px', padding: '3px 0', opacity: (canSeek && controlsEnabled) ? 1 : 0.4, cursor: (canSeek && controlsEnabled) ? 'pointer' : 'not-allowed' }}
+          onMouseDown={(canSeek && controlsEnabled) ? handleScrubberMouseDown : undefined}
+          title={(canSeek && controlsEnabled) ? 'Click or drag to seek' : 'Pause the simulation to seek'}
         >
           <div style={{ ...styles.scrubberFill(scenarioDurationSec > 0 ? (replayTime / scenarioDurationSec) * 100 : 0), height: '4px', position: 'relative', top: '50%', transform: 'translateY(-50%)' }} />
           <div style={styles.scrubberThumb(scenarioDurationSec > 0 ? (replayTime / scenarioDurationSec) * 100 : 0)} />
@@ -303,8 +316,8 @@ export function TimelinePanel() {
         </span>
       </div>
 
-      {/* Event list */}
-      <div style={styles.eventList}>
+      {/* Event list — stop wheel propagation to prevent map zoom */}
+      <div style={styles.eventList} onWheel={(e) => e.stopPropagation()}>
         {filteredEvents.length === 0 ? (
           <p style={{ opacity: 0.4, textAlign: 'center', marginTop: '8px' }}>
             {replayPlaying ? 'Waiting for events...' : 'Press Play to start the scenario.'}

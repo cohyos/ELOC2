@@ -86,7 +86,7 @@ function sectorLatLngs(
 /** Create a divIcon with no default Leaflet styling and drag prevention */
 function icon(html: string, size: [number, number], anchor: [number, number]): L.DivIcon {
   return L.divIcon({
-    html: `<div draggable="false" style="user-select:none;-webkit-user-drag:none;">${html}</div>`,
+    html: `<div draggable="false" style="user-select:none;-webkit-user-drag:none;pointer-events:none;">${html}</div>`,
     iconSize: size, iconAnchor: anchor, className: '',
   });
 }

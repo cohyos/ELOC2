@@ -471,6 +471,8 @@ export function MapView() {
           width: '100%',
           height: '100%',
           filter: darkMode ? 'none' : 'brightness(0.85) saturate(0.7)',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
         }}
       />
       <LayerFilterPanel />
