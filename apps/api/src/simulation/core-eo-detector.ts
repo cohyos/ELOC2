@@ -53,6 +53,18 @@ export interface EoDetection {
   lastUpdatedSimSec: number;
   /** Consecutive update count. */
   updateCount: number;
+
+  // ── Track feedback (from Core EO → Staring Sensor) ──
+  /** Associated system track ID (fed back from Core EO after correlation). */
+  associatedTrackId?: string;
+  /** Angular velocity in az (deg/s) — from consecutive bearing measurements. */
+  angularVelocityAzDegPerSec?: number;
+  /** Angular velocity in el (deg/s). */
+  angularVelocityElDegPerSec?: number;
+  /** Predicted az for next tick (from angular velocity). */
+  predictedAzDeg?: number;
+  /** Predicted el for next tick. */
+  predictedElDeg?: number;
 }
 
 /** A correlated EO target produced by matching bearings across ≥2 sensors. */
@@ -229,6 +241,26 @@ export class CoreEoTargetDetector {
     );
 
     if (existing) {
+      // Compute angular velocity from consecutive bearing measurements
+      const prevAz = existing.bearing.azimuthDeg;
+      const prevEl = existing.bearing.elevationDeg;
+      const dtSec = (simTimeSec ?? 0) - existing.lastUpdatedSimSec;
+      if (dtSec > 0.5 && dtSec < 30) {
+        let dAz = obs.bearing.azimuthDeg - prevAz;
+        if (dAz > 180) dAz -= 360;
+        if (dAz < -180) dAz += 360;
+        const dEl = obs.bearing.elevationDeg - prevEl;
+        existing.angularVelocityAzDegPerSec = dAz / dtSec;
+        existing.angularVelocityElDegPerSec = dEl / dtSec;
+        // Predict next bearing position (for improved matching next tick)
+        const predictDt = 2; // next EO tick is ~2s away
+        let predAz = obs.bearing.azimuthDeg + existing.angularVelocityAzDegPerSec * predictDt;
+        if (predAz > 360) predAz -= 360;
+        if (predAz < 0) predAz += 360;
+        existing.predictedAzDeg = predAz;
+        existing.predictedElDeg = obs.bearing.elevationDeg + existing.angularVelocityElDegPerSec * predictDt;
+      }
+
       // Update existing detection with new bearing
       existing.bearing = obs.bearing;
       existing.imageQuality = obs.imageQuality;
@@ -466,11 +498,25 @@ export class CoreEoTargetDetector {
     return all;
   }
 
-  /** Mark an EO target as promoted to a system track. */
+  /** Mark an EO target as promoted to a system track.
+   *  Also feeds back the track association to all contributing detections,
+   *  so staring sensors can use angular velocity prediction for better
+   *  detection-to-track continuity.
+   */
   markPromoted(eoTargetId: string, systemTrackId: string): void {
     const target = this.eoTargets.get(eoTargetId);
     if (target) {
       target.promotedTrackId = systemTrackId;
+
+      // Feed back track association to contributing detections
+      for (const detId of target.detectionIds) {
+        for (const store of this.sensorDetections.values()) {
+          const det = store.get(detId);
+          if (det) {
+            det.associatedTrackId = systemTrackId;
+          }
+        }
+      }
     }
   }
 
@@ -500,19 +546,35 @@ export class CoreEoTargetDetector {
     elevationDeg: number,
     excludeIds?: Set<string>,
   ): EoDetection | undefined {
+    let bestDet: EoDetection | undefined;
+    let bestDist = Infinity;
+
     for (const det of sensorStore.values()) {
       // Skip detections already matched this tick (WFOV frame-aware)
       if (excludeIds?.has(det.detectionId)) continue;
 
-      let azDiff = Math.abs(azimuthDeg - det.bearing.azimuthDeg);
+      // Use predicted position if available (angular velocity feedback),
+      // otherwise fall back to last measured position.
+      // This improves matching for fast-moving targets where the bearing
+      // changes significantly between ticks.
+      const refAz = det.predictedAzDeg ?? det.bearing.azimuthDeg;
+      const refEl = det.predictedElDeg ?? det.bearing.elevationDeg;
+
+      let azDiff = Math.abs(azimuthDeg - refAz);
       if (azDiff > 180) azDiff = 360 - azDiff;
-      const elDiff = Math.abs(elevationDeg - det.bearing.elevationDeg);
+      const elDiff = Math.abs(elevationDeg - refEl);
+
       // Both az and el must be within the correlation gate
       if (azDiff < this.config.correlationGateDeg && elDiff < this.config.correlationGateDeg) {
-        return det;
+        // Pick the closest match (in case multiple detections are within gate)
+        const dist = azDiff * azDiff + elDiff * elDiff;
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestDet = det;
+        }
       }
     }
-    return undefined;
+    return bestDet;
   }
 
   /**

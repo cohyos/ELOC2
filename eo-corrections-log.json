@@ -166,5 +166,13 @@
     "corrections": [],
     "parameterChanges": {},
     "scoreBefore": 78
+  },
+  {
+    "runId": 22,
+    "timestamp": "2026-03-23T23:02:49.826Z",
+    "issuesSummary": "3 critical, 0 major, 0 minor",
+    "corrections": [],
+    "parameterChanges": {},
+    "scoreBefore": 81
   }
 ]
