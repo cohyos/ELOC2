@@ -554,6 +554,52 @@ export class LiveEngine {
   /** Two-tier staring EO detection: per-sensor az/el detections + cross-sensor triangulation. */
   private coreEoDetector = new CoreEoTargetDetector();
 
+  // ── Pipeline Health Monitoring ──────────────────────────────────────
+  /** Pipeline health metrics — tracks per-stage latencies and gap detection */
+  private pipelineHealth: {
+    /** Sim time when each pipeline milestone was first achieved */
+    milestones: {
+      firstTrackCreated: number;
+      firstTrackConfirmed: number;
+      firstEoCueIssued: number;
+      firstEoTrackCreated: number;
+      firstGeometryEstimate: number;
+    };
+    /** Per-stage gap alerts */
+    alerts: Array<{
+      stage: string;
+      message: string;
+      severity: 'info' | 'warning' | 'critical';
+      timeSec: number;
+    }>;
+    /** Counts for gap detection */
+    ticksSinceLastEoTrack: number;
+    ticksSinceLastGeometry: number;
+    bearingsReceived: number;
+    bearingsMatched: number;
+    bearingsUnmatched: number;
+    /** Track proliferation detection */
+    peakTrackToGtRatio: number;
+    /** Summary health score (0-100) */
+    healthScore: number;
+  } = {
+    milestones: {
+      firstTrackCreated: -1,
+      firstTrackConfirmed: -1,
+      firstEoCueIssued: -1,
+      firstEoTrackCreated: -1,
+      firstGeometryEstimate: -1,
+    },
+    alerts: [],
+    ticksSinceLastEoTrack: 0,
+    ticksSinceLastGeometry: 0,
+    bearingsReceived: 0,
+    bearingsMatched: 0,
+    bearingsUnmatched: 0,
+    peakTrackToGtRatio: 0,
+    healthScore: 100,
+  };
+
   // ── Latency tracking ─────────────────────────────────────────────────
   /** Rolling window of per-tick processing latencies (ms) */
   private tickLatencies: number[] = [];
@@ -675,7 +721,7 @@ export class LiveEngine {
       coastingMissThreshold: 5,
       pDetection: 0.9,
       pFalseAlarm: 0.01,
-      maxCoastingTimeSec: 30,
+      maxCoastingTimeSec: 15,
       associationMode: 'nn', // default NN; switch to 'auto' for JPDA/MHT
       enableIMM: true, // P5: Enable IMM for coordinated turn detection
       enableTBD: false,
@@ -905,6 +951,7 @@ export class LiveEngine {
       ballisticEstimates: this.cachedBallisticEstimates,
       connectedUsers: this.getConnectedUsers(),
       autoLoopEnabled: this.autoLoopEnabled,
+      pipelineHealth: this.pipelineHealth,
     };
   }
 
@@ -1469,7 +1516,7 @@ export class LiveEngine {
       coastingMissThreshold: 5,
       pDetection: 0.9,
       pFalseAlarm: 0.01,
-      maxCoastingTimeSec: 30,
+      maxCoastingTimeSec: 15,
       associationMode: 'nn',
       enableIMM: true, // P5: Enable IMM for coordinated turn detection
       enableTBD: false,
@@ -1830,6 +1877,9 @@ export class LiveEngine {
     // Multi-target bearing association (REQ-6)
     this.computeBearingAssociations();
 
+    // Pipeline health monitoring: detect gaps and alert
+    this.updatePipelineHealth();
+
     // REQ-16: Delegate to EO Management Module (facade over existing EO logic)
     this.eoModule.ingestTracks(this.state.tracks, this.state.sensors);
     this.eoModule.tick(result.currentTimeSec, 1);
@@ -2135,14 +2185,17 @@ export class LiveEngine {
    * Returns the cueId if matched, or null.
    */
   private matchBearingToCue(bearingObs: EoBearingObservation): string | null {
+    this.pipelineHealth.bearingsReceived++;
     const now = Date.now() as Timestamp;
+
+    // Primary: match bearing to cue with executing task for this sensor
     for (const [cueId, cue] of this.activeCuesById) {
       if (cue.systemTrackId && bearingObs.sensorId) {
-        // Match by sensor: the cue was assigned to a specific sensor via a task
         const task = this.state.tasks.find(
           t => t.cueId === cueId && t.sensorId === bearingObs.sensorId && t.status === 'executing',
         );
         if (task && isCueValid(cue, now)) {
+          this.pipelineHealth.bearingsMatched++;
           return cueId;
         }
       }
@@ -2152,10 +2205,14 @@ export class LiveEngine {
     for (const [cueId, cue] of this.activeCuesById) {
       if (isCueValid(cue, now)) {
         const task = this.state.tasks.find(t => t.cueId === cueId && t.sensorId === bearingObs.sensorId);
-        if (task) return cueId;
+        if (task) {
+          this.pipelineHealth.bearingsMatched++;
+          return cueId;
+        }
       }
     }
 
+    this.pipelineHealth.bearingsUnmatched++;
     return null;
   }
 
@@ -5119,7 +5176,7 @@ export class LiveEngine {
 
   private computeEoAllocationQuality(): void {
     const tracks = this.state.tracks;
-    const eoSensors = this.state.sensors.filter(s => s.type === 'eo');
+    const eoSensors = this.state.sensors.filter(s => s.sensorType === 'eo');
     const elapsedSec = this.state.elapsedSec;
 
     // 1. Coverage efficiency: % of high-priority/confirmed tracks that received EO investigation
@@ -5254,6 +5311,106 @@ export class LiveEngine {
       sensorUtilization: sensorUtilizationPct,
       priorityAlignment,
     };
+  }
+
+  // ── Pipeline Health Monitoring ───────────────────────────────────────
+
+  /**
+   * Update pipeline health metrics — detect gaps, record milestones, emit alerts.
+   * Called once per tick from finalizeTick().
+   */
+  private updatePipelineHealth(): void {
+    const timeSec = this.state.elapsedSec;
+    const ph = this.pipelineHealth;
+
+    // Record milestones (first occurrence)
+    if (ph.milestones.firstTrackCreated < 0 && this.state.tracks.length > 0) {
+      ph.milestones.firstTrackCreated = timeSec;
+    }
+    if (ph.milestones.firstTrackConfirmed < 0 && this.state.tracks.some(t => t.status === 'confirmed')) {
+      ph.milestones.firstTrackConfirmed = timeSec;
+    }
+    if (ph.milestones.firstEoCueIssued < 0 && this.activeCuesById.size > 0) {
+      ph.milestones.firstEoCueIssued = timeSec;
+    }
+    if (ph.milestones.firstEoTrackCreated < 0 && this.eoTracksById.size > 0) {
+      ph.milestones.firstEoTrackCreated = timeSec;
+    }
+    if (ph.milestones.firstGeometryEstimate < 0 && this.state.geometryEstimates.size > 0) {
+      ph.milestones.firstGeometryEstimate = timeSec;
+    }
+
+    // Track proliferation detection
+    const gt = this.getGroundTruth();
+    if (gt.length > 0) {
+      const ratio = this.state.tracks.length / gt.length;
+      if (ratio > ph.peakTrackToGtRatio) {
+        ph.peakTrackToGtRatio = ratio;
+      }
+      if (ratio > 3 && timeSec > 30 && !ph.alerts.some(a => a.stage === 'track_proliferation' && timeSec - a.timeSec < 30)) {
+        ph.alerts.push({
+          stage: 'track_proliferation',
+          message: `Track proliferation: ${this.state.tracks.length} tracks for ${gt.length} targets (ratio ${ratio.toFixed(1)}:1)`,
+          severity: ratio > 5 ? 'critical' : 'warning',
+          timeSec,
+        });
+        this.pushEvent('pipeline.alert', `⚠ Track proliferation: ${this.state.tracks.length}/${gt.length} ratio`, { ratio, severity: ratio > 5 ? 'critical' : 'warning' });
+      }
+    }
+
+    // EO bearing gap detection: warn if bearings are received but never matched
+    if (timeSec > 30 && ph.bearingsReceived > 10 && ph.bearingsMatched === 0 &&
+        !ph.alerts.some(a => a.stage === 'eo_bearing_gap')) {
+      ph.alerts.push({
+        stage: 'eo_bearing_gap',
+        message: `EO bearing gap: ${ph.bearingsReceived} bearings received but 0 matched to cues`,
+        severity: 'critical',
+        timeSec,
+      });
+      this.pushEvent('pipeline.alert', '⚠ EO bearing gap: no bearings matching cues', { received: ph.bearingsReceived, matched: 0 });
+    }
+
+    // EO track creation gap: warn if cues exist but no EO tracks for >30s
+    if (this.eoTracksById.size > 0) {
+      ph.ticksSinceLastEoTrack = 0;
+    } else {
+      ph.ticksSinceLastEoTrack++;
+    }
+    if (ph.ticksSinceLastEoTrack > 60 && this.activeCuesById.size > 0 &&
+        !ph.alerts.some(a => a.stage === 'eo_track_gap' && timeSec - a.timeSec < 60)) {
+      ph.alerts.push({
+        stage: 'eo_track_gap',
+        message: 'No EO tracks created in 60s despite active cues',
+        severity: 'warning',
+        timeSec,
+      });
+    }
+
+    // Geometry gap: warn if EO tracks exist but no geometry for >60s
+    if (this.state.geometryEstimates.size > 0) {
+      ph.ticksSinceLastGeometry = 0;
+    } else {
+      ph.ticksSinceLastGeometry++;
+    }
+
+    // Compute overall health score
+    let score = 100;
+    const falseTrackRate = this.cachedQualityMetrics?.falseTrackRate ?? 0;
+    score -= falseTrackRate * 30; // -30 for 100% false tracks
+    if (ph.bearingsReceived > 10 && ph.bearingsMatched === 0) score -= 20;
+    if (ph.ticksSinceLastEoTrack > 30 && this.activeCuesById.size > 0) score -= 10;
+    if (ph.peakTrackToGtRatio > 3) score -= 15;
+    ph.healthScore = Math.max(0, Math.min(100, score));
+
+    // Keep only last 50 alerts
+    if (ph.alerts.length > 50) {
+      ph.alerts = ph.alerts.slice(-50);
+    }
+  }
+
+  /** Get pipeline health metrics (for API/diagnostics). */
+  getPipelineHealth(): typeof this.pipelineHealth {
+    return this.pipelineHealth;
   }
 
   // ── Before/After EO Comparison (REQ-9) ─────────────────────────────
@@ -5553,6 +5710,19 @@ export class LiveEngine {
       // Connected user counts
       connectedUsers: this.getConnectedUsers(),
       autoLoopEnabled: this.autoLoopEnabled,
+      // Pipeline health monitoring
+      pipelineHealth: {
+        healthScore: this.pipelineHealth.healthScore,
+        milestones: this.pipelineHealth.milestones,
+        bearingsReceived: this.pipelineHealth.bearingsReceived,
+        bearingsMatched: this.pipelineHealth.bearingsMatched,
+        bearingsUnmatched: this.pipelineHealth.bearingsUnmatched,
+        peakTrackToGtRatio: this.pipelineHealth.peakTrackToGtRatio,
+        alertCount: this.pipelineHealth.alerts.length,
+        latestAlert: this.pipelineHealth.alerts.length > 0
+          ? this.pipelineHealth.alerts[this.pipelineHealth.alerts.length - 1]
+          : undefined,
+      },
     });
 
     // Separate ground truth broadcast

@@ -51,4 +51,9 @@ export function registerQualityRoutes(app: FastifyInstance, engine: LiveEngine) 
   app.get('/api/quality/convergence', async () => {
     return engine.getConvergenceStates();
   });
+
+  // GET /api/quality/pipeline-health — Returns pipeline health monitoring data
+  app.get('/api/quality/pipeline-health', async () => {
+    return engine.getPipelineHealth();
+  });
 }

@@ -696,7 +696,20 @@ export class TrackManager {
         ];
       }
 
-      // Transition to dropped
+      // Enforce maxCoastingTimeSec: drop tracks that have been coasting too long
+      const maxCoastingSec = this.config.maxCoastingTimeSec ?? 15;
+      if (track.status === 'coasting' && meta.missCount > (coastThreshold + maxCoastingSec)) {
+        track.status = 'dropped';
+        track.lineage = [
+          ...track.lineage,
+          createLineageEntry(
+            'track.dropped',
+            `Dropped: coasting exceeded max ${maxCoastingSec}s (${meta.missCount} misses)`,
+          ),
+        ];
+      }
+
+      // Transition to dropped on low existence probability
       if (meta.existenceProbability < deleteThreshold) {
         track.status = 'dropped';
         track.lineage = [
