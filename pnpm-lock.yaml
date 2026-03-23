@@ -270,6 +270,31 @@ importers:
         specifier: ^3.0.0
         version: 3.2.4(@types/node@25.5.0)(tsx@4.21.0)
 
+  packages/eo-core:
+    dependencies:
+      '@eloc2/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@eloc2/geometry':
+        specifier: workspace:*
+        version: link:../geometry
+      '@eloc2/sensor-bus':
+        specifier: workspace:*
+        version: link:../sensor-bus
+      '@eloc2/shared-utils':
+        specifier: workspace:*
+        version: link:../shared-utils
+    devDependencies:
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(postcss@8.5.8)(tsx@4.21.0)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.4(@types/node@25.5.0)(tsx@4.21.0)
+
   packages/eo-investigation:
     dependencies:
       '@eloc2/domain':
@@ -557,6 +582,31 @@ importers:
       '@types/node':
         specifier: ^25.5.0
         version: 25.5.0
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(postcss@8.5.8)(tsx@4.21.0)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.4(@types/node@25.5.0)(tsx@4.21.0)
+
+  packages/system-fuser:
+    dependencies:
+      '@eloc2/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@eloc2/fusion-core':
+        specifier: workspace:*
+        version: link:../fusion-core
+      '@eloc2/sensor-bus':
+        specifier: workspace:*
+        version: link:../sensor-bus
+      '@eloc2/shared-utils':
+        specifier: workspace:*
+        version: link:../shared-utils
+    devDependencies:
       tsup:
         specifier: ^8.3.0
         version: 8.5.1(postcss@8.5.8)(tsx@4.21.0)(typescript@5.9.3)
