@@ -364,7 +364,9 @@ export function updateTrackTrailLayer(
   const features: GeoJSON.Feature[] = [];
 
   for (const [trackId, positions] of trailHistory) {
-    const status = trackStatusMap.get(trackId) ?? 'tentative';
+    // Skip orphaned trails for tracks no longer in active set
+    if (!trackStatusMap.has(trackId)) continue;
+    const status = trackStatusMap.get(trackId)!;
     const color = statusColor(status);
     const count = positions.length;
     // Skip last position (that's the current track icon position)
