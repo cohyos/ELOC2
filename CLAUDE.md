@@ -26,6 +26,10 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 - **Schemas**: `packages/schemas` — Zod validation schemas for API payloads
 - **Shared Utils**: `packages/shared-utils` — Common utilities shared across packages
 - **Validation**: `packages/validation` — Input validation and assertion helpers
+- **Sensor Bus**: `packages/sensor-bus` — EventEmitter-based message bus for distributed sensor architecture (Redis-ready)
+- **Sensor Instances**: `packages/sensor-instances` — Independent sensor classes (RadarSensorInstance, EoSensorInstance, C4isrSensorInstance)
+- **EO Core**: `packages/eo-core` — EO CORE entity: bearing aggregation, cross-sensor triangulation, EO track management, investigator coordinator
+- **System Fuser**: `packages/system-fuser` — Track-to-track fusion, DistributedPipeline orchestrator, LifecycleManager
 
 ## Key Files
 - `apps/api/src/simulation/live-engine.ts` — Main simulation loop, WS broadcast, geometry & fusion integration
@@ -71,8 +75,22 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 - `packages/domain/src/weather.ts` — Weather condition types and effects
 - `apps/workstation/src/reports/ReportModal.tsx` — Report type/time selection modal (REQ-19)
 - `apps/workstation/src/admin/UserManagementView.tsx` — User management page (REQ-23)
+- `packages/sensor-bus/src/bus.ts` — SensorBus EventEmitter message bus
+- `packages/sensor-bus/src/types.ts` — SensorTrackReport, BearingReport, SystemCommand, GroundTruthBroadcast
+- `packages/sensor-instances/src/base-sensor.ts` — Abstract SensorInstance base (own TrackManager, GT filtering, commands)
+- `packages/sensor-instances/src/radar-sensor.ts` — RadarSensorInstance (local tracks, dual-hypothesis BM/ABT)
+- `packages/sensor-instances/src/eo-sensor.ts` — EoSensorInstance (gimbal, bearing reports, cue/search handling)
+- `packages/sensor-instances/src/c4isr-sensor.ts` — C4isrSensorInstance (system-level local tracks)
+- `packages/eo-core/src/eo-core.ts` — EoCoreEntity (bearing aggregation → triangulation → EO tracks)
+- `packages/eo-core/src/investigator-coordinator.ts` — Greedy EO sensor-to-track assignment with dwell/revisit
+- `packages/system-fuser/src/system-fuser.ts` — Track-to-track fusion (Mahalanobis correlation + information-matrix)
+- `packages/system-fuser/src/distributed-pipeline.ts` — DistributedPipeline orchestrator (full GT→system tracks pipeline)
+- `packages/system-fuser/src/lifecycle-manager.ts` — LifecycleManager (WS disconnect cleanup, scenario switch, reset)
 
 ## Data Flow
+
+### Monolithic Pipeline (LiveEngine — current production)
+
 1. `ScenarioRunner.step()` generates `SimulationEvent[]` (observations, bearings, faults)
 2. `LiveEngine.processSimEvent()` feeds observations through `TrackManager.processObservation()`
 3. Fusion-mode-selector picks basic/conservative/centralized based on registration health
@@ -83,6 +101,18 @@ Monorepo: `packages/` (domain libs) + `apps/` (api, workstation, simulator).
 8. `DebugOverlay` renders via native Leaflet layers (markers, polylines, circles, polygons)
 9. Auth middleware (`auth-plugin.ts`) validates session tokens on protected routes when `AUTH_ENABLED=true`
 10. ASTERIX adapter can ingest live CAT-048/CAT-062 UDP feeds and convert to internal observation format
+
+### Distributed Pipeline (New — 124 tests, ready for integration)
+1. `DistributedPipeline.tick()` broadcasts `GroundTruthBroadcast` on `SensorBus`
+2. Each `SensorInstance` receives GT, filters by coverage, generates observations
+3. Radar/C4ISR sensors maintain local tracks via own `TrackManager`, publish `SensorTrackReport`
+4. EO sensors generate bearing reports via `generateEoBearing()`, publish `BearingReport`
+5. `EoCoreEntity` aggregates bearings, finds cross-sensor matches, triangulates (≥2 sensors)
+6. EO CORE publishes triangulated positions as `SensorTrackReport` (sensorId=`EO-CORE`)
+7. `SystemFuser` correlates all incoming local tracks → fuses into system tracks
+8. `InvestigatorCoordinator` assigns EO sensors to highest-priority system tracks via `CueCommand`
+9. System-level classification sends `GatingOverrideCommand` to sensors for BM/ABT gating
+10. `LifecycleManager` handles cleanup on WS disconnect, scenario switch, reset/destroy
 
 ## Knowledge Base — Source of Truth
 
@@ -170,6 +200,18 @@ See `Knowledge_Base_and_Agents_instructions/Instructor_Operator_UX_Plan.md` for 
 | REQ-21 | Instructor Button Grouping | ✅ Complete |
 | REQ-22 | Operator Mode Restrictions | ✅ Complete |
 | REQ-23 | User Management Page | ✅ Complete |
+
+### Distributed Sensor Architecture (2026-03-23, branch `claude/eloc2-development-QxD7P`)
+
+| Milestone | Status | Tests | Key Deliverables |
+|-----------|--------|-------|-----------------|
+| 1: Sensor Bus + Base | ✅ Complete | 11 | SensorBus (EventEmitter), SensorInstance abstract base, GT filtering |
+| 2: Radar + C4ISR | ✅ Complete | 54 | RadarSensorInstance, C4isrSensorInstance, sensor factory |
+| 3: EO + CORE | ✅ Complete | 21 | EoSensorInstance (gimbal), EoCoreEntity (triangulation), InvestigatorCoordinator |
+| 4: System Fuser | ✅ Complete | 12 | SystemFuser (track-to-track fusion, merge, lifecycle) |
+| 5: Pipeline + Integration | ✅ Complete | 11 | DistributedPipeline orchestrator, 11 E2E integration tests |
+| 6: Classification + Lifecycle | ✅ Complete | 15 | ABT/BM gating override, LifecycleManager (WS cleanup, scenario switch) |
+| **Total** | **Complete** | **124** | **4 new packages, full distributed pipeline** |
 
 ### System Updates (2026-03-20, branch `claude/review-knowledge-base-FTTzx`)
 

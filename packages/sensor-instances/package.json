@@ -1,0 +1,26 @@
+{
+  "name": "@eloc2/sensor-instances",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@eloc2/domain": "workspace:*",
+    "@eloc2/sensor-bus": "workspace:*",
+    "@eloc2/fusion-core": "workspace:*",
+    "@eloc2/registration": "workspace:*",
+    "@eloc2/shared-utils": "workspace:*",
+    "@eloc2/simulator": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.0",
+    "vitest": "^3.0.0",
+    "typescript": "^5.7.0"
+  }
+}
