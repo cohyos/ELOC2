@@ -10,12 +10,11 @@
 
 import { SensorBus } from '@eloc2/sensor-bus';
 import type { GroundTruthBroadcast, GroundTruthTarget } from '@eloc2/sensor-bus';
-import type { SensorInstanceConfig } from '@eloc2/sensor-instances';
+import type { SensorInstanceConfig, ObservationGenerators } from '@eloc2/sensor-instances';
 import {
-  RadarSensorInstance,
-  EoSensorInstance,
-  C4isrSensorInstance,
+  createSensorInstances,
   SensorInstance,
+  EoSensorInstance,
 } from '@eloc2/sensor-instances';
 import { EoCoreEntity } from '@eloc2/eo-core';
 import type { EoSensorInfo, TaskableTrack } from '@eloc2/eo-core';
@@ -30,6 +29,8 @@ import type { FusedSystemTrack, SystemFuserConfig } from './types.js';
 export interface DistributedPipelineConfig {
   sensors: SensorInstanceConfig[];
   fuserConfig?: Partial<SystemFuserConfig>;
+  /** Optional observation generators for decoupling from simulator. */
+  generators?: ObservationGenerators;
 }
 
 export interface PipelineTickResult {
@@ -58,24 +59,8 @@ export class DistributedPipeline {
   constructor(config: DistributedPipelineConfig) {
     this.bus = new SensorBus();
 
-    // Create sensor instances
-    for (const sensorConfig of config.sensors) {
-      let sensor: SensorInstance;
-      switch (sensorConfig.type) {
-        case 'radar':
-          sensor = new RadarSensorInstance(sensorConfig, this.bus);
-          break;
-        case 'eo':
-          sensor = new EoSensorInstance(sensorConfig, this.bus);
-          break;
-        case 'c4isr':
-          sensor = new C4isrSensorInstance(sensorConfig, this.bus);
-          break;
-        default:
-          throw new Error(`Unknown sensor type: ${sensorConfig.type}`);
-      }
-      this.sensors.push(sensor);
-    }
+    // Create sensor instances via factory (supports DI generators)
+    this.sensors = createSensorInstances(config.sensors, this.bus, config.generators);
 
     // Create EO CORE — aggregates bearings from all EO sensors, triangulates
     this.eoCore = new EoCoreEntity(this.bus);
