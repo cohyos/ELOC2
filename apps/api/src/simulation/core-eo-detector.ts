@@ -429,7 +429,21 @@ export class CoreEoTargetDetector {
             triResult.missDistanceM, selected, uniqueSensors, now,
           );
         } else {
-          // Clear triangulation — create target immediately
+          // Temporal consistency gate for low-sensor-count intersections:
+          // 2-sensor intersections are noisy — require seeing them twice before
+          // creating a real target. 3+ sensor groups are more reliable and
+          // create targets immediately.
+          if (uniqueSensors.size <= 2) {
+            const groupKey = [...uniqueSensors].sort().join('+');
+            const existingCandidate = this.findAmbiguityCandidateByGroup(groupKey);
+            if (!existingCandidate) {
+              this.addOrUpdateAmbiguityCandidate(
+                groupKey, triResult.position, triResult.intersectionAngleDeg,
+                triResult.missDistanceM, selected, uniqueSensors, now,
+              );
+              continue; // Wait for next tick confirmation
+            }
+          }
           // Propagate best image quality from contributing detections
           const bestIq = Math.max(...selected.map(d => d.imageQuality));
           const target: EoTarget3D = {
@@ -904,6 +918,14 @@ export class CoreEoTargetDetector {
    * Add or update an ambiguity candidate. Each candidate is tracked by the
    * ConsistencyEvaluator to assess whether it represents a real target.
    */
+  /** Find an existing ambiguity candidate by group key */
+  private findAmbiguityCandidateByGroup(groupKey: string): AmbiguityCandidate | undefined {
+    for (const c of this.ambiguityCandidates.values()) {
+      if (c.groupKey === groupKey && !c.resolved) return c;
+    }
+    return undefined;
+  }
+
   private addOrUpdateAmbiguityCandidate(
     groupKey: string,
     position: Position3D,
