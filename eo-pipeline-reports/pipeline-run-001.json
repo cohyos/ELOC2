@@ -1,7 +1,7 @@
 [
   {
     "runId": 1,
-    "timestamp": "2026-03-23T23:00:47.367Z",
+    "timestamp": "2026-03-24T06:15:01.772Z",
     "simTimeSec": 200,
     "phase": "Phase 1: Fighter (t=200)",
     "bearing": {
@@ -125,7 +125,7 @@
   },
   {
     "runId": 1,
-    "timestamp": "2026-03-23T23:00:48.197Z",
+    "timestamp": "2026-03-24T06:15:02.363Z",
     "simTimeSec": 450,
     "phase": "Phase 2: Formation (t=450)",
     "bearing": {
@@ -260,7 +260,7 @@
   },
   {
     "runId": 1,
-    "timestamp": "2026-03-23T23:00:51.703Z",
+    "timestamp": "2026-03-24T06:15:05.019Z",
     "simTimeSec": 660,
     "phase": "Phase 3: Ballistic (t=660)",
     "bearing": {
@@ -393,7 +393,7 @@
   },
   {
     "runId": 1,
-    "timestamp": "2026-03-23T23:00:59.578Z",
+    "timestamp": "2026-03-24T06:15:11.502Z",
     "simTimeSec": 1050,
     "phase": "Phase 4a: Dense Early (t=1050)",
     "bearing": {
@@ -429,9 +429,9 @@
       }
     },
     "correlation": {
-      "totalGroups": 27,
-      "multiSensorGroups": 27,
-      "singleSensorGroups": 0,
+      "totalGroups": 26,
+      "multiSensorGroups": 25,
+      "singleSensorGroups": 1,
       "groupPurity": 0,
       "gtCompleteness": 1,
       "bearingContinuity": 1,
@@ -454,21 +454,21 @@
       }
     },
     "triangulation": {
-      "totalAttempts": 27,
-      "successCount": 27,
-      "successRate": 1,
-      "avgPositionErrorM": 5785.050129878953,
+      "totalAttempts": 26,
+      "successCount": 25,
+      "successRate": 0.9615384615384616,
+      "avgPositionErrorM": 5924.629559008039,
       "maxPositionErrorM": 31326.62588393891,
-      "avgIntersectionAngleDeg": 69.97319372309614,
-      "avgMissDistanceM": 404.7009862885479,
-      "ambiguityCount": 0,
+      "avgIntersectionAngleDeg": 72.63733718387454,
+      "avgMissDistanceM": 338.44751386767194,
+      "ambiguityCount": 1,
       "classificationDist": {
-        "confirmed_3d": 19,
-        "candidate_3d": 8
+        "confirmed_3d": 18,
+        "candidate_3d": 7
       }
     },
     "track": {
-      "eoTracksCreated": 27,
+      "eoTracksCreated": 25,
       "aliveTrackCount": 4,
       "trackToGtRatio": 0.8,
       "gtCoverage": 0.8,
@@ -505,7 +505,7 @@
         "score": 70,
         "grade": "B",
         "issues": [
-          "High pos error: 5785m"
+          "High pos error: 5925m"
         ]
       },
       {
@@ -526,7 +526,7 @@
   },
   {
     "runId": 1,
-    "timestamp": "2026-03-23T23:01:18.554Z",
+    "timestamp": "2026-03-24T06:15:24.507Z",
     "simTimeSec": 1300,
     "phase": "Phase 4b: Dense Mid (t=1300)",
     "bearing": {
@@ -565,9 +565,9 @@
       }
     },
     "correlation": {
-      "totalGroups": 34,
-      "multiSensorGroups": 34,
-      "singleSensorGroups": 0,
+      "totalGroups": 33,
+      "multiSensorGroups": 32,
+      "singleSensorGroups": 1,
       "groupPurity": 0,
       "gtCompleteness": 1.3333333333333333,
       "bearingContinuity": 1,
@@ -590,21 +590,21 @@
       }
     },
     "triangulation": {
-      "totalAttempts": 34,
-      "successCount": 34,
-      "successRate": 1,
-      "avgPositionErrorM": 4395.848306214371,
+      "totalAttempts": 33,
+      "successCount": 32,
+      "successRate": 0.9696969696969697,
+      "avgPositionErrorM": 4475.701486082101,
       "maxPositionErrorM": 17275.430627793503,
-      "avgIntersectionAngleDeg": 71.38624004763021,
-      "avgMissDistanceM": 285.281624963216,
-      "ambiguityCount": 0,
+      "avgIntersectionAngleDeg": 73.5559175216467,
+      "avgMissDistanceM": 226.05738955157346,
+      "ambiguityCount": 1,
       "classificationDist": {
-        "confirmed_3d": 25,
-        "candidate_3d": 9
+        "confirmed_3d": 24,
+        "candidate_3d": 8
       }
     },
     "track": {
-      "eoTracksCreated": 34,
+      "eoTracksCreated": 32,
       "aliveTrackCount": 8,
       "trackToGtRatio": 1.3333333333333333,
       "gtCoverage": 0.5,
@@ -641,7 +641,7 @@
         "score": 85,
         "grade": "A",
         "issues": [
-          "Pos error: 4396m"
+          "Pos error: 4476m"
         ]
       },
       {
