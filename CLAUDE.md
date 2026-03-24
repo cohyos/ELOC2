@@ -411,7 +411,7 @@ See `Knowledge_Base_and_Agents_instructions/Instructor_Operator_UX_Plan.md` for 
 - **Auth startup safety**: Auth plugin (`auth-plugin.ts`) connects to PostgreSQL synchronously at startup. If `AUTH_ENABLED=true` but `DATABASE_URL` is missing/wrong, the container will hang and fail Cloud Run health check. Always set `AUTH_ENABLED=false` in CI unless DB credentials are configured in the build trigger
 - **DB password**: Never hardcode in `cloudbuild.yaml`. Pass via `--substitutions=_DB_PASSWORD=xxx` or use Secret Manager
 - **Cloud SQL proxy**: The `--add-cloudsql-instances` flag is only needed when `AUTH_ENABLED=true`
-- **Health check**: Cloud Run expects HTTP 200 on `/api/health` within startup timeout. If server hangs on DB connection, increase `--startup-cpu-boost` or fix the root cause
+- **Health check**: Cloud Run expects HTTP 200 on `/api/health` within startup timeout. If server hangs on DB connection, increase `--cpu-boost` or fix the root cause
 
 ### Security Configuration (2026-03-24)
 - **Docker**: Container runs as non-root `eloc2` user; source maps stripped from prod image
