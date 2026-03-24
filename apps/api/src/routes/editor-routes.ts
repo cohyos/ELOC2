@@ -166,8 +166,8 @@ export async function editorRoutes(app: FastifyInstance, engine: LiveEngine) {
       return reply.code(400).send({ error: 'lat, lon, alt, speed, and headingDeg are required' });
     }
 
-    const state = engine.getState();
-    if (!state.running) {
+    const simState = engine.getSimulationState().state;
+    if (simState === 'idle' || simState === 'resetting') {
       return reply.code(409).send({ error: 'No scenario is currently running' });
     }
 

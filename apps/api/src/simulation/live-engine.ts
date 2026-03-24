@@ -5721,6 +5721,11 @@ export class LiveEngine {
     };
   }
 
+  /** Public method for routes to trigger an immediate state broadcast */
+  notifyStateChange(): void {
+    this.broadcastRap(true);
+  }
+
   private broadcastRap(_force = false): void {
     // No throttling — every tick broadcasts to frontend regardless of speed.
     // Speed compresses wall-clock time but must not skip pipeline steps or outputs.
