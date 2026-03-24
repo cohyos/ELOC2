@@ -1,7 +1,7 @@
 [
   {
     "runId": 1,
-    "timestamp": "2026-03-24T06:15:01.772Z",
+    "timestamp": "2026-03-24T06:50:58.657Z",
     "simTimeSec": 200,
     "phase": "Phase 1: Fighter (t=200)",
     "bearing": {
@@ -125,7 +125,7 @@
   },
   {
     "runId": 1,
-    "timestamp": "2026-03-24T06:15:02.363Z",
+    "timestamp": "2026-03-24T06:50:59.484Z",
     "simTimeSec": 450,
     "phase": "Phase 2: Formation (t=450)",
     "bearing": {
@@ -161,9 +161,9 @@
       }
     },
     "correlation": {
-      "totalGroups": 8,
+      "totalGroups": 11,
       "multiSensorGroups": 8,
-      "singleSensorGroups": 0,
+      "singleSensorGroups": 3,
       "groupPurity": 0,
       "gtCompleteness": 1,
       "bearingContinuity": 0.9493670886075949,
@@ -186,14 +186,14 @@
       }
     },
     "triangulation": {
-      "totalAttempts": 8,
+      "totalAttempts": 11,
       "successCount": 8,
-      "successRate": 1,
+      "successRate": 0.7272727272727273,
       "avgPositionErrorM": 1307.7694704795435,
       "maxPositionErrorM": 2129.669108463778,
       "avgIntersectionAngleDeg": 67.74179806335677,
       "avgMissDistanceM": 90.02890381370132,
-      "ambiguityCount": 0,
+      "ambiguityCount": 3,
       "classificationDist": {
         "candidate_3d": 4,
         "confirmed_3d": 4
@@ -260,7 +260,7 @@
   },
   {
     "runId": 1,
-    "timestamp": "2026-03-24T06:15:05.019Z",
+    "timestamp": "2026-03-24T06:51:02.655Z",
     "simTimeSec": 660,
     "phase": "Phase 3: Ballistic (t=660)",
     "bearing": {
@@ -291,9 +291,9 @@
       }
     },
     "correlation": {
-      "totalGroups": 17,
+      "totalGroups": 20,
       "multiSensorGroups": 17,
-      "singleSensorGroups": 0,
+      "singleSensorGroups": 3,
       "groupPurity": 1,
       "gtCompleteness": 1,
       "bearingContinuity": 1,
@@ -315,14 +315,14 @@
       }
     },
     "triangulation": {
-      "totalAttempts": 17,
+      "totalAttempts": 20,
       "successCount": 17,
-      "successRate": 1,
+      "successRate": 0.85,
       "avgPositionErrorM": 17472.291657965383,
       "maxPositionErrorM": 21498.970910450105,
       "avgIntersectionAngleDeg": 67.72618115130355,
       "avgMissDistanceM": 100.10241625620216,
-      "ambiguityCount": 0,
+      "ambiguityCount": 3,
       "classificationDist": {
         "confirmed_3d": 9,
         "candidate_3d": 8
@@ -393,7 +393,7 @@
   },
   {
     "runId": 1,
-    "timestamp": "2026-03-24T06:15:11.502Z",
+    "timestamp": "2026-03-24T06:51:09.436Z",
     "simTimeSec": 1050,
     "phase": "Phase 4a: Dense Early (t=1050)",
     "bearing": {
@@ -429,9 +429,9 @@
       }
     },
     "correlation": {
-      "totalGroups": 26,
+      "totalGroups": 29,
       "multiSensorGroups": 25,
-      "singleSensorGroups": 1,
+      "singleSensorGroups": 4,
       "groupPurity": 0,
       "gtCompleteness": 1,
       "bearingContinuity": 1,
@@ -454,14 +454,14 @@
       }
     },
     "triangulation": {
-      "totalAttempts": 26,
+      "totalAttempts": 29,
       "successCount": 25,
-      "successRate": 0.9615384615384616,
+      "successRate": 0.8620689655172413,
       "avgPositionErrorM": 5924.629559008039,
       "maxPositionErrorM": 31326.62588393891,
       "avgIntersectionAngleDeg": 72.63733718387454,
       "avgMissDistanceM": 338.44751386767194,
-      "ambiguityCount": 1,
+      "ambiguityCount": 4,
       "classificationDist": {
         "confirmed_3d": 18,
         "candidate_3d": 7
@@ -526,7 +526,7 @@
   },
   {
     "runId": 1,
-    "timestamp": "2026-03-24T06:15:24.507Z",
+    "timestamp": "2026-03-24T06:51:24.279Z",
     "simTimeSec": 1300,
     "phase": "Phase 4b: Dense Mid (t=1300)",
     "bearing": {
@@ -565,9 +565,9 @@
       }
     },
     "correlation": {
-      "totalGroups": 33,
+      "totalGroups": 37,
       "multiSensorGroups": 32,
-      "singleSensorGroups": 1,
+      "singleSensorGroups": 5,
       "groupPurity": 0,
       "gtCompleteness": 1.3333333333333333,
       "bearingContinuity": 1,
@@ -590,14 +590,14 @@
       }
     },
     "triangulation": {
-      "totalAttempts": 33,
+      "totalAttempts": 37,
       "successCount": 32,
-      "successRate": 0.9696969696969697,
+      "successRate": 0.8648648648648649,
       "avgPositionErrorM": 4475.701486082101,
       "maxPositionErrorM": 17275.430627793503,
       "avgIntersectionAngleDeg": 73.5559175216467,
       "avgMissDistanceM": 226.05738955157346,
-      "ambiguityCount": 1,
+      "ambiguityCount": 5,
       "classificationDist": {
         "confirmed_3d": 24,
         "candidate_3d": 8
