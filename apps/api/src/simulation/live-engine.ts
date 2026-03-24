@@ -2776,6 +2776,15 @@ export class LiveEngine {
     for (const [sensorId, dwell] of this.dwellState) {
       const elapsed = nowSec - dwell.dwellStartSec;
       if (elapsed >= dwell.dwellDurationSec) {
+        // Operator-priority tracks: keep tracking, don't release dwell.
+        // The investigator stays locked on the target until operator removes priority.
+        if (this.operatorPriorityTracks.has(dwell.targetTrackId)) {
+          // Reset dwell timer to keep tracking continuously
+          dwell.dwellStartSec = nowSec;
+          sensorsStillDwelling.add(sensorId);
+          continue;
+        }
+
         // Dwell completed — free this sensor for reassignment
         this.dwellState.delete(sensorId);
 

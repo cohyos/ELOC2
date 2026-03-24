@@ -143,6 +143,8 @@ interface UiState {
   selectGroundTruth: (id: string | null) => void;
   setInvestigationWindowTrackId: (trackId: string | null) => void;
   setEoVideoPopupTrackId: (trackId: string | null) => void;
+  trajectoryTrackIds: Set<string>;
+  toggleTrajectory: (trackId: string) => void;
   toggleDetailPanel: () => void;
   toggleTimelinePanel: () => void;
   toggleLayer: (layer: keyof LayerVisibility) => void;
@@ -310,6 +312,15 @@ export const useUiStore = create<UiState>((set) => ({
 
   setEoVideoPopupTrackId: (trackId) =>
     set({ eoVideoPopupTrackId: trackId }),
+
+  trajectoryTrackIds: new Set<string>(),
+  toggleTrajectory: (trackId) =>
+    set((s) => {
+      const next = new Set(s.trajectoryTrackIds);
+      if (next.has(trackId)) next.delete(trackId);
+      else next.add(trackId);
+      return { trajectoryTrackIds: next };
+    }),
 
   toggleDetailPanel: () =>
     set((s) => ({ detailPanelOpen: !s.detailPanelOpen })),

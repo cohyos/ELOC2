@@ -258,9 +258,12 @@ export function DebugOverlay({
     const classify = (cls: string) => { fetch('/api/operator/classify', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ trackId: id, classification: cls }) }).catch(() => {}); };
 
     if (type === 'track') {
+      const hasTrajectory = useUiStore.getState().trajectoryTrackIds.has(id);
       actions.push(
         { label: 'Select', action: () => callbacksRef.current.onSelectTrack?.(id) },
+        { label: hasTrajectory ? 'Hide Trajectory' : 'Show Trajectory', action: () => useUiStore.getState().toggleTrajectory(id) },
         { label: 'Cue EO', action: () => { fetch('/api/operator/priority', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ trackId: id, priority: true }) }).catch(() => {}); } },
+        { label: 'Stop Cue EO', action: () => { fetch('/api/operator/priority', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ trackId: id, priority: false }) }).catch(() => {}); } },
         { label: 'Set Priority', action: () => { fetch('/api/operator/set-priority', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ trackId: id, priority: 'high' }) }).catch(() => {}); } },
         { label: 'Open EO Video', action: () => useUiStore.getState().setEoVideoPopupTrackId(id) },
       );
@@ -292,6 +295,8 @@ export function DebugOverlay({
         { label: 'Release Sensor', action: () => { fetch('/api/operator/release-sensor', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ sensorId: id }) }).catch(() => {}); } },
       );
       if (isEo) {
+        const sectorScanState = useSensorStore.getState().sectorScan;
+        const isSectorScanning = sectorScanState?.active && sectorScanState.scanners.some(s => s.sensorId === id);
         actions.push(
           { label: isSearching ? 'Stop Search' : 'Start Search', action: () => {
             fetch('/api/eo/search-control', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ sensorId: id, enabled: !isSearching }) }).catch(() => {});
@@ -300,6 +305,13 @@ export function DebugOverlay({
             useUiStore.getState().setDetailView('sector-scan');
           } },
         );
+        if (isSectorScanning) {
+          actions.push(
+            { label: 'Stop Sector Scan', action: () => {
+              fetch('/api/eo/sector-scan/stop', { method: 'POST' }).catch(() => {});
+            } },
+          );
+        }
       }
     } else if (type === 'gt') {
       actions.push(
@@ -884,13 +896,44 @@ export function DebugOverlay({
 
     const filteredTrackIds = new Set(filteredTracks.map(t => t.systemTrackId as string));
     const trackStatusMap = new Map(tracks.map(t => [t.systemTrackId as string, t.status]));
+    const trajectoryTrackIds = useUiStore.getState().trajectoryTrackIds;
+
     for (const [trackId, positions] of trailHistory) {
       if (!filteredTrackIds.has(trackId)) continue;
       const status = trackStatusMap.get(trackId) ?? 'tentative';
       const color = statusColor(status);
       const count = positions.length;
       const newestTrailIdx = count - 2;
+      const showTrajectory = trajectoryTrackIds.has(trackId);
 
+      // Trajectory polyline: draw connected path when toggled on
+      if (showTrajectory && count >= 2) {
+        const latlngs = positions
+          .filter(p => Number.isFinite(p.lon) && Number.isFinite(p.lat))
+          .map(p => [p.lat, p.lon] as [number, number]);
+        if (latlngs.length >= 2) {
+          L.polyline(latlngs, {
+            color, weight: 2.5, opacity: 0.9, interactive: false,
+          }).addTo(g);
+
+          // Altitude label at track's current position
+          const track = tracks.find(t => (t.systemTrackId as string) === trackId);
+          if (track) {
+            const alt = track.state.alt ?? 0;
+            const altLabel = alt >= 1000 ? `${(alt / 1000).toFixed(1)}km` : `${Math.round(alt)}m`;
+            const lastPos = latlngs[latlngs.length - 1];
+            L.marker(lastPos, {
+              icon: icon(
+                `<span style="font:bold 9px monospace;color:${color};text-shadow:0 0 3px #000;background:rgba(0,0,0,0.6);padding:1px 3px;border-radius:2px;">ALT ${altLabel}</span>`,
+                [60, 14], [30, -8],
+              ),
+              interactive: false,
+            }).addTo(g);
+          }
+        }
+      }
+
+      // Trail dots (always shown when trails visible)
       for (let i = 0; i < count - 1; i++) {
         const age = count - 1 - i;
         const isNewest = i === newestTrailIdx;
@@ -899,7 +942,6 @@ export function DebugOverlay({
         if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
 
         if (isNewest) {
-          // Newest trail dot: use divIcon for flash animation
           L.marker([lat, lon], {
             icon: icon(
               `<div style="width:8px;height:8px;border-radius:50%;background:${color};box-shadow:0 0 6px 2px ${color};animation:trail-flash 0.8s ease-out;"></div>`,
