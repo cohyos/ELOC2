@@ -245,8 +245,10 @@ export const greenPineDefense: ScenarioDefinition = {
 
     // ── Phase 2 (t=300–600s): Shahed-136 formation (5 drones) ──
     // V-formation heading south toward Green Pine from the north.
-    // Spacing ~3 km between members — realistic for loitering munition swarm
-    // and above the 2 km merge threshold for separate track resolution.
+    // Tight ~300m spacing — realistic for loitering munition swarm.
+    // Radar alone cannot resolve these (merge threshold 2km), but the
+    // 9 staring EO sensors with 0.1° angular resolution CAN distinguish
+    // individual drones at this spacing (0.1° at 25km = ~45m resolution).
     {
       targetId: 'TGT-S136-1',
       name: 'Shahed-136 Lead',
@@ -263,53 +265,53 @@ export const greenPineDefense: ScenarioDefinition = {
     {
       targetId: 'TGT-S136-2',
       name: 'Shahed-136 Left Wing',
-      description: 'Left-wing drone, ~3 km west of lead.',
+      description: 'Left-wing drone, ~300m offset from lead.',
       classification: 'uav',
       rcs: 0.05,
       startTime: 305,
       waypoints: [
-        { time: 0, position: { lat: 31.735, lon: 34.77, alt: 300 }, velocity: { vx: 0, vy: -50, vz: 0 } },
-        { time: 150, position: { lat: 31.485, lon: 34.77, alt: 300 } },
-        { time: 300, position: { lat: 31.235, lon: 34.77, alt: 300 } },
+        { time: 0, position: { lat: 31.749, lon: 34.797, alt: 300 }, velocity: { vx: 0, vy: -50, vz: 0 } },
+        { time: 150, position: { lat: 31.499, lon: 34.797, alt: 300 } },
+        { time: 300, position: { lat: 31.249, lon: 34.797, alt: 300 } },
       ],
     },
     {
       targetId: 'TGT-S136-3',
       name: 'Shahed-136 Right Wing',
-      description: 'Right-wing drone, ~3 km east of lead.',
+      description: 'Right-wing drone, ~300m offset from lead.',
       classification: 'uav',
       rcs: 0.05,
       startTime: 305,
       waypoints: [
-        { time: 0, position: { lat: 31.735, lon: 34.83, alt: 300 }, velocity: { vx: 0, vy: -50, vz: 0 } },
-        { time: 150, position: { lat: 31.485, lon: 34.83, alt: 300 } },
-        { time: 300, position: { lat: 31.235, lon: 34.83, alt: 300 } },
+        { time: 0, position: { lat: 31.749, lon: 34.803, alt: 300 }, velocity: { vx: 0, vy: -50, vz: 0 } },
+        { time: 150, position: { lat: 31.499, lon: 34.803, alt: 300 } },
+        { time: 300, position: { lat: 31.249, lon: 34.803, alt: 300 } },
       ],
     },
     {
       targetId: 'TGT-S136-4',
       name: 'Shahed-136 Left Trail',
-      description: 'Left-trail drone, ~3 km behind and west of lead.',
+      description: 'Left-trail drone, ~500m behind left wing.',
       classification: 'uav',
       rcs: 0.05,
       startTime: 310,
       waypoints: [
-        { time: 0, position: { lat: 31.72, lon: 34.755, alt: 300 }, velocity: { vx: 0, vy: -50, vz: 0 } },
-        { time: 150, position: { lat: 31.47, lon: 34.755, alt: 300 } },
-        { time: 300, position: { lat: 31.22, lon: 34.755, alt: 300 } },
+        { time: 0, position: { lat: 31.747, lon: 34.795, alt: 300 }, velocity: { vx: 0, vy: -50, vz: 0 } },
+        { time: 150, position: { lat: 31.497, lon: 34.795, alt: 300 } },
+        { time: 300, position: { lat: 31.247, lon: 34.795, alt: 300 } },
       ],
     },
     {
       targetId: 'TGT-S136-5',
       name: 'Shahed-136 Right Trail',
-      description: 'Right-trail drone, ~3 km behind and east of lead.',
+      description: 'Right-trail drone, ~500m behind right wing.',
       classification: 'uav',
       rcs: 0.05,
       startTime: 310,
       waypoints: [
-        { time: 0, position: { lat: 31.72, lon: 34.845, alt: 300 }, velocity: { vx: 0, vy: -50, vz: 0 } },
-        { time: 150, position: { lat: 31.47, lon: 34.845, alt: 300 } },
-        { time: 300, position: { lat: 31.22, lon: 34.845, alt: 300 } },
+        { time: 0, position: { lat: 31.747, lon: 34.805, alt: 300 }, velocity: { vx: 0, vy: -50, vz: 0 } },
+        { time: 150, position: { lat: 31.497, lon: 34.805, alt: 300 } },
+        { time: 300, position: { lat: 31.247, lon: 34.805, alt: 300 } },
       ],
     },
 

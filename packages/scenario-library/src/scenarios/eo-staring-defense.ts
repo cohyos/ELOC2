@@ -264,9 +264,11 @@ export const eoStaringDefense: ScenarioDefinition = {
       ],
     },
 
-    // Phase 2: Shahed-136 formation (5 drones) — wider spacing for EO resolution
-    // ~3 km spacing between members — above the 2 km merge threshold for separate
-    // track detection by both radar and EO core triangulation.
+    // Phase 2: Shahed-136 formation (5 drones) — tight spacing, EO-resolved
+    // ~300m spacing — realistic for loitering munition swarm.
+    // Staring EO sensors (0.1° resolution) can distinguish drones at this
+    // spacing via angular bearing separation. Radar merges them, but EO
+    // core triangulation produces separate 3D targets per drone.
     // Starts within N cluster coverage at ~28 km from center, heading south.
     {
       targetId: 'TGT-S136-1',
@@ -284,53 +286,53 @@ export const eoStaringDefense: ScenarioDefinition = {
     {
       targetId: 'TGT-S136-2',
       name: 'Shahed-136 Left Wing',
-      description: 'Left-wing drone, ~3 km west of lead.',
+      description: 'Left-wing drone, ~300m offset from lead.',
       classification: 'uav',
       rcs: 0.05,
       startTime: 305,
       waypoints: [
-        { time: 0, position: { lat: 31.487, lon: 34.77, alt: 500 }, velocity: { vx: 0, vy: -50, vz: 0 } },
-        { time: 150, position: { lat: 31.362, lon: 34.77, alt: 500 } },
-        { time: 300, position: { lat: 31.237, lon: 34.77, alt: 500 } },
+        { time: 0, position: { lat: 31.499, lon: 34.797, alt: 500 }, velocity: { vx: 0, vy: -50, vz: 0 } },
+        { time: 150, position: { lat: 31.374, lon: 34.797, alt: 500 } },
+        { time: 300, position: { lat: 31.249, lon: 34.797, alt: 500 } },
       ],
     },
     {
       targetId: 'TGT-S136-3',
       name: 'Shahed-136 Right Wing',
-      description: 'Right-wing drone, ~3 km east of lead.',
+      description: 'Right-wing drone, ~300m offset from lead.',
       classification: 'uav',
       rcs: 0.05,
       startTime: 305,
       waypoints: [
-        { time: 0, position: { lat: 31.487, lon: 34.83, alt: 500 }, velocity: { vx: 0, vy: -50, vz: 0 } },
-        { time: 150, position: { lat: 31.362, lon: 34.83, alt: 500 } },
-        { time: 300, position: { lat: 31.237, lon: 34.83, alt: 500 } },
+        { time: 0, position: { lat: 31.499, lon: 34.803, alt: 500 }, velocity: { vx: 0, vy: -50, vz: 0 } },
+        { time: 150, position: { lat: 31.374, lon: 34.803, alt: 500 } },
+        { time: 300, position: { lat: 31.249, lon: 34.803, alt: 500 } },
       ],
     },
     {
       targetId: 'TGT-S136-4',
       name: 'Shahed-136 Left Trail',
-      description: 'Left-trail drone, ~3 km behind and west of lead.',
+      description: 'Left-trail drone, ~500m behind left wing.',
       classification: 'uav',
       rcs: 0.05,
       startTime: 310,
       waypoints: [
-        { time: 0, position: { lat: 31.473, lon: 34.755, alt: 500 }, velocity: { vx: 0, vy: -50, vz: 0 } },
-        { time: 150, position: { lat: 31.348, lon: 34.755, alt: 500 } },
-        { time: 300, position: { lat: 31.223, lon: 34.755, alt: 500 } },
+        { time: 0, position: { lat: 31.497, lon: 34.795, alt: 500 }, velocity: { vx: 0, vy: -50, vz: 0 } },
+        { time: 150, position: { lat: 31.372, lon: 34.795, alt: 500 } },
+        { time: 300, position: { lat: 31.247, lon: 34.795, alt: 500 } },
       ],
     },
     {
       targetId: 'TGT-S136-5',
       name: 'Shahed-136 Right Trail',
-      description: 'Right-trail drone, ~3 km behind and east of lead.',
+      description: 'Right-trail drone, ~500m behind right wing.',
       classification: 'uav',
       rcs: 0.05,
       startTime: 310,
       waypoints: [
-        { time: 0, position: { lat: 31.473, lon: 34.845, alt: 500 }, velocity: { vx: 0, vy: -50, vz: 0 } },
-        { time: 150, position: { lat: 31.348, lon: 34.845, alt: 500 } },
-        { time: 300, position: { lat: 31.223, lon: 34.845, alt: 500 } },
+        { time: 0, position: { lat: 31.497, lon: 34.805, alt: 500 }, velocity: { vx: 0, vy: -50, vz: 0 } },
+        { time: 150, position: { lat: 31.372, lon: 34.805, alt: 500 } },
+        { time: 300, position: { lat: 31.247, lon: 34.805, alt: 500 } },
       ],
     },
 
