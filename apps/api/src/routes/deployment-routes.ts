@@ -116,8 +116,17 @@ export function registerDeploymentRoutes(app: FastifyInstance) {
       sensors: SensorSpec[];
       constraints: DeploymentConstraints;
     };
-  }>('/api/deployment/optimize', { preHandler: instructorGuard() }, async (request) => {
-    const { sensors, constraints } = request.body;
+  }>('/api/deployment/optimize', { preHandler: instructorGuard() }, async (request, reply) => {
+    const { sensors, constraints } = request.body ?? {} as any;
+    if (!Array.isArray(sensors) || sensors.length === 0) {
+      return reply.code(400).send({ error: 'sensors array is required and must not be empty' });
+    }
+    if (!constraints || !Array.isArray(constraints.scannedArea) || constraints.scannedArea.length < 3) {
+      return reply.code(400).send({ error: 'constraints.scannedArea polygon requires at least 3 points' });
+    }
+    if (constraints.gridResolutionM != null && (constraints.gridResolutionM < 100 || constraints.gridResolutionM > 50000)) {
+      return reply.code(400).send({ error: 'gridResolutionM must be between 100 and 50000' });
+    }
     const result = optimize(sensors, constraints);
     return result;
   });
@@ -186,8 +195,14 @@ export function registerDeploymentRoutes(app: FastifyInstance) {
       constraints: DeploymentConstraints;
       result: { placedSensors: PlacedSensor[]; metrics: any };
     };
-  }>('/api/deployment/save', { preHandler: instructorGuard() }, async (request) => {
-    const { name, sensors, constraints, result } = request.body;
+  }>('/api/deployment/save', { preHandler: instructorGuard() }, async (request, reply) => {
+    const { name, sensors, constraints, result } = request.body ?? {} as any;
+    if (!name || typeof name !== 'string' || name.length > 200) {
+      return reply.code(400).send({ error: 'name is required (max 200 chars)' });
+    }
+    if (!Array.isArray(sensors)) {
+      return reply.code(400).send({ error: 'sensors array is required' });
+    }
     const id = `deploy-${nextId++}`;
     const saved: SavedDeployment = {
       id,

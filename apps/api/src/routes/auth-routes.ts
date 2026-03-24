@@ -35,15 +35,18 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     const pool = getPool();
     const user = await findByUsername(pool, username);
     if (!user) {
+      app.log.warn({ event: 'auth.login_failed', username, ip: request.ip, reason: 'unknown_user' }, 'Login failed: unknown user');
       return reply.code(401).send({ error: 'Invalid credentials' });
     }
 
     if (!user.enabled) {
+      app.log.warn({ event: 'auth.login_failed', username, ip: request.ip, reason: 'disabled' }, 'Login failed: account disabled');
       return reply.code(403).send({ error: 'Account is disabled' });
     }
 
     const valid = await verifyPassword(password, user.password_hash);
     if (!valid) {
+      app.log.warn({ event: 'auth.login_failed', username, ip: request.ip, reason: 'bad_password' }, 'Login failed: bad password');
       return reply.code(401).send({ error: 'Invalid credentials' });
     }
 
@@ -57,6 +60,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     }
 
     // Create session
+    app.log.info({ event: 'auth.login', username, role: user.role, ip: request.ip }, 'User logged in');
     const session = await createSession(pool, user.id, user.role);
 
     // Set cookie
@@ -83,6 +87,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     preHandler: authMiddleware,
   }, async (request, reply) => {
     const pool = getPool();
+    app.log.info({ event: 'auth.logout', username: request.user!.username, ip: request.ip }, 'User logged out');
     await deleteSession(pool, request.user!.sessionId);
 
     reply.header(
@@ -147,6 +152,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     }
 
     const user = await createUser(pool, username, password, role);
+    app.log.info({ event: 'auth.user_created', username, role, createdBy: request.user?.username, ip: request.ip }, 'User created');
     return reply.code(201).send(user);
   });
 
@@ -171,6 +177,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       return reply.code(404).send({ error: 'User not found' });
     }
 
+    app.log.info({ event: 'auth.user_deleted', deletedUserId: id, deletedBy: request.user?.username, ip: request.ip }, 'User deleted');
     return { ok: true };
   });
 

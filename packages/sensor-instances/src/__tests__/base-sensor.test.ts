@@ -330,8 +330,8 @@ describe('Sensor Factory', () => {
 
   it('throws for unregistered sensor type', () => {
     expect(() =>
-      createSensorInstance(makeRadarConfig({ type: 'c4isr' }), bus),
-    ).toThrow('Unknown sensor type: c4isr');
+      createSensorInstance(makeRadarConfig({ type: 'quantum_lidar' as any }), bus),
+    ).toThrow('Unknown sensor type: quantum_lidar');
   });
 
   it('createSensorInstances batch-creates from array', () => {
