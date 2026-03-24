@@ -413,9 +413,12 @@ export class CoreEoTargetDetector {
         // High-elevation targets (>50°) have inherently poor ground-based
         // triangulation geometry — always route through ambiguity.
         const avgElevation = selected.reduce((s, d) => s + Math.abs(d.bearing.elevationDeg), 0) / selected.length;
-        const isAmbiguous = triResult.missDistanceM > this.config.ambiguousMissDistanceM
+        // Tighter quality gate for 2-sensor intersections (more prone to false positives)
+        const twoSensorMissLimit = uniqueSensors.size <= 2 ? 1500 : this.config.ambiguousMissDistanceM;
+        const isAmbiguous = triResult.missDistanceM > twoSensorMissLimit
           || triResult.intersectionAngleDeg < 10
           || (selected.length >= 3 && triResult.missDistanceM > 1000)
+          || (uniqueSensors.size <= 2 && triResult.intersectionAngleDeg < 20) // 2-sensor needs better geometry
           || avgElevation > 50;
 
         if (isAmbiguous) {
