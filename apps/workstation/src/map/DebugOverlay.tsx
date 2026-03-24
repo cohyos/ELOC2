@@ -1105,6 +1105,35 @@ export function DebugOverlay({
           interactive: false,
         }).addTo(g);
       }
+
+      // Heading line with speed-dependent dots (same style as GT targets)
+      // 4 levels: 1 dot (<50 m/s), 2 dots (<200), 3 dots (<500), 4 dots (>500)
+      if (showTracks && track.velocity) {
+        const { vx, vy, vz } = track.velocity;
+        const spd = Math.sqrt(vx * vx + vy * vy + (vz ?? 0) * (vz ?? 0));
+        if (spd > 0.5) {
+          const baseScale = 0.00015;
+          const lenFactor = spd < 50 ? 0.6 : spd < 200 ? 0.8 : spd < 500 ? 1.0 : 1.3;
+          const sc = baseScale * lenFactor;
+          const eLat = lat + (vy / spd) * sc * spd;
+          const eLon = lon + (vx / spd) * sc * spd;
+          const dots = spd < 50 ? 1 : spd < 200 ? 2 : spd < 500 ? 3 : 4;
+
+          L.polyline([[lat, lon], [eLat, eLon]], {
+            color, weight: 1.5, opacity: 0.6, interactive: false,
+          }).addTo(g);
+
+          for (let di = 0; di < dots; di++) {
+            const frac = (di + 1) / (dots + 1);
+            const dLat = lat + (eLat - lat) * frac;
+            const dLon = lon + (eLon - lon) * frac;
+            L.circleMarker([dLat, dLon], {
+              radius: (4 + di) / 2, fillColor: color, fillOpacity: 0.85,
+              color, weight: 0.5, opacity: 0.85, interactive: false,
+            }).addTo(g);
+          }
+        }
+      }
     }
   }, [tracks, filteredTracks, layerVisibility.tracks, layerVisibility.trackLabels, layerVisibility.useNatoSymbols, showGroundTruth, multiSensorResolutions, convergedTrackIds, pictureMode]);
 
