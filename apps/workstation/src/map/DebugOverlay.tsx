@@ -1208,26 +1208,41 @@ export function DebugOverlay({
       }
 
       // Velocity vector line + speed label
+      // 4 speed levels: slow (<50), medium (<200), fast (<500), very fast (>500)
+      // Rendered as a thin line with dots — more dots = faster
       if (target.velocity) {
         const { vx, vy, vz } = target.velocity;
         const speed = Math.sqrt(vx * vx + vy * vy + (vz ?? 0) * (vz ?? 0));
         if (speed > 0.1) {
-          // Direction arrow
-          const scale = 0.0003 / speed;
-          const endLat = lat + vy * scale;
-          const endLon = lon + vx * scale;
+          // Scale line length proportional to speed (longer = faster)
+          const baseScale = 0.00015;
+          const lengthFactor = speed < 50 ? 0.6 : speed < 200 ? 0.8 : speed < 500 ? 1.0 : 1.3;
+          const scale = baseScale * lengthFactor;
+          const dirLat = vy / speed;
+          const dirLon = vx / speed;
+          const endLat = lat + dirLat * scale * speed;
+          const endLon = lon + dirLon * scale * speed;
+
+          // Dot count by speed level: 1 (slow), 2 (medium), 3 (fast), 4 (very fast)
+          const dotCount = speed < 50 ? 1 : speed < 200 ? 2 : speed < 500 ? 3 : 4;
+
+          // Thin leader line (no arrowhead)
           L.polyline([[lat, lon], [endLat, endLon]], {
-            color: '#00ffff', weight: 2, opacity: 0.8, interactive: false,
+            color: '#00ffff', weight: 1.5, opacity: 0.7, interactive: false,
           }).addTo(g);
-          // Arrowhead at end of velocity vector
-          const headingDeg = Math.atan2(vx, vy) * 180 / Math.PI;
-          L.marker([endLat, endLon], {
-            icon: icon(
-              `<div style="width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:8px solid #00ffff;transform:rotate(${headingDeg}deg);opacity:0.8;"></div>`,
-              [8, 8], [4, 4],
-            ),
-            interactive: false,
-          }).addTo(g);
+
+          // Dots along the line at evenly spaced intervals
+          for (let di = 0; di < dotCount; di++) {
+            const frac = (di + 1) / (dotCount + 1);
+            const dLat = lat + (endLat - lat) * frac;
+            const dLon = lon + (endLon - lon) * frac;
+            const dotSize = 4 + di; // slightly larger dots further out
+            L.circleMarker([dLat, dLon], {
+              radius: dotSize / 2, fillColor: '#00ffff', fillOpacity: 0.9,
+              color: '#00ffff', weight: 0.5, opacity: 0.9, interactive: false,
+            }).addTo(g);
+          }
+
           // Speed label
           const speedStr = speed >= 340 ? `M${(speed / 340).toFixed(1)}` : `${Math.round(speed)}m/s`;
           const altM = target.position.alt ?? 0;
