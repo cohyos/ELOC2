@@ -3269,16 +3269,82 @@ export class LiveEngine {
       : Date.now() as Timestamp;
     const EO_FUSION_GATE_M = 3000; // 3km gate for EO→radar track fusion
 
-    // ── Step 1: Always create the EO 3D system track ──
+    // ── Step 1: Check if a nearby radar/system track already exists ──
+    // If so, enhance it directly without creating a separate EO system track.
+    // This prevents zombie EO tracks from competing with radar in the correlator.
+    let bestRadarTrack: SystemTrack | undefined;
+    let bestDistance = Infinity;
+
+    for (const track of this.state.tracks) {
+      if (track.status === 'dropped') continue;
+      if (track.fusionMode === 'eo_triangulation') continue;
+
+      const dLat = (target.position.lat - track.state.lat) * 110540;
+      const dLon = (target.position.lon - track.state.lon) * 111320 *
+        Math.cos(track.state.lat * Math.PI / 180);
+      const dAlt = target.position.alt - track.state.alt;
+      const dist = Math.sqrt(dLat * dLat + dLon * dLon + dAlt * dAlt);
+
+      if (dist < bestDistance) {
+        bestDistance = dist;
+        bestRadarTrack = track;
+      }
+    }
+
+    if (bestRadarTrack && bestDistance <= EO_FUSION_GATE_M) {
+      // ── Enhance existing radar track with EO metadata (no position change) ──
+      // EO triangulation (~km accuracy) is much less precise than radar (~50m).
+      // Modifying the radar position from EO causes accumulated drift that
+      // eventually breaks radar correlation. Instead, only update metadata.
+      const radarTrackId = bestRadarTrack.systemTrackId as string;
+
+      for (const sid of target.sensorIds) {
+        if (!bestRadarTrack.sources.includes(sid as SensorId)) {
+          bestRadarTrack.sources.push(sid as SensorId);
+        }
+      }
+
+      bestRadarTrack.lineage.push(
+        createLineageEntry(
+          'eo.target.fused',
+          `Fused EO 3D (${target.sensorIds.length} sensors, angle=${target.intersectionAngleDeg.toFixed(1)}°, dist=${bestDistance.toFixed(0)}m)`,
+        ),
+      );
+      bestRadarTrack.lastUpdated = now;
+      bestRadarTrack.eoInvestigationStatus = 'confirmed';
+
+      // Copy geometry estimate to the radar track
+      this.state.geometryEstimates.set(radarTrackId, {
+        estimateId: generateId(),
+        eoTrackIds: target.detectionIds.map(d => d as EoTrackId),
+        position3D: target.position,
+        covariance3D: undefined,
+        quality: target.intersectionAngleDeg > 15 ? 'strong' : 'acceptable',
+        classification: target.classification,
+        intersectionAngleDeg: target.intersectionAngleDeg,
+        timeAlignmentQualityMs: 0,
+        bearingNoiseDeg: 0.1,
+      } as GeometryEstimate);
+
+      // Refresh track's update tick to prevent stale marking
+      this.trackManager.setTrackUpdateTick(bestRadarTrack.systemTrackId, this.state.elapsedSec);
+
+      this.pushEvent(
+        'eo.track.fused',
+        `EO 3D from ${target.sensorIds.length} sensors fused into ${radarTrackId.slice(0, 8)} (dist=${bestDistance.toFixed(0)}m)`,
+        { radarTrackId, distance: bestDistance },
+      );
+
+      return radarTrackId;
+    }
+
+    // ── Step 2: No nearby radar track — create standalone EO system track ──
     const eoTrackId = generateId() as SystemTrackId;
 
     const eoSystemTrack: SystemTrack = {
       systemTrackId: eoTrackId,
       state: { ...target.position },
       velocity: undefined,
-      // Adaptive covariance from triangulation quality:
-      // miss distance and sensor count determine horizontal uncertainty,
-      // intersection angle determines how well-conditioned the geometry is
       covariance: (() => {
         const missSq = Math.max(100, target.missDistanceM * target.missDistanceM);
         const angleFactor = target.intersectionAngleDeg > 30 ? 1.0 :
@@ -3286,7 +3352,7 @@ export class LiveEngine {
         const sensorFactor = target.sensorIds.length >= 5 ? 0.5 :
           target.sensorIds.length >= 3 ? 0.8 : 1.5;
         const horizVar = missSq * angleFactor * sensorFactor;
-        const vertVar = horizVar * 4; // altitude 2x less certain from EO
+        const vertVar = horizVar * 4;
         return [
           [horizVar, 0, 0],
           [0, horizVar, 0],
@@ -3303,15 +3369,12 @@ export class LiveEngine {
       ],
       lastUpdated: now,
       sources: target.sensorIds.map(s => s as SensorId),
-      eoInvestigationStatus: 'in_progress', // allow investigator cueing for refinement
+      eoInvestigationStatus: 'in_progress',
       fusionMode: 'eo_triangulation',
     };
 
-    // Register EO track with TrackManager, passing current tick to prevent
-    // immediate stale-marking by markStaleTracksAsMissed
     this.trackManager.injectTrack(eoSystemTrack, this.state.elapsedSec);
 
-    // Store geometry estimate for the EO track
     this.state.geometryEstimates.set(eoTrackId as string, {
       estimateId: generateId(),
       eoTrackIds: target.detectionIds.map(d => d as EoTrackId),
@@ -3323,86 +3386,6 @@ export class LiveEngine {
       timeAlignmentQualityMs: 0,
       bearingNoiseDeg: 0.1,
     } as GeometryEstimate);
-
-    // ── Step 2: Try to fuse with existing radar/system track ──
-    let bestRadarTrack: SystemTrack | undefined;
-    let bestDistance = Infinity;
-
-    for (const track of this.state.tracks) {
-      if (track.status === 'dropped') continue;
-      // Skip tracks that are already EO-originated (don't fuse EO with EO)
-      if (track.fusionMode === 'eo_triangulation') continue;
-
-      const dLat = (target.position.lat - track.state.lat) * 110540;
-      const dLon = (target.position.lon - track.state.lon) * 111320 *
-        Math.cos(track.state.lat * Math.PI / 180);
-      const dAlt = target.position.alt - track.state.alt;
-      const dist = Math.sqrt(dLat * dLat + dLon * dLon + dAlt * dAlt);
-
-      if (dist < bestDistance) {
-        bestDistance = dist;
-        bestRadarTrack = track;
-      }
-    }
-
-    if (bestRadarTrack && bestDistance <= EO_FUSION_GATE_M) {
-      // ── Fuse EO data into existing radar track ──
-      const radarTrackId = bestRadarTrack.systemTrackId as string;
-
-      // Weighted position fusion: radar has range, EO has angular triangulation
-      const eoWeight = target.classification === 'confirmed_3d' ? 0.4 : 0.2;
-      const radarWeight = 1 - eoWeight;
-
-      bestRadarTrack.state = {
-        lat: radarWeight * bestRadarTrack.state.lat + eoWeight * target.position.lat,
-        lon: radarWeight * bestRadarTrack.state.lon + eoWeight * target.position.lon,
-        alt: radarWeight * bestRadarTrack.state.alt + eoWeight * target.position.alt,
-      };
-
-      // Add EO sensor sources to radar track
-      for (const sid of target.sensorIds) {
-        if (!bestRadarTrack.sources.includes(sid as SensorId)) {
-          bestRadarTrack.sources.push(sid as SensorId);
-        }
-      }
-
-      bestRadarTrack.lineage.push(
-        createLineageEntry(
-          'eo.target.fused',
-          `Fused with EO 3D track ${(eoTrackId as string).slice(0, 8)} (${target.sensorIds.length} sensors, angle=${target.intersectionAngleDeg.toFixed(1)}°, dist=${bestDistance.toFixed(0)}m)`,
-        ),
-      );
-      bestRadarTrack.lastUpdated = now;
-      bestRadarTrack.eoInvestigationStatus = 'confirmed';
-
-      // Also copy geometry estimate to the radar track
-      this.state.geometryEstimates.set(radarTrackId, {
-        estimateId: generateId(),
-        eoTrackIds: target.detectionIds.map(d => d as EoTrackId),
-        position3D: target.position,
-        covariance3D: undefined,
-        quality: target.intersectionAngleDeg > 15 ? 'strong' : 'acceptable',
-        classification: target.classification,
-        intersectionAngleDeg: target.intersectionAngleDeg,
-        timeAlignmentQualityMs: 0,
-        bearingNoiseDeg: 0.1,
-      } as GeometryEstimate);
-
-      // Mark the EO track as fused to the radar track
-      eoSystemTrack.lineage.push(
-        createLineageEntry(
-          'eo.track.fused',
-          `Fused into radar track ${radarTrackId.slice(0, 8)} (dist=${bestDistance.toFixed(0)}m)`,
-        ),
-      );
-
-      this.pushEvent(
-        'eo.track.fused',
-        `EO 3D track ${(eoTrackId as string).slice(0, 8)} fused into radar track ${radarTrackId.slice(0, 8)} (dist=${bestDistance.toFixed(0)}m)`,
-        { eoTrackId: eoTrackId as string, radarTrackId, distance: bestDistance },
-      );
-    }
-    // Step 3: If no match, the EO track stands alone as a new system track
 
     return eoTrackId as string;
   }
@@ -3491,7 +3474,12 @@ export class LiveEngine {
         eoTrack.velocity = newVel;
       }
 
-      eoTrack.state = { ...target.position };
+      // For EO-only tracks, use EO position directly.
+      // For radar-originated tracks, do NOT modify position — radar is far more
+      // accurate and EO updates would cause accumulated drift.
+      if (eoTrack.fusionMode === 'eo_triangulation') {
+        eoTrack.state = { ...target.position };
+      }
       eoTrack.lastUpdated = simNow;
 
       // CRITICAL: refresh lastUpdateTick so the track isn't marked stale
