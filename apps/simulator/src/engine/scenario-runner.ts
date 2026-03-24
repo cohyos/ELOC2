@@ -14,7 +14,7 @@ import {
   interpolateVelocity,
   isTargetActive,
 } from '../targets/target-generator.js';
-import { getActiveFaults, isSensorInOutage } from '../faults/fault-manager.js';
+import { getActiveFaults, isSensorInOutage, applyClockDrift } from '../faults/fault-manager.js';
 import { generateRadarObservation, generateClutterFalseAlarms } from '../sensors/radar/radar-model.js';
 import { generateEoBearing } from '../sensors/eo/eo-model.js';
 import { generateC4isrObservation } from '../sensors/c4isr-source/c4isr-model.js';
@@ -126,6 +126,14 @@ export class ScenarioRunner {
         (f) => f.sensorId === sensor.sensorId,
       );
 
+      // Phased array scan-coherent timestamp: compute once per sensor per tick.
+      // All targets detected by the same radar in the same tick share this timestamp,
+      // modeling a single scan that sweeps the entire FOV and detects ALL targets
+      // simultaneously (just like the EO staring sensor's 24Hz frame model).
+      const scanTimestampMs = sensor.type === 'radar'
+        ? applyClockDrift(this.baseTimestamp + this.currentTimeSec * 1000, sensorFaults)
+        : undefined;
+
       for (const [tgtId, tgtPos] of targetPositions) {
         const tgtVel = this.getTargetVelocity(tgtId);
         const tgtDef = this.scenario.targets.find((t) => t.targetId === tgtId);
@@ -141,7 +149,12 @@ export class ScenarioRunner {
               sensorFaults,
               tgtId,
               this.rng,
-              { rcs: tgtDef?.rcs, classification: tgtDef?.classification, weather: this.scenario.weather },
+              {
+                rcs: tgtDef?.rcs,
+                classification: tgtDef?.classification,
+                weather: this.scenario.weather,
+                scanTimestampMs,
+              },
             );
             if (obs) {
               events.push({

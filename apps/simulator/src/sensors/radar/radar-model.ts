@@ -44,6 +44,40 @@ function gaussianNoise(stddev: number, rng: () => number = Math.random): number 
 }
 
 // ---------------------------------------------------------------------------
+// Phased Array Radar Constants
+// ---------------------------------------------------------------------------
+
+/** Default scan rate for phased array radar (Hz). Electronically steered = fast. */
+const DEFAULT_SCAN_RATE_HZ = 6;
+
+/** Default PRF (Pulse Repetition Frequency) in Hz */
+const DEFAULT_PRF_HZ = 3000;
+
+/** Default radar wavelength in meters (S-band) */
+const DEFAULT_WAVELENGTH_M = 0.1;
+
+/**
+ * Compute detection probability based on RCS and range.
+ * Uses simplified radar equation: Pd degrades with range^4 / RCS.
+ * At max effective range, Pd ≈ 0.5. At half range, Pd ≈ 0.99.
+ */
+function computeDetectionProbability(
+  rangeM: number,
+  effectiveMaxRangeM: number,
+  rcs: number,
+): number {
+  if (rangeM <= 0 || effectiveMaxRangeM <= 0) return 1.0;
+  // Normalized range ratio (0 = at sensor, 1 = at max effective range)
+  const rangeFraction = rangeM / effectiveMaxRangeM;
+  // Pd follows a sigmoid-like curve: high at close range, drops near max range
+  // At fraction=0.5: Pd≈0.99, at fraction=0.9: Pd≈0.85, at fraction=1.0: Pd≈0.50
+  const basePd = 1.0 / (1.0 + Math.exp(10 * (rangeFraction - 0.95)));
+  // RCS boost: larger targets are easier to detect
+  const rcsBoost = Math.min(1.0, Math.sqrt(Math.max(rcs, 0.01)));
+  return Math.min(1.0, basePd * (0.5 + 0.5 * rcsBoost));
+}
+
+// ---------------------------------------------------------------------------
 // Doppler / radial-velocity helpers
 // ---------------------------------------------------------------------------
 
@@ -72,12 +106,6 @@ function computeRadialVelocity(
   // Project target velocity (ENU: vx=East, vy=North, vz=Up) onto LOS
   return targetVel.vx * ux + targetVel.vy * uy + (targetVel.vz ?? 0) * uz;
 }
-
-/** Default radar PRF for blind-speed calculation (Hz). */
-const DEFAULT_PRF_HZ = 3000;
-
-/** Default radar wavelength — S-band ~10 cm. */
-const DEFAULT_WAVELENGTH_M = 0.1;
 
 /**
  * Compute the first blind speed for a pulsed-Doppler radar.
@@ -194,6 +222,19 @@ export function generateRadarObservation(
     prfHz?: number;
     /** Radar wavelength in meters (for blind speed calc). Default 0.1 (S-band). */
     wavelengthM?: number;
+    /**
+     * Phased array scan rate in Hz. Multiple scans per simulation tick
+     * integrate to reduce noise by √(scansPerTick). Default 6 Hz.
+     * Set to 0 to disable scan integration.
+     */
+    scanRateHz?: number;
+    /** Simulation tick interval in seconds. Default 1. Used with scanRateHz for integration. */
+    tickIntervalSec?: number;
+    /** Pre-computed scan timestamp (ms) — ensures all targets in the same scan share one timestamp.
+     *  When provided, this overrides the internal timestamp computation. */
+    scanTimestampMs?: number;
+    /** Enable RCS-based probabilistic detection. Default true for phased array realism. */
+    enablePd?: boolean;
   },
 ): RadarObservation | undefined {
   // Check outage
@@ -230,8 +271,28 @@ export function generateRadarObservation(
     return undefined;
   }
 
-  // Position noise: +/-50m
-  const posNoise = 50;
+  // ── Phased array Pd-based probabilistic detection ──
+  // A real phased array radar has a detection probability that depends on
+  // RCS and range. Small targets at long range are sometimes missed.
+  // Opt-in: disabled by default to preserve deterministic behavior in tests.
+  if (options?.enablePd === true) {
+    const pd = computeDetectionProbability(coverage.rangeM, effectiveMaxRange, rcs);
+    const r0 = rng ?? Math.random;
+    if (r0() > pd) {
+      return undefined; // target not detected this scan
+    }
+  }
+
+  // ── Phased array scan integration ──
+  // A phased array scanning at N Hz with a simulation tick of T seconds
+  // integrates N*T scans. Noise reduces by √(N*T) (incoherent integration).
+  const scanRateHz = options?.scanRateHz ?? DEFAULT_SCAN_RATE_HZ;
+  const tickSec = options?.tickIntervalSec ?? 1;
+  const scansPerTick = Math.max(1, Math.round(scanRateHz * tickSec));
+  const integrationFactor = Math.sqrt(scansPerTick); // noise reduction
+
+  // Position noise: base ±50m, reduced by scan integration
+  const posNoise = 50 / integrationFactor;
   const r = rng ?? Math.random;
   const noisyPos: Position3D = {
     lat: targetPos.lat + gaussianNoise(posNoise / 111_320, r),
@@ -239,13 +300,14 @@ export function generateRadarObservation(
     alt: targetPos.alt + gaussianNoise(posNoise, r),
   };
 
-  // Velocity noise: +/-2 m/s
+  // Velocity noise: base ±2 m/s, reduced by scan integration
+  const velNoise = 2 / integrationFactor;
   let noisyVel: Velocity3D | undefined;
   if (targetVel) {
     noisyVel = {
-      vx: targetVel.vx + gaussianNoise(2, r),
-      vy: targetVel.vy + gaussianNoise(2, r),
-      vz: targetVel.vz + gaussianNoise(2, r),
+      vx: targetVel.vx + gaussianNoise(velNoise, r),
+      vy: targetVel.vy + gaussianNoise(velNoise, r),
+      vz: targetVel.vz + gaussianNoise(velNoise, r),
     };
   }
 
@@ -287,9 +349,12 @@ export function generateRadarObservation(
     }
   }
 
-  // Timestamp in milliseconds
-  let timestampMs = baseTimestamp + timeSec * 1000;
-  timestampMs = applyClockDrift(timestampMs, sensorFaults);
+  // Timestamp in milliseconds — use scan-coherent timestamp if provided
+  // (ensures all targets detected in the same scan share one timestamp)
+  let timestampMs = options?.scanTimestampMs ?? (baseTimestamp + timeSec * 1000);
+  if (!options?.scanTimestampMs) {
+    timestampMs = applyClockDrift(timestampMs, sensorFaults);
+  }
 
   // Covariance: diagonal, proportional to range squared.
   // Floor at range=30km equivalent to prevent over-tight covariance at close range
