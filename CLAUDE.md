@@ -150,7 +150,7 @@ The `Knowledge_Base_and_Agents_instructions/` folder contains **28 foundational 
 | `Symbology_and_Icon_Reference.md` | **Complete icon/symbol reference: track, sensor, NATO, EO popup, context menus, color palette** | **Reference** |
 | `Chunk_index.md` | Index of all knowledge base chunks for retrieval | Reference |
 
-## Current Completion (as of 2026-03-21)
+## Current Completion (as of 2026-03-24)
 
 ### Original Build Phases (0–9)
 | Phase | Status | Notes |
@@ -270,6 +270,31 @@ See `Knowledge_Base_and_Agents_instructions/Instructor_Operator_UX_Plan.md` for 
 | Terrain elevation API | ✅ Complete | GET `/api/terrain/elevation?lat=X&lon=Y` |
 | Raster map reimplementation | ✅ Complete | MapLibre replaced with Leaflet (Canvas 2D), native Leaflet layers for all rendering |
 
+### Security Hardening (2026-03-24, branch `claude/eloc2-development-QxD7P`)
+
+| Task | Status | Notes |
+|------|--------|-------|
+| SEC-1: Remove hardcoded credentials | ✅ Complete | `ADMIN_DEFAULT_PASSWORD` env var required (≥12 chars) |
+| SEC-2: Docker non-root | ✅ Complete | `eloc2` user, HEALTHCHECK, source map strip |
+| SEC-3: Security headers | ✅ Complete | HSTS, X-Frame-Options, X-Content-Type-Options, XSS-Protection |
+| SEC-4: CORS configuration | ✅ Complete | Explicit origin allowlist via `CORS_ORIGINS` env var |
+| SEC-5: Rate limiting | ✅ Complete | Login: 10 attempts / 15 min / IP |
+| SEC-6: Body size limits | ✅ Complete | Fastify bodyLimit = 10MB |
+| SEC-7: Secure cookies | ✅ Complete | `Secure` flag in production |
+| SEC-8: bcrypt → bcryptjs | ✅ Complete | Eliminates 6 HIGH tar CVEs, salt rounds 10→12 |
+| SEC-9: Auth guards | ✅ Complete | All 7 deployment POST routes require instructor role |
+| SEC-10: Path traversal fix | ✅ Complete | Deployment ID validation + path containment |
+| SEC-11: WS connection limit | ✅ Complete | Max 50 concurrent WebSocket clients |
+| SEC-12: ASTERIX validation | ✅ Complete | Host whitelist, port range, parser iteration caps |
+| SEC-13: XSS prevention | ✅ Complete | `escapeHtml()` on all popup/context menu labels |
+| SEC-14: Memory leak prevention | ✅ Complete | Track pruning in TrackManager, EoTrackManager, SystemFuser |
+| SEC-15: SensorBus error handler | ✅ Complete | Prevents process crash on unhandled EventEmitter error |
+| SEC-16: Log redaction | ✅ Complete | password, session_id, cookie, authorization fields redacted |
+| SEC-17: Error disclosure | ✅ Complete | Server errors logged internally, generic message to client |
+| SEC-18: Password policy | ✅ Complete | Min 8 chars, max 128 chars |
+| Leaflet zoom fix | ✅ Complete | `zoomSnap: 0`, `zoomDelta: 1`, `wheelDebounceTime: 80` — smooth zoom |
+| Leaflet listener cleanup | ✅ Complete | contextmenu DOM listener + drag state cleanup on unmount |
+
 ## Key Files Added
 - `apps/workstation/src/map/ctrl-box-zoom.ts` — Ctrl+drag rectangle zoom utility
 - `apps/workstation/src/libraries/LibrariesView.tsx` — Libraries view (tabbed: sensors, targets, scenarios)
@@ -280,7 +305,7 @@ See `Knowledge_Base_and_Agents_instructions/Instructor_Operator_UX_Plan.md` for 
 - `configs/deployments/` — 3 pre-defined deployment files (JSON persistence)
 - `Knowledge_Base_and_Agents_instructions/Raster_Map_Reimplementation_Design.md` — Map renderer design doc
 
-## Recent Fixes (Rounds 1-3, branch `claude/eloc2-development-U3sup`)
+## Recent Fixes (Rounds 1-5)
 
 ### Round 1 — Core rendering fixes
 - DebugOverlay gated behind `?debug=1` URL param
@@ -306,6 +331,32 @@ See `Knowledge_Base_and_Agents_instructions/Instructor_Operator_UX_Plan.md` for 
 - **Version label**: Updated to v0.3.0 with tooltip
 - **RAF batching**: ReplayController coalesces WS messages via requestAnimationFrame
 - **Pause fix**: Backend sends final broadcast with `running: false` on pause
+
+### Round 4 — Leaflet fixes (branch `claude/eloc2-development-QxD7P`)
+- **Smooth zoom**: Replaced `zoomSnap: 0.25` / `zoomDelta: 0.5` with `zoomSnap: 0` / `zoomDelta: 1` on all 3 maps — eliminates two-step zoom animation
+- **DOM listener cleanup**: `contextmenu` `addEventListener` now properly removed on unmount (was leaking on all 3 maps)
+- **Drag handler safety**: DeploymentView + EditorMap reset drag state on unmount to prevent stale `mousemove`/`mouseup` handlers
+- **wheelDebounceTime**: Added 80ms debounce to coalesce rapid scroll events
+
+### Round 5 — Security hardening (branch `claude/eloc2-development-QxD7P`)
+- **Hardcoded credentials removed**: Default `admin/admin123` replaced with `ADMIN_DEFAULT_PASSWORD` env var (≥12 chars required)
+- **Docker non-root**: Container now runs as `eloc2` user (was root), HEALTHCHECK added, source maps stripped from prod image
+- **Security headers**: X-Content-Type-Options, X-Frame-Options, HSTS, XSS-Protection, Referrer-Policy on all responses
+- **CORS**: Explicit origin allowlist via `CORS_ORIGINS` env var (defaults to localhost in dev)
+- **Rate limiting**: Login endpoint capped at 10 attempts / 15 min per IP
+- **Body limit**: Fastify bodyLimit set to 10MB (was unlimited)
+- **Secure cookie**: Session cookie gets `Secure` flag in production
+- **bcrypt → bcryptjs**: Pure JS drop-in eliminates 6 HIGH `tar` CVEs from native `bcrypt` → `@mapbox/node-pre-gyp` → `tar@6.2.1` chain; salt rounds increased 10→12
+- **Auth guards**: All 7 deployment routes now require instructor role when `AUTH_ENABLED=true`
+- **Path traversal**: Deployment ID validated non-empty + `path.resolve` containment check
+- **WS connection limit**: Max 50 concurrent WebSocket clients (was unbounded)
+- **ASTERIX validation**: Export host whitelisted (localhost only), port validated (1024-65535), parser extension loop capped (64 iterations), Mode S rep count capped (32)
+- **XSS prevention**: `escapeHtml()` applied to all popup/context menu labels in DebugOverlay
+- **Memory leak prevention**: Track pruning added to TrackManager, EoTrackManager, SystemFuser — dropped tracks auto-removed after retention period
+- **SensorBus crash prevention**: Error event handler added (prevents process crash on unhandled EventEmitter error)
+- **Log redaction**: Sensitive fields (password, session_id, cookie, authorization) redacted from Fastify logs
+- **Error disclosure**: Report routes no longer expose `err.message` to client
+- **Password policy**: Minimum 8 chars (was 6), max 128 chars
 
 ## Gap Completion Plan (Ordered)
 
@@ -362,21 +413,39 @@ See `Knowledge_Base_and_Agents_instructions/Instructor_Operator_UX_Plan.md` for 
 - **Cloud SQL proxy**: The `--add-cloudsql-instances` flag is only needed when `AUTH_ENABLED=true`
 - **Health check**: Cloud Run expects HTTP 200 on `/api/health` within startup timeout. If server hangs on DB connection, increase `--startup-cpu-boost` or fix the root cause
 
+### Security Configuration (2026-03-24)
+- **Docker**: Container runs as non-root `eloc2` user; source maps stripped from prod image
+- **Admin seed**: Default admin account requires `ADMIN_DEFAULT_PASSWORD` env var (≥12 chars). Without it, no default user is created
+- **CORS**: Set `CORS_ORIGINS=https://your-domain.com` in production. Defaults to `localhost:3000,localhost:3001` in dev
+- **Rate limiting**: Login endpoint: 10 attempts / 15 min / IP. No env var override yet
+- **WS connections**: Max 50 concurrent WebSocket clients (hardcoded in `LiveEngine.MAX_WS_CLIENTS`)
+- **Session cookies**: `Secure` flag auto-added when `NODE_ENV=production`
+- **Password policy**: Min 8 chars, max 128 chars (enforced in `auth-routes.ts`)
+- **Deployment routes**: All POST endpoints require instructor role when `AUTH_ENABLED=true`
+- **ASTERIX export**: Host restricted to localhost; port must be 1024-65535
+- **Body size**: Fastify bodyLimit = 10MB; larger payloads rejected with 413
+- **Log redaction**: Passwords, session IDs, cookies, and auth headers are redacted from Fastify logs
+
 ### Docker / CI Build Checklist
 - After adding new source files or directories, always verify the Dockerfile includes the necessary COPY steps for `package.json` (line ~10-29) and source dirs
 - Test container startup locally before pushing to Cloud Build: `docker build -t eloc2-test . && docker run -p 3001:3001 -e NODE_ENV=production eloc2-test`
 - Ensure all route endpoints (especially `/api/auth/status`) are registered before deploying
 - When fixing a blank page or UI issue in production, check BOTH the backend (missing routes/endpoints) AND the frontend build output (static files copied correctly) before declaring the fix complete
+- Container runs as non-root `eloc2` user — ensure all file paths are writable by this user
+- Source maps (`.js.map`, `.d.ts.map`) are stripped from production image automatically
+- HEALTHCHECK is configured: `GET /api/health` every 30s with 15s startup grace period
 
 ## Development
 - Package manager: pnpm (v9.15.0) with workspaces
 - Build: `pnpm build` (uses Turbo)
-- Test: `pnpm test` (73 tests, all passing)
-- Dev branch: `claude/review-knowledge-base-FTTzx`
-- Dockerfile: 2-stage build, serves workstation static files from API on port 3001
+- Test: `pnpm test` (all passing; 2 pre-existing sensor-instances failures)
+- Dev branch: `claude/eloc2-development-QxD7P`
+- Dockerfile: 2-stage build, non-root `eloc2` user, serves workstation static files from API on port 3001
 - Vite dev server on port 3000 proxies `/api` and `/ws` to 3001
-- Auth: Set `AUTH_ENABLED=true` env var to enable PostgreSQL-backed authentication (requires running DB)
+- Auth: Set `AUTH_ENABLED=true` + `DATABASE_URL` + `ADMIN_DEFAULT_PASSWORD` (≥12 chars) to enable PostgreSQL-backed authentication
 - PostgreSQL: Use `docker-compose.yml` to start the database for auth/session management
+- CORS: Set `CORS_ORIGINS` env var for production (comma-separated origins)
+- Password hashing: `bcryptjs` (pure JS, 12 salt rounds) — no native compilation needed
 
 ## Conventions
 - Branded types: `SystemTrackId`, `SensorId`, `Timestamp` (string/number underneath)
