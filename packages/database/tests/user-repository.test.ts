@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock bcrypt
-vi.mock('bcrypt', () => ({
+// Mock bcryptjs
+vi.mock('bcryptjs', () => ({
   default: {
-    hash: vi.fn().mockResolvedValue('$2b$10$hashedpassword'),
+    hash: vi.fn().mockResolvedValue('$2b$12$hashedpassword'),
     compare: vi.fn().mockResolvedValue(true),
   },
 }));
@@ -28,7 +28,7 @@ function mockPool(rows: unknown[] = [], rowCount = 1) {
 const sampleUser = {
   id: '550e8400-e29b-41d4-a716-446655440000',
   username: 'testuser',
-  password_hash: '$2b$10$hashedpassword',
+  password_hash: '$2b$12$hashedpassword',
   role: 'operator' as const,
   enabled: true,
   created_at: new Date('2026-01-01'),
@@ -44,7 +44,7 @@ describe('user-repository', () => {
       const [sql, params] = pool.query.mock.calls[0];
       expect(sql).toContain('INSERT INTO users');
       expect(params[0]).toBe('testuser');
-      expect(params[1]).toBe('$2b$10$hashedpassword'); // bcrypt mock
+      expect(params[1]).toBe('$2b$12$hashedpassword'); // bcrypt mock
       expect(params[2]).toBe('operator');
 
       expect(result.id).toBe(sampleUser.id);
@@ -164,7 +164,7 @@ describe('user-repository', () => {
 
   describe('verifyPassword', () => {
     it('should delegate to bcrypt.compare', async () => {
-      const result = await verifyPassword('password123', '$2b$10$hashedpassword');
+      const result = await verifyPassword('password123', '$2b$12$hashedpassword');
       expect(result).toBe(true);
     });
   });

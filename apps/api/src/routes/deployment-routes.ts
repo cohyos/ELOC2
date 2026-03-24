@@ -17,8 +17,14 @@ import type {
   GeoPolygon,
   GeoPoint,
 } from '@eloc2/deployment-planner';
+import { requireRole } from '../auth/auth-middleware.js';
 import fs from 'node:fs';
 import path from 'node:path';
+
+const AUTH_ENABLED = process.env.AUTH_ENABLED === 'true';
+function instructorGuard(): any[] {
+  return AUTH_ENABLED ? [requireRole('instructor')] : [];
+}
 
 // Directory for persisted deployment JSON files
 const DEPLOYMENTS_DIR = path.resolve(
@@ -38,7 +44,15 @@ function ensureDir(): void {
 function deploymentPath(id: string): string {
   // Sanitise id to prevent directory traversal
   const safe = id.replace(/[^a-zA-Z0-9_-]/g, '');
-  return path.join(DEPLOYMENTS_DIR, `${safe}.json`);
+  if (!safe || safe.length === 0 || safe.length > 128) {
+    throw new Error('Invalid deployment ID');
+  }
+  // Double-check the resolved path stays within DEPLOYMENTS_DIR
+  const resolved = path.resolve(DEPLOYMENTS_DIR, `${safe}.json`);
+  if (!resolved.startsWith(path.resolve(DEPLOYMENTS_DIR))) {
+    throw new Error('Invalid deployment ID');
+  }
+  return resolved;
 }
 
 /** Read a single deployment from disk (or null). */
@@ -102,8 +116,17 @@ export function registerDeploymentRoutes(app: FastifyInstance) {
       sensors: SensorSpec[];
       constraints: DeploymentConstraints;
     };
-  }>('/api/deployment/optimize', async (request) => {
-    const { sensors, constraints } = request.body;
+  }>('/api/deployment/optimize', { preHandler: instructorGuard() }, async (request, reply) => {
+    const { sensors, constraints } = request.body ?? {} as any;
+    if (!Array.isArray(sensors) || sensors.length === 0) {
+      return reply.code(400).send({ error: 'sensors array is required and must not be empty' });
+    }
+    if (!constraints || !Array.isArray(constraints.scannedArea) || constraints.scannedArea.length < 3) {
+      return reply.code(400).send({ error: 'constraints.scannedArea polygon requires at least 3 points' });
+    }
+    if (constraints.gridResolutionM != null && (constraints.gridResolutionM < 100 || constraints.gridResolutionM > 50000)) {
+      return reply.code(400).send({ error: 'gridResolutionM must be between 100 and 50000' });
+    }
     const result = optimize(sensors, constraints);
     return result;
   });
@@ -116,7 +139,7 @@ export function registerDeploymentRoutes(app: FastifyInstance) {
       constraints: DeploymentConstraints;
       placedSensors: PlacedSensor[];
     };
-  }>('/api/deployment/score-position', async (request) => {
+  }>('/api/deployment/score-position', { preHandler: instructorGuard() }, async (request) => {
     const { position, sensor, constraints, placedSensors } = request.body;
     const resolution = constraints.gridResolutionM || 1000;
     const cells = generateGrid(constraints.scannedArea, resolution);
@@ -146,7 +169,7 @@ export function registerDeploymentRoutes(app: FastifyInstance) {
       placedSensors: PlacedSensor[];
       constraints: DeploymentConstraints;
     };
-  }>('/api/deployment/validate', async (request) => {
+  }>('/api/deployment/validate', { preHandler: instructorGuard() }, async (request) => {
     const { placedSensors, constraints } = request.body;
     const resolution = constraints.gridResolutionM || 1000;
     const cells = generateGrid(constraints.scannedArea, resolution);
@@ -158,7 +181,7 @@ export function registerDeploymentRoutes(app: FastifyInstance) {
   // POST /api/deployment/export-scenario — Convert to ScenarioDefinition sensor format
   app.post<{
     Body: { placedSensors: PlacedSensor[] };
-  }>('/api/deployment/export-scenario', async (request) => {
+  }>('/api/deployment/export-scenario', { preHandler: instructorGuard() }, async (request) => {
     const { placedSensors } = request.body;
     const sensorDefs = exportToSensorDefinitions(placedSensors);
     return { sensors: sensorDefs };
@@ -172,8 +195,14 @@ export function registerDeploymentRoutes(app: FastifyInstance) {
       constraints: DeploymentConstraints;
       result: { placedSensors: PlacedSensor[]; metrics: any };
     };
-  }>('/api/deployment/save', async (request) => {
-    const { name, sensors, constraints, result } = request.body;
+  }>('/api/deployment/save', { preHandler: instructorGuard() }, async (request, reply) => {
+    const { name, sensors, constraints, result } = request.body ?? {} as any;
+    if (!name || typeof name !== 'string' || name.length > 200) {
+      return reply.code(400).send({ error: 'name is required (max 200 chars)' });
+    }
+    if (!Array.isArray(sensors)) {
+      return reply.code(400).send({ error: 'sensors array is required' });
+    }
     const id = `deploy-${nextId++}`;
     const saved: SavedDeployment = {
       id,
@@ -217,7 +246,7 @@ export function registerDeploymentRoutes(app: FastifyInstance) {
       scenarioName?: string;
       durationSec?: number;
     };
-  }>('/api/deployment/export-to-scenario', async (request, reply) => {
+  }>('/api/deployment/export-to-scenario', { preHandler: instructorGuard() }, async (request, reply) => {
     let sensors: PlacedSensor[];
 
     if (request.body.deploymentId) {

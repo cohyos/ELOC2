@@ -532,6 +532,27 @@ export class TrackManager {
     return track;
   }
 
+  /**
+   * Remove tracks that have been in 'dropped' status for longer than the
+   * specified retention period. Prevents unbounded Map growth in long
+   * running simulations.
+   */
+  pruneDroppedTracks(retentionMs: number = 60_000): number {
+    const now = Date.now();
+    let pruned = 0;
+    for (const [trackId, track] of this.tracks) {
+      if (track.status === 'dropped') {
+        const lastUpdate = track.lastUpdated ?? 0;
+        if (now - lastUpdate > retentionMs) {
+          this.tracks.delete(trackId);
+          this.meta.delete(trackId as SystemTrackId);
+          pruned++;
+        }
+      }
+    }
+    return pruned;
+  }
+
   // ── Merge ─────────────────────────────────────────────────────────────────
 
   mergeTracks(trackId1: SystemTrackId, trackId2: SystemTrackId): SystemTrack {

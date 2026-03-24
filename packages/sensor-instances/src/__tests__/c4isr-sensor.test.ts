@@ -161,25 +161,48 @@ describe('C4isrSensorInstance', () => {
   });
 
   it('local tracks get confirmed after 2 updates (faster than radar)', () => {
+    // Use a deterministic observation generator (no noise) so that
+    // consecutive observations correlate reliably with the same track.
+    let obsCounter = 0;
+    const deterministicGenerator = (
+      sensorDef: any, tgtPos: any, tgtVel: any, timeSec: number, baseTimestamp: number,
+    ) => ({
+      observationId: `obs-${++obsCounter}`,
+      sensorId: sensorDef.sensorId,
+      position: { ...tgtPos },
+      velocity: tgtVel ? { ...tgtVel } : undefined,
+      timestamp: (baseTimestamp + timeSec * 1000) as any,
+      covariance: [[400, 0, 0], [0, 400, 0], [0, 0, 400]],
+    });
+
+    const deterministicSensor = new C4isrSensorInstance(
+      c4isrConfig, bus, deterministicGenerator as any,
+    );
+
     const handler = vi.fn();
     bus.onTrackReport(handler);
 
-    bus.broadcastGroundTruth(makeGroundTruth([makeTarget('TGT-1')]));
+    // Use a stationary target so observations always match the same position
+    // (moving targets cause prediction divergence → correlation miss → new track each tick)
+    bus.broadcastGroundTruth(makeGroundTruth([makeTarget('TGT-1', {
+      velocity: { vx: 0, vy: 0, vz: 0 },
+    })]));
 
-    // First update at t=12 — track should be tentative (new)
-    sensor.tick(12, 1);
+    // First update at t=12 — track created as tentative ('new')
+    deterministicSensor.tick(12, 1);
     let report: SensorTrackReport = handler.mock.calls[0][0];
     expect(report.localTracks.length).toBeGreaterThanOrEqual(1);
-    const firstStatus = report.localTracks[0].status;
-    expect(firstStatus).toBe('new'); // tentative → mapped to 'new'
+    expect(report.localTracks[0].status).toBe('new');
 
-    // Second update at t=24
-    sensor.tick(24, 1);
+    // Second update at t=24 — Bayesian Pe update should confirm the track
+    deterministicSensor.tick(24, 1);
 
-    // Third update at t=36 — with existence-based promotion (Pe needs ≥0.8),
-    // confirmation may require 3 updates depending on Pd/Pfa parameters
-    sensor.tick(36, 1);
+    // Third update at t=36 — track stays confirmed
+    deterministicSensor.tick(36, 1);
     report = handler.mock.calls[handler.mock.calls.length - 1][0];
+
+    // With existence-based confirmation (Pe threshold 0.7), the track
+    // should be confirmed ('maintained') after 2+ updates
     const confirmedTrack = report.localTracks.find(
       (t) => t.status === 'maintained',
     );

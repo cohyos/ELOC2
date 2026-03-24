@@ -19,3 +19,5 @@ export type {
 
 // Bus
 export { SensorBus } from './bus.js';
+export { RedisSensorBus } from './redis-bus.js';
+export type { RedisBusConfig, RedisBusState } from './redis-bus.js';

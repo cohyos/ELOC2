@@ -43,8 +43,17 @@ async function seedDefaultInstructor(
   try {
     const existing = await findByUsername(pool, 'admin');
     if (!existing) {
-      await createUser(pool, 'admin', 'admin123', 'instructor');
-      app.log.info('Default instructor account created (admin/admin123)');
+      // Use environment variable for default password; NEVER use hardcoded credentials
+      const defaultPassword = process.env.ADMIN_DEFAULT_PASSWORD;
+      if (!defaultPassword || defaultPassword.length < 12) {
+        app.log.warn(
+          'No ADMIN_DEFAULT_PASSWORD env var set (or < 12 chars) — skipping default instructor seed. ' +
+          'Set ADMIN_DEFAULT_PASSWORD to create the initial admin account.',
+        );
+        return;
+      }
+      await createUser(pool, 'admin', defaultPassword, 'instructor');
+      app.log.info('Default instructor account created (username: admin)');
     }
   } catch (err) {
     app.log.warn(err, 'Could not seed default instructor — users table may already have data');

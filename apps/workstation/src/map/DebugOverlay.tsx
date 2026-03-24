@@ -8,6 +8,12 @@ import type { CoverZone, OperationalZone } from '../stores/cover-zone-store';
 import type { SearchModeStateWS } from '../stores/sensor-store';
 import type { FovOverlap, BearingAssociation, MultiSensorResolution } from '../stores/fov-overlap-store';
 import type { BallisticEstimateWS } from '../stores/task-store';
+
+/** Escape HTML special characters to prevent XSS in popup content */
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 import { resolveTrackSymbol, resolveSensorSymbol } from './symbols/symbol-resolver';
 import { EoVideoPopup } from './EoVideoPopup';
 
@@ -191,11 +197,11 @@ export function DebugOverlay({
       } else if (items.length > 1 && map) {
         // Multiple objects — show disambiguation popup
         const listHtml = items.map(item =>
-          `<div class="disambig-item" data-type="${item.type}" data-id="${item.id}" ` +
+          `<div class="disambig-item" data-type="${escapeHtml(item.type)}" data-id="${escapeHtml(item.id)}" ` +
           `style="padding:4px 8px;cursor:pointer;display:flex;align-items:center;gap:6px;border-bottom:1px solid #444;" ` +
           `onmouseover="this.style.background='#333'" onmouseout="this.style.background='transparent'">` +
-          `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${item.color};flex-shrink:0;"></span>` +
-          `<span style="font:11px monospace;color:#e0e0e0;white-space:nowrap;">${item.label}</span>` +
+          `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${escapeHtml(item.color)};flex-shrink:0;"></span>` +
+          `<span style="font:11px monospace;color:#e0e0e0;white-space:nowrap;">${escapeHtml(item.label)}</span>` +
           `</div>`
         ).join('');
         const popup = L.popup({
@@ -290,7 +296,7 @@ export function DebugOverlay({
       const disabled = (a as any).disabled;
       const isSep = (a as any).separator;
       if (isSep) {
-        return `<div style="padding:3px 12px;font:bold 9px monospace;color:#666;border-bottom:1px solid #333;background:#1a1a1a;">${a.label}</div>`;
+        return `<div style="padding:3px 12px;font:bold 9px monospace;color:#666;border-bottom:1px solid #333;background:#1a1a1a;">${escapeHtml(a.label)}</div>`;
       }
       const style = disabled
         ? `padding:5px 12px;cursor:not-allowed;font:11px monospace;color:#555;border-bottom:1px solid #333;`
@@ -298,7 +304,7 @@ export function DebugOverlay({
       const hover = disabled ? '' : `onmouseover="this.style.background='#333'" onmouseout="this.style.background='transparent'"`;
       const suffix = disabled ? ' <span style="color:#666;font-size:9px;">(no EO data)</span>' : '';
       return `<div class="ctx-action" data-idx="${i}" data-disabled="${disabled ? '1' : '0'}" ` +
-        `style="${style}" ${hover}>${a.label}${suffix}</div>`;
+        `style="${style}" ${hover}>${escapeHtml(a.label)}${suffix}</div>`;
     }).join('');
 
     const popup = L.popup({
@@ -310,7 +316,7 @@ export function DebugOverlay({
       .setLatLng(latlng)
       .setContent(
         `<div style="background:#1a1a1a;border:1px solid #555;border-radius:4px;overflow:hidden;margin:-13px -20px -13px -20px;">` +
-        `<div style="padding:4px 10px;font:bold 10px monospace;color:#aaa;border-bottom:1px solid #555;background:#222;">${label}</div>` +
+        `<div style="padding:4px 10px;font:bold 10px monospace;color:#aaa;border-bottom:1px solid #555;background:#222;">${escapeHtml(label)}</div>` +
         `${menuHtml}</div>`
       )
       .openOn(map);

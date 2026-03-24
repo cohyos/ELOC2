@@ -38,7 +38,8 @@ export function registerReportRoutes(app: FastifyInstance, engine: LiveEngine) {
       reply.header('Content-Disposition', `attachment; filename="${filename}"`);
       return pdfBuffer;
     } catch (err: any) {
-      return reply.code(500).send({ error: 'Report generation failed', details: err.message });
+      app.log.error(err, 'Report generation failed');
+      return reply.code(500).send({ error: 'Report generation failed' });
     }
   });
 
@@ -50,6 +51,10 @@ export function registerReportRoutes(app: FastifyInstance, engine: LiveEngine) {
 
     if (!imageData || typeof imageData !== 'string') {
       return reply.code(400).send({ error: 'imageData (base64 string) is required' });
+    }
+    // Cap snapshot size at 5MB to prevent memory exhaustion
+    if (imageData.length > 5 * 1024 * 1024) {
+      return reply.code(413).send({ error: 'imageData exceeds 5MB limit' });
     }
     if (!label || typeof label !== 'string') {
       return reply.code(400).send({ error: 'label is required' });

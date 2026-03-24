@@ -314,7 +314,7 @@ export async function scenarioRoutes(app: FastifyInstance) {
     if (!source) {
       return reply.code(404).send({ error: 'Source scenario not found' });
     }
-    const cloned = JSON.parse(JSON.stringify(source));
+    const cloned = structuredClone(source);
     cloned.id = `custom-${Date.now()}`;
     cloned.name = newName || `${source.name} (Copy)`;
     customScenarios.set(cloned.id, cloned);

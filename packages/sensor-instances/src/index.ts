@@ -27,3 +27,4 @@ export {
   createSensorInstance,
   createSensorInstances,
 } from './sensor-factory.js';
+export type { ObservationGenerators } from './sensor-factory.js';

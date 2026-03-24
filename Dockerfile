@@ -1,5 +1,5 @@
 # ── Stage 1: Build ──────────────────────────────────────────────────────────
-FROM node:22-slim AS builder
+FROM node:22.14-slim AS builder
 
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
@@ -52,7 +52,7 @@ COPY configs/ configs/
 RUN pnpm build
 
 # ── Stage 2: Production ────────────────────────────────────────────────────
-FROM node:22-slim AS production
+FROM node:22.14-slim AS production
 
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
@@ -64,10 +64,21 @@ COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/apps ./apps
 COPY --from=builder /app/configs ./configs
 
+# Remove source maps from production image
+RUN find /app -name '*.js.map' -delete -o -name '*.d.ts.map' -delete 2>/dev/null; true
+
 # Ensure turbo and other node_modules binaries are in PATH
 # (Cloud Build overrides WORKDIR, so pnpm may not resolve .bin correctly)
 ENV PATH="/app/node_modules/.bin:${PATH}"
 ENV NODE_ENV=production
+
+# Run as non-root user for security
+RUN groupadd -r eloc2 && useradd -r -g eloc2 -d /app eloc2 && chown -R eloc2:eloc2 /app
+USER eloc2
+
 EXPOSE 3001
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3001/api/health', (r) => { if (r.statusCode !== 200) process.exit(1); }).on('error', () => process.exit(1))"
 
 CMD ["node", "apps/api/dist/server.js"]

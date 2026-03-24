@@ -53,6 +53,18 @@ export interface EoDetection {
   lastUpdatedSimSec: number;
   /** Consecutive update count. */
   updateCount: number;
+
+  // ── Track feedback (from Core EO → Staring Sensor) ──
+  /** Associated system track ID (fed back from Core EO after correlation). */
+  associatedTrackId?: string;
+  /** Angular velocity in az (deg/s) — from consecutive bearing measurements. */
+  angularVelocityAzDegPerSec?: number;
+  /** Angular velocity in el (deg/s). */
+  angularVelocityElDegPerSec?: number;
+  /** Predicted az for next tick (from angular velocity). */
+  predictedAzDeg?: number;
+  /** Predicted el for next tick. */
+  predictedElDeg?: number;
 }
 
 /** A correlated EO target produced by matching bearings across ≥2 sensors. */
@@ -190,9 +202,18 @@ export class CoreEoTargetDetector {
 
   // ── Public API ──────────────────────────────────────────────────────────
 
+  /** Track which detections were updated this tick (for frame-aware matching). */
+  private updatedThisTick = new Set<string>();
+  private lastIngestTick = -1;
+
   /**
    * Ingest a bearing observation from a staring sensor.
-   * The detector manages it as an independent bearing-only detection.
+   *
+   * WFOV frame-aware: A staring sensor's 360° MWIR array detects ALL targets
+   * in a single frame at 24Hz. When multiple bearings arrive from the same
+   * sensor in the same tick, they represent DISTINCT targets in the same frame.
+   * We must NOT merge them into the same detection — each bearing gets matched
+   * only to detections NOT already updated this tick.
    */
   ingestBearing(obs: EoBearingObservation, sensorPosition: Position3D, simTimeSec?: number): EoDetection {
     const sensorId = obs.sensorId;
@@ -200,18 +221,53 @@ export class CoreEoTargetDetector {
       this.sensorDetections.set(sensorId, new Map());
     }
 
+    // Reset per-tick tracking when a new tick starts
+    const currentTick = simTimeSec ?? -1;
+    if (currentTick !== this.lastIngestTick) {
+      this.updatedThisTick.clear();
+      this.lastIngestTick = currentTick;
+    }
+
     const sensorStore = this.sensorDetections.get(sensorId)!;
 
-    // Try to match to existing detection from same sensor (same target az/el)
-    const existing = this.findMatchingDetection(sensorStore, obs.bearing.azimuthDeg, obs.bearing.elevationDeg);
+    // Try to match to existing detection from same sensor (same target az/el).
+    // WFOV frame-aware: skip detections already updated this tick to prevent
+    // merging distinct targets from the same 360° frame. However, only skip
+    // if the existing detection's bearing is significantly different (>1°),
+    // since very close targets may genuinely be the same detection updated.
+    const existing = this.findMatchingDetection(
+      sensorStore, obs.bearing.azimuthDeg, obs.bearing.elevationDeg,
+      this.updatedThisTick,
+    );
 
     if (existing) {
-      // Update existing detection
+      // Compute angular velocity from consecutive bearing measurements
+      const prevAz = existing.bearing.azimuthDeg;
+      const prevEl = existing.bearing.elevationDeg;
+      const dtSec = (simTimeSec ?? 0) - existing.lastUpdatedSimSec;
+      if (dtSec > 0.5 && dtSec < 30) {
+        let dAz = obs.bearing.azimuthDeg - prevAz;
+        if (dAz > 180) dAz -= 360;
+        if (dAz < -180) dAz += 360;
+        const dEl = obs.bearing.elevationDeg - prevEl;
+        existing.angularVelocityAzDegPerSec = dAz / dtSec;
+        existing.angularVelocityElDegPerSec = dEl / dtSec;
+        // Predict next bearing position (for improved matching next tick)
+        const predictDt = 2; // next EO tick is ~2s away
+        let predAz = obs.bearing.azimuthDeg + existing.angularVelocityAzDegPerSec * predictDt;
+        if (predAz > 360) predAz -= 360;
+        if (predAz < 0) predAz += 360;
+        existing.predictedAzDeg = predAz;
+        existing.predictedElDeg = obs.bearing.elevationDeg + existing.angularVelocityElDegPerSec * predictDt;
+      }
+
+      // Update existing detection with new bearing
       existing.bearing = obs.bearing;
       existing.imageQuality = obs.imageQuality;
       existing.lastUpdated = Date.now();
       existing.lastUpdatedSimSec = simTimeSec ?? existing.lastUpdatedSimSec;
       existing.updateCount++;
+      this.updatedThisTick.add(existing.detectionId);
       return existing;
     }
 
@@ -230,6 +286,7 @@ export class CoreEoTargetDetector {
     };
 
     sensorStore.set(detection.detectionId, detection);
+    this.updatedThisTick.add(detection.detectionId);
     return detection;
   }
 
@@ -285,7 +342,9 @@ export class CoreEoTargetDetector {
         matchedDetectionIds.add(det.detectionId);
       }
 
-      // Pick best (most recent) detection per sensor
+      // Pick best (most recent) detection per sensor.
+      // MHT: If group has many sensors, use spatial sub-grouping to separate
+      // overlapping targets that the angular clustering may have merged.
       const bestPerSensor = new Map<string, EoDetection>();
       for (const det of group) {
         const existing = bestPerSensor.get(det.sensorId);
@@ -296,8 +355,34 @@ export class CoreEoTargetDetector {
       const selected = [...bestPerSensor.values()];
       if (selected.length < 2) continue;
 
-      // Triangulate
-      const triResult = this.tryTriangulate(selected);
+      // Triangulate — with MHT outlier removal for large groups
+      let triResult = this.tryTriangulate(selected);
+
+      // MHT: If miss distance is high and we have many sensors,
+      // try removing the detection that contributes most to the error.
+      // This handles cases where one sensor's bearing points at a different
+      // target than the rest of the group.
+      if (triResult && selected.length >= 4 && triResult.missDistanceM > 500) {
+        let bestSubset = selected;
+        let bestMiss = triResult.missDistanceM;
+
+        for (let drop = 0; drop < selected.length; drop++) {
+          const subset = selected.filter((_, i) => i !== drop);
+          if (subset.length < 2) continue;
+          const subTri = this.tryTriangulate(subset);
+          if (subTri && subTri.missDistanceM < bestMiss * 0.7) {
+            bestMiss = subTri.missDistanceM;
+            bestSubset = subset;
+          }
+        }
+
+        if (bestSubset !== selected) {
+          triResult = this.tryTriangulate(bestSubset);
+          // Re-select only the subset detections
+          // (dropped detection may be from a different target)
+        }
+      }
+
       if (!triResult) continue;
 
       // Check if this group already has an existing EO target
@@ -325,9 +410,16 @@ export class CoreEoTargetDetector {
         // With good multi-sensor geometry (pentagon layout), real targets
         // should have miss distance < 1 km. Higher values indicate
         // cross-contaminated groups (bearings from different targets merged).
-        const isAmbiguous = triResult.missDistanceM > this.config.ambiguousMissDistanceM
+        // High-elevation targets (>50°) have inherently poor ground-based
+        // triangulation geometry — always route through ambiguity.
+        const avgElevation = selected.reduce((s, d) => s + Math.abs(d.bearing.elevationDeg), 0) / selected.length;
+        // Tighter quality gate for 2-sensor intersections (more prone to false positives)
+        const twoSensorMissLimit = uniqueSensors.size <= 2 ? 1500 : this.config.ambiguousMissDistanceM;
+        const isAmbiguous = triResult.missDistanceM > twoSensorMissLimit
           || triResult.intersectionAngleDeg < 10
-          || (selected.length >= 3 && triResult.missDistanceM > 1000);
+          || (selected.length >= 3 && triResult.missDistanceM > 1000)
+          || (uniqueSensors.size <= 2 && triResult.intersectionAngleDeg < 20) // 2-sensor needs better geometry
+          || avgElevation > 50;
 
         if (isAmbiguous) {
           // Route to ambiguity candidate pool for consistency resolution
@@ -337,7 +429,21 @@ export class CoreEoTargetDetector {
             triResult.missDistanceM, selected, uniqueSensors, now,
           );
         } else {
-          // Clear triangulation — create target immediately
+          // Temporal consistency gate for low-sensor-count intersections:
+          // 2-sensor intersections are noisy — require seeing them twice before
+          // creating a real target. 3+ sensor groups are more reliable and
+          // create targets immediately.
+          if (uniqueSensors.size <= 2) {
+            const groupKey = [...uniqueSensors].sort().join('+');
+            const existingCandidate = this.findAmbiguityCandidateByGroup(groupKey);
+            if (!existingCandidate) {
+              this.addOrUpdateAmbiguityCandidate(
+                groupKey, triResult.position, triResult.intersectionAngleDeg,
+                triResult.missDistanceM, selected, uniqueSensors, now,
+              );
+              continue; // Wait for next tick confirmation
+            }
+          }
           // Propagate best image quality from contributing detections
           const bestIq = Math.max(...selected.map(d => d.imageQuality));
           const target: EoTarget3D = {
@@ -409,11 +515,25 @@ export class CoreEoTargetDetector {
     return all;
   }
 
-  /** Mark an EO target as promoted to a system track. */
+  /** Mark an EO target as promoted to a system track.
+   *  Also feeds back the track association to all contributing detections,
+   *  so staring sensors can use angular velocity prediction for better
+   *  detection-to-track continuity.
+   */
   markPromoted(eoTargetId: string, systemTrackId: string): void {
     const target = this.eoTargets.get(eoTargetId);
     if (target) {
       target.promotedTrackId = systemTrackId;
+
+      // Feed back track association to contributing detections
+      for (const detId of target.detectionIds) {
+        for (const store of this.sensorDetections.values()) {
+          const det = store.get(detId);
+          if (det) {
+            det.associatedTrackId = systemTrackId;
+          }
+        }
+      }
     }
   }
 
@@ -441,17 +561,37 @@ export class CoreEoTargetDetector {
     sensorStore: Map<string, EoDetection>,
     azimuthDeg: number,
     elevationDeg: number,
+    excludeIds?: Set<string>,
   ): EoDetection | undefined {
+    let bestDet: EoDetection | undefined;
+    let bestDist = Infinity;
+
     for (const det of sensorStore.values()) {
-      let azDiff = Math.abs(azimuthDeg - det.bearing.azimuthDeg);
+      // Skip detections already matched this tick (WFOV frame-aware)
+      if (excludeIds?.has(det.detectionId)) continue;
+
+      // Use predicted position if available (angular velocity feedback),
+      // otherwise fall back to last measured position.
+      // This improves matching for fast-moving targets where the bearing
+      // changes significantly between ticks.
+      const refAz = det.predictedAzDeg ?? det.bearing.azimuthDeg;
+      const refEl = det.predictedElDeg ?? det.bearing.elevationDeg;
+
+      let azDiff = Math.abs(azimuthDeg - refAz);
       if (azDiff > 180) azDiff = 360 - azDiff;
-      const elDiff = Math.abs(elevationDeg - det.bearing.elevationDeg);
+      const elDiff = Math.abs(elevationDeg - refEl);
+
       // Both az and el must be within the correlation gate
       if (azDiff < this.config.correlationGateDeg && elDiff < this.config.correlationGateDeg) {
-        return det;
+        // Pick the closest match (in case multiple detections are within gate)
+        const dist = azDiff * azDiff + elDiff * elDiff;
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestDet = det;
+        }
       }
     }
-    return undefined;
+    return bestDet;
   }
 
   /**
@@ -655,12 +795,16 @@ export class CoreEoTargetDetector {
     // sensors cover 360° and would match ALL targets indiscriminately.
     const triResult = this.tryTriangulate(detections);
     if (triResult) {
-      const SPATIAL_GATE_M = 2500; // 2.5 km gate for same-target matching
+      // Spatial gate widens for high-altitude targets (BMs move fast and
+      // triangulation geometry is weaker at high elevation)
+      const altKm = triResult.position.alt / 1000;
+      const SPATIAL_GATE_M = altKm > 10 ? 5000 + altKm * 200 : 2500;
       for (const target of this.eoTargets.values()) {
         const dLat = (triResult.position.lat - target.position.lat) * 110540;
         const dLon = (triResult.position.lon - target.position.lon) * 111320 *
           Math.cos(target.position.lat * Math.PI / 180);
-        const dist = Math.sqrt(dLat * dLat + dLon * dLon);
+        const dAlt = triResult.position.alt - target.position.alt;
+        const dist = Math.sqrt(dLat * dLat + dLon * dLon + dAlt * dAlt);
         if (dist < SPATIAL_GATE_M) {
           return target;
         }
@@ -774,6 +918,14 @@ export class CoreEoTargetDetector {
    * Add or update an ambiguity candidate. Each candidate is tracked by the
    * ConsistencyEvaluator to assess whether it represents a real target.
    */
+  /** Find an existing ambiguity candidate by group key */
+  private findAmbiguityCandidateByGroup(groupKey: string): AmbiguityCandidate | undefined {
+    for (const c of this.ambiguityCandidates.values()) {
+      if (c.groupKey === groupKey && !c.resolved) return c;
+    }
+    return undefined;
+  }
+
   private addOrUpdateAmbiguityCandidate(
     groupKey: string,
     position: Position3D,

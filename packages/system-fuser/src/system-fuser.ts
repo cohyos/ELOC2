@@ -427,6 +427,18 @@ export class SystemFuser {
     return counts;
   }
 
+  /** Prune tracks dropped for longer than retentionSec. Prevents unbounded growth. */
+  pruneDroppedTracks(simTimeSec: number, retentionSec: number = 60): number {
+    let pruned = 0;
+    for (const [id, track] of this.systemTracks) {
+      if (track.status === 'dropped' && simTimeSec - (track.lastUpdated / 1000) > retentionSec) {
+        this.systemTracks.delete(id);
+        pruned++;
+      }
+    }
+    return pruned;
+  }
+
   /** Reset all state */
   reset(): void {
     this.systemTracks.clear();

@@ -3,4 +3,33 @@ dist
 .git
 *.log
 .env
+.env.*
 .DS_Store
+
+# Test files
+**/*.test.ts
+**/*.spec.ts
+**/__tests__
+coverage
+.nyc_output
+
+# Documentation and knowledge base
+Knowledge_Base_and_Agents_instructions
+*.md
+!packages/*/README.md
+
+# Build artifacts and caches
+.turbo
+.cache
+.vscode
+.idea
+
+# Reports and temporary files
+eo-stress-test-reports
+eo-pipeline-reports
+tests
+
+# Credentials and secrets
+credentials*
+*.pem
+*.key
