@@ -887,7 +887,10 @@ export class CoreEoTargetDetector {
       }
     }
 
-    // Also prune 3D targets whose detections are all gone
+    // Also prune 3D targets whose detections are all gone.
+    // Previously, promoted targets were never pruned, causing them to
+    // accumulate with stale positions and interfere with spatial matching.
+    // Now: prune ALL stale targets regardless of promotion status.
     for (const [targetId, target] of this.eoTargets) {
       const anyAlive = target.detectionIds.some(dId => {
         for (const store of this.sensorDetections.values()) {
@@ -895,7 +898,7 @@ export class CoreEoTargetDetector {
         }
         return false;
       });
-      if (!anyAlive && !target.promotedTrackId) {
+      if (!anyAlive) {
         this.eoTargets.delete(targetId);
       }
     }
