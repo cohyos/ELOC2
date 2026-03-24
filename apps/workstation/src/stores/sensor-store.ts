@@ -21,7 +21,7 @@ export interface SectorScanStateWS {
     azimuthDeg: number;
     detectedBySensorId: string;
     targetId: string;
-    triangulated: boolean;
+    triangulationCount: number;
   }>;
   active: boolean;
   triangulatorSensorId: string | null;

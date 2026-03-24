@@ -294,13 +294,15 @@ export function SectorScanPanel() {
                   key={i}
                   style={{
                     fontSize: '10px',
-                    color: d.triangulated ? '#00cc44' : '#ffcc00',
+                    color: d.triangulationCount > 0 ? '#00cc44' : '#ffcc00',
                     padding: '1px 0',
                   }}
                 >
-                  {d.triangulated ? '\u2713' : '\u25cf'}{' '}
+                  {d.triangulationCount > 0 ? '\u2713' : '\u25cf'}{' '}
                   {d.azimuthDeg.toFixed(1)}&deg; ({d.detectedBySensorId})
-                  {d.triangulated ? ' — triangulated' : ' — pending'}
+                  {d.triangulationCount > 0
+                    ? ` — ${d.triangulationCount}x triangulated`
+                    : ' — awaiting TRI'}
                 </div>
               ))}
             </div>

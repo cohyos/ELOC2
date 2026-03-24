@@ -738,8 +738,8 @@ export function DebugOverlay({
         const [dLon, dLat] = geoOffset(lon, lat, det.azimuthDeg, detRange);
         L.circleMarker([dLat, dLon], {
           radius: 6,
-          color: det.triangulated ? '#00cc44' : '#ffcc00',
-          fillColor: det.triangulated ? '#00cc44' : '#ffcc00',
+          color: det.triangulationCount > 0 ? '#00cc44' : '#ffcc00',
+          fillColor: det.triangulationCount > 0 ? '#00cc44' : '#ffcc00',
           fillOpacity: 0.8,
           weight: 2,
           interactive: false,

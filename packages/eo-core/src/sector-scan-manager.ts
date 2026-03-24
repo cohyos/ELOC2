@@ -5,8 +5,15 @@
  * EO investigators. The manager:
  *   1. Divides the sector equally among assigned scanners
  *   2. Issues SearchPatternCommands to each scanner for its sub-sector
- *   3. On detection — designates another investigator for triangulation via CueCommand
- *   4. On multiple detections — the triangulator hops between them
+ *   3. On detection — selects the best-geometry investigator for triangulation
+ *   4. TRI runs along the detector's bearing ray to self-detect the target,
+ *      then EO CORE triangulates from two bearings (no radar dependency)
+ *   5. Multiple detections — TRI hops between them at ~0.5s intervals
+ *   6. Continuous triangulation — TRI keeps cycling detections to maintain
+ *      track data, never "finishes" until detections expire
+ *   7. TRI only releases when zero detections remain across ALL scanners
+ *
+ * EO video rate: 24 Hz. Dwell per detection: 0.5s (~12 frames).
  *
  * This is part of EO CORE management.
  */
@@ -32,10 +39,16 @@ export interface SectorDefinition {
 export interface SectorScanConfig {
   /** Scan speed in degrees per second (default: 10) */
   scanSpeedDegPerSec: number;
-  /** How long (seconds) a triangulator dwells on each detection before hopping (default: 3) */
+  /**
+   * Dwell time per detection before hopping to next (default: 0.5s).
+   * At 24 Hz video rate this gives ~12 frames per detection — enough for
+   * the TRI to acquire a bearing for triangulation.
+   */
   triangulationDwellSec: number;
-  /** Minimum confidence to treat a bearing as a detection (default: 0.3) */
+  /** Minimum imageQuality to treat a bearing as a detection (default: 0.3) */
   detectionConfidenceThreshold: number;
+  /** Detection expiry time in seconds (default: 30) */
+  detectionExpiryTimeSec: number;
 }
 
 export type ScannerRole = 'scanning' | 'triangulating';
@@ -57,10 +70,10 @@ export interface SectorDetection {
   sensorPosition: Position3D;
   /** Target ID from bearing report */
   targetId: string;
-  /** Simulation time of detection */
+  /** Simulation time of last detection update */
   detectedAtSec: number;
-  /** Whether triangulation has been attempted */
-  triangulated: boolean;
+  /** How many triangulation passes have been completed on this detection */
+  triangulationCount: number;
 }
 
 export interface SectorScanState {
@@ -70,7 +83,7 @@ export interface SectorScanState {
   sector: SectorDefinition;
   /** Assigned investigators */
   scanners: ScannerAssignment[];
-  /** Active detections pending triangulation */
+  /** Active detections requiring continuous triangulation */
   detections: SectorDetection[];
   /** Whether the scan is actively running */
   active: boolean;
@@ -86,9 +99,54 @@ export interface SectorScanState {
 
 const DEFAULT_CONFIG: SectorScanConfig = {
   scanSpeedDegPerSec: 10,
-  triangulationDwellSec: 3,
+  triangulationDwellSec: 0.5, // ~12 frames at 24 Hz
   detectionConfidenceThreshold: 0.3,
+  detectionExpiryTimeSec: 30,
 };
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Compute angular difference normalized to [-180, 180] */
+function angleDiffDeg(a: number, b: number): number {
+  let d = b - a;
+  while (d > 180) d -= 360;
+  while (d < -180) d += 360;
+  return d;
+}
+
+/**
+ * Compute the geometry spread score for a candidate triangulator relative
+ * to a detection. Best triangulation geometry is when the angle between
+ * the detector→target bearing and the candidate→target bearing approaches 90°.
+ * Score ranges from 0 (collinear, worst) to 1 (perpendicular, best).
+ */
+function geometrySpreadScore(
+  detectorPos: Position3D,
+  detectionAzDeg: number,
+  candidatePos: Position3D,
+): number {
+  // Bearing from candidate to the estimated detection point
+  // Use a rough 5 km estimate along the detection ray from detector
+  const rangeM = 5000;
+  const azRad = (detectionAzDeg * Math.PI) / 180;
+  const estLat = detectorPos.lat + (rangeM * Math.cos(azRad)) / 111_320;
+  const estLon = detectorPos.lon + (rangeM * Math.sin(azRad)) /
+    (111_320 * Math.cos((detectorPos.lat * Math.PI) / 180));
+
+  // Bearing from candidate to estimated target position
+  const dLat = estLat - candidatePos.lat;
+  const dLon = (estLon - candidatePos.lon) *
+    Math.cos((candidatePos.lat * Math.PI) / 180);
+  const candAzDeg = ((Math.atan2(dLon, dLat) * 180) / Math.PI + 360) % 360;
+
+  // Intersection angle = difference between the two bearings
+  const intersectionAngle = Math.abs(angleDiffDeg(detectionAzDeg, candAzDeg));
+
+  // Score: 1.0 at 90° (best), 0.0 at 0° or 180° (worst)
+  return Math.sin((intersectionAngle * Math.PI) / 180);
+}
 
 // ---------------------------------------------------------------------------
 // SectorScanManager
@@ -99,7 +157,7 @@ export class SectorScanManager {
   private config: SectorScanConfig;
   private activeScan: SectorScanState | null = null;
 
-  /** Sensor positions needed for cueing — populated by caller */
+  /** Sensor positions needed for geometry scoring — populated by caller */
   private sensorPositions: Map<string, Position3D> = new Map();
 
   constructor(bus: SensorBus, config?: Partial<SectorScanConfig>) {
@@ -116,7 +174,7 @@ export class SectorScanManager {
    * Start a sector scan with assigned investigators.
    * @param sector - The threat sector to scan
    * @param sensorIds - 1 to 3 EO sensor IDs to assign
-   * @param sensorPositions - Position of each sensor (needed for cue targeting)
+   * @param sensorPositions - Position of each sensor (needed for geometry scoring)
    * @param simTimeSec - Current simulation time
    * @returns scanId or null if invalid
    */
@@ -162,22 +220,18 @@ export class SectorScanManager {
   }
 
   /**
-   * Stop the active sector scan. Returns sensors to standby.
+   * Stop the active sector scan. Returns sensors to track mode.
    */
   stopScan(simTimeSec: number): void {
     if (!this.activeScan) return;
 
-    // Send standby commands to all assigned sensors
     for (const scanner of this.activeScan.scanners) {
       this.bus.sendCommand({
         messageType: 'system.command',
         commandId: generateId(),
         targetSensorId: scanner.sensorId as SensorId,
         simTimeSec,
-        command: {
-          type: 'mode',
-          mode: 'track',
-        },
+        command: { type: 'mode', mode: 'track' },
       });
     }
 
@@ -186,52 +240,45 @@ export class SectorScanManager {
   }
 
   /**
-   * Called every tick to manage triangulation hopping.
+   * Called every tick to manage triangulation hopping and release logic.
    */
   tick(simTimeSec: number): void {
     if (!this.activeScan?.active) return;
 
     const scan = this.activeScan;
 
-    // Prune old detections (older than 30 seconds)
+    // Prune expired detections
     scan.detections = scan.detections.filter(
-      (d) => simTimeSec - d.detectedAtSec < 30,
+      (d) => simTimeSec - d.detectedAtSec < this.config.detectionExpiryTimeSec,
     );
 
-    // If we have a triangulator and multiple detections, hop between them
+    // ── TRI release logic: only release when ZERO detections remain ──
+    if (scan.triangulatorSensorId && scan.detections.length === 0) {
+      this.releaseTriangulator(simTimeSec);
+      return;
+    }
+
+    // ── Continuous triangulation: hop to next detection after dwell ──
     if (
       scan.triangulatorSensorId &&
-      scan.detections.length > 1 &&
+      scan.detections.length > 0 &&
       simTimeSec - scan.lastHopTimeSec >= this.config.triangulationDwellSec
     ) {
       this.hopToNextDetection(simTimeSec);
     }
-
-    // If no pending detections, release the triangulator back to scanning
-    const untriangulated = scan.detections.filter((d) => !d.triangulated);
-    if (untriangulated.length === 0 && scan.triangulatorSensorId) {
-      this.releaseTriangulator(simTimeSec);
-    }
   }
 
-  /**
-   * Get current scan state (for API/WS broadcast).
-   */
+  /** Get current scan state (for API/WS broadcast). */
   getState(): SectorScanState | null {
     return this.activeScan;
   }
 
-  /**
-   * Check if a sector scan is active.
-   */
+  /** Check if a sector scan is active. */
   isActive(): boolean {
     return this.activeScan?.active ?? false;
   }
 
-  /**
-   * Get available EO sensor IDs that could be assigned
-   * (not currently in the active scan).
-   */
+  /** Get assigned sensor IDs. */
   getAssignedSensorIds(): string[] {
     if (!this.activeScan) return [];
     return this.activeScan.scanners.map((s) => s.sensorId);
@@ -245,16 +292,12 @@ export class SectorScanManager {
 
   // ── Private: Sector Division ────────────────────────────────────────────
 
-  /**
-   * Divide the sector equally among assigned sensors.
-   * All start as 'scanning' role.
-   */
   private divideSector(
     sector: SectorDefinition,
     sensorIds: string[],
   ): ScannerAssignment[] {
     let sectorWidth = sector.azimuthEndDeg - sector.azimuthStartDeg;
-    if (sectorWidth <= 0) sectorWidth += 360; // Handle wrap-around
+    if (sectorWidth <= 0) sectorWidth += 360;
 
     const n = sensorIds.length;
     const subWidth = sectorWidth / n;
@@ -262,7 +305,6 @@ export class SectorScanManager {
     return sensorIds.map((sensorId, i) => {
       let subStart = sector.azimuthStartDeg + i * subWidth;
       let subEnd = sector.azimuthStartDeg + (i + 1) * subWidth;
-      // Normalize
       subStart = ((subStart % 360) + 360) % 360;
       subEnd = ((subEnd % 360) + 360) % 360;
 
@@ -296,117 +338,33 @@ export class SectorScanManager {
     });
   }
 
-  // ── Private: Detection Handling ─────────────────────────────────────────
-
-  private handleBearingReport(report: BearingReport): void {
-    if (!this.activeScan?.active) return;
-
-    // Only process reports from our assigned sensors
-    const sensorId = report.sensorId as string;
-    const scanner = this.activeScan.scanners.find(
-      (s) => s.sensorId === sensorId,
-    );
-    if (!scanner) return;
-
-    // Only process from scanners (not from the triangulator)
-    if (scanner.role !== 'scanning') return;
-
-    // Check for detections above confidence threshold (use imageQuality as proxy)
-    for (const bearing of report.bearings) {
-      if (bearing.imageQuality < this.config.detectionConfidenceThreshold) {
-        continue;
-      }
-
-      // Check if we already have this detection (same target within ~2° azimuth)
-      const existing = this.activeScan.detections.find(
-        (d) =>
-          d.targetId === bearing.targetId &&
-          Math.abs(d.azimuthDeg - bearing.bearing.azimuthDeg) < 2,
-      );
-      if (existing) {
-        // Update detection time
-        existing.detectedAtSec = report.simTimeSec;
-        continue;
-      }
-
-      // New detection
-      const detection: SectorDetection = {
-        azimuthDeg: bearing.bearing.azimuthDeg,
-        detectedBySensorId: sensorId,
-        sensorPosition: bearing.sensorPosition,
-        targetId: bearing.targetId,
-        detectedAtSec: report.simTimeSec,
-        triangulated: false,
-      };
-      this.activeScan.detections.push(detection);
-
-      // Try to assign a triangulator
-      this.tryAssignTriangulator(detection, report.simTimeSec);
-    }
-  }
-
   /**
-   * Try to designate another scanner as triangulator for a detection.
-   * Picks the scanner that is NOT the detector and NOT already triangulating.
+   * Cue the triangulator to look along the detector's bearing ray.
+   * The TRI slews its gimbal to the detection azimuth so it can
+   * self-detect the target from its own position — giving EO CORE
+   * two independent bearings for triangulation.
    */
-  private tryAssignTriangulator(
-    detection: SectorDetection,
-    simTimeSec: number,
-  ): void {
-    const scan = this.activeScan!;
-
-    // If already have a triangulator, just add this detection to queue
-    if (scan.triangulatorSensorId) {
-      // Cue the existing triangulator to the new detection
-      this.cueTriangulatorToDetection(detection, simTimeSec);
-      return;
-    }
-
-    // Need at least 2 scanners to spare one for triangulation
-    if (scan.scanners.length < 2) return;
-
-    // Pick a scanner that isn't the detector — prefer the one closest in azimuth
-    const candidates = scan.scanners.filter(
-      (s) =>
-        s.sensorId !== detection.detectedBySensorId && s.role === 'scanning',
-    );
-    if (candidates.length === 0) return;
-
-    // Pick first available candidate
-    const triangulator = candidates[0];
-    triangulator.role = 'triangulating';
-    scan.triangulatorSensorId = triangulator.sensorId;
-    scan.currentDetectionIndex = scan.detections.indexOf(detection);
-    scan.lastHopTimeSec = simTimeSec;
-
-    // Cue the triangulator to the detection
-    this.cueTriangulatorToDetection(detection, simTimeSec);
-  }
-
-  /**
-   * Send a CueCommand to the triangulator to look at a detection.
-   * We estimate a position along the bearing from the detecting sensor.
-   */
-  private cueTriangulatorToDetection(
+  private cueTriangulatorToRay(
     detection: SectorDetection,
     simTimeSec: number,
   ): void {
     const scan = this.activeScan!;
     if (!scan.triangulatorSensorId) return;
 
-    // Estimate a target position along the detection bearing
-    // Use a rough range estimate (e.g., 5km along the bearing)
-    const estimatedRangeM = 5000;
+    // The TRI needs to look along the *detector's bearing ray* from its
+    // own position. Estimate target position along that ray at ~5 km.
+    const rangeM = 5000;
     const azRad = (detection.azimuthDeg * Math.PI) / 180;
-    const dLat = (estimatedRangeM * Math.cos(azRad)) / 111_320;
-    const dLon =
-      (estimatedRangeM * Math.sin(azRad)) /
-      (111_320 * Math.cos((detection.sensorPosition.lat * Math.PI) / 180));
+    const estLat = detection.sensorPosition.lat +
+      (rangeM * Math.cos(azRad)) / 111_320;
+    const estLon = detection.sensorPosition.lon +
+      (rangeM * Math.sin(azRad)) /
+        (111_320 * Math.cos((detection.sensorPosition.lat * Math.PI) / 180));
 
     const predictedPosition: Position3D = {
-      lat: detection.sensorPosition.lat + dLat,
-      lon: detection.sensorPosition.lon + dLon,
-      alt: detection.sensorPosition.alt + 1000, // Assume target is above sensor
+      lat: estLat,
+      lon: estLon,
+      alt: detection.sensorPosition.alt + 1000,
     };
 
     this.bus.sendCommand({
@@ -419,36 +377,150 @@ export class SectorScanManager {
         systemTrackId: `SECTOR-DET-${detection.targetId}`,
         predictedPosition,
         uncertaintyGateDeg: 10,
-        priority: 8,
+        priority: 9,
       },
     });
   }
 
+  // ── Private: Detection Handling ─────────────────────────────────────────
+
+  private handleBearingReport(report: BearingReport): void {
+    if (!this.activeScan?.active) return;
+
+    const sensorId = report.sensorId as string;
+    const scanner = this.activeScan.scanners.find(
+      (s) => s.sensorId === sensorId,
+    );
+    if (!scanner) return;
+
+    // Only process bearing reports from sensors in scanning role
+    if (scanner.role !== 'scanning') return;
+
+    for (const bearing of report.bearings) {
+      if (bearing.imageQuality < this.config.detectionConfidenceThreshold) {
+        continue;
+      }
+
+      // Update existing detection (same target within ~2°) or create new
+      const existing = this.activeScan.detections.find(
+        (d) =>
+          d.targetId === bearing.targetId &&
+          Math.abs(angleDiffDeg(d.azimuthDeg, bearing.bearing.azimuthDeg)) < 2,
+      );
+      if (existing) {
+        existing.detectedAtSec = report.simTimeSec;
+        existing.azimuthDeg = bearing.bearing.azimuthDeg; // Update bearing
+        continue;
+      }
+
+      // New detection
+      const detection: SectorDetection = {
+        azimuthDeg: bearing.bearing.azimuthDeg,
+        detectedBySensorId: sensorId,
+        sensorPosition: bearing.sensorPosition,
+        targetId: bearing.targetId,
+        detectedAtSec: report.simTimeSec,
+        triangulationCount: 0,
+      };
+      this.activeScan.detections.push(detection);
+
+      // Try to assign a triangulator if we don't have one
+      if (!this.activeScan.triangulatorSensorId) {
+        this.assignTriangulator(detection, report.simTimeSec);
+      }
+    }
+  }
+
   /**
-   * Hop the triangulator to the next unresolved detection.
+   * Select the best triangulator based on geometry spread.
+   * Picks the investigator whose bearing to the estimated target
+   * creates the largest intersection angle with the detector's bearing
+   * (closest to 90° is ideal for triangulation accuracy).
+   *
+   * Prefers sensors not currently assigned to scanning (free sensors)
+   * over pulling an active scanner off duty.
+   */
+  private assignTriangulator(
+    detection: SectorDetection,
+    simTimeSec: number,
+  ): void {
+    const scan = this.activeScan!;
+
+    // Need at least 2 investigators to do triangulation
+    if (scan.scanners.length < 2) return;
+
+    // Candidates: anyone except the detector
+    const candidates = scan.scanners.filter(
+      (s) => s.sensorId !== detection.detectedBySensorId,
+    );
+    if (candidates.length === 0) return;
+
+    // Score each candidate by geometry spread
+    let bestScore = -1;
+    let bestCandidate: ScannerAssignment | null = null;
+
+    for (const cand of candidates) {
+      const candPos = this.sensorPositions.get(cand.sensorId);
+      if (!candPos) continue;
+
+      let score = geometrySpreadScore(
+        detection.sensorPosition,
+        detection.azimuthDeg,
+        candPos,
+      );
+
+      // Bonus for sensors not currently scanning (free/idle) — prefer them
+      // so we don't pull an active scanner off duty unnecessarily
+      if (cand.role !== 'scanning') {
+        score += 0.5;
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestCandidate = cand;
+      }
+    }
+
+    if (!bestCandidate) return;
+
+    bestCandidate.role = 'triangulating';
+    scan.triangulatorSensorId = bestCandidate.sensorId;
+    scan.currentDetectionIndex = scan.detections.indexOf(detection);
+    scan.lastHopTimeSec = simTimeSec;
+
+    // Cue the TRI to look along the detector's bearing ray
+    this.cueTriangulatorToRay(detection, simTimeSec);
+  }
+
+  /**
+   * Hop the triangulator to the next detection in round-robin.
+   * Continuous triangulation — never marks detections as "done".
+   * Each hop increments the triangulationCount so the UI can show progress.
    */
   private hopToNextDetection(simTimeSec: number): void {
     const scan = this.activeScan!;
-    const untriangulated = scan.detections.filter((d) => !d.triangulated);
-    if (untriangulated.length === 0) return;
+    if (scan.detections.length === 0) return;
 
-    // Mark current as triangulated (we've dwelled long enough)
-    if (scan.currentDetectionIndex < scan.detections.length) {
-      scan.detections[scan.currentDetectionIndex].triangulated = true;
+    // Increment triangulation count on current detection
+    const current = scan.detections[scan.currentDetectionIndex];
+    if (current) {
+      current.triangulationCount++;
     }
 
-    // Find next untriangulated
-    const next = scan.detections.find((d) => !d.triangulated);
-    if (!next) return;
-
-    scan.currentDetectionIndex = scan.detections.indexOf(next);
+    // Round-robin to next detection
+    scan.currentDetectionIndex =
+      (scan.currentDetectionIndex + 1) % scan.detections.length;
     scan.lastHopTimeSec = simTimeSec;
 
-    this.cueTriangulatorToDetection(next, simTimeSec);
+    const next = scan.detections[scan.currentDetectionIndex];
+    if (next) {
+      this.cueTriangulatorToRay(next, simTimeSec);
+    }
   }
 
   /**
    * Release the triangulator back to scanning duty.
+   * Only called when zero detections remain across all scanners.
    */
   private releaseTriangulator(simTimeSec: number): void {
     const scan = this.activeScan!;
@@ -459,10 +531,10 @@ export class SectorScanManager {
     );
     if (scanner) {
       scanner.role = 'scanning';
-      // Re-issue search command for its sub-sector
       this.issueSearchCommand(scanner, simTimeSec);
     }
 
     scan.triangulatorSensorId = null;
+    scan.currentDetectionIndex = 0;
   }
 }
