@@ -68,9 +68,10 @@ export function DeploymentMap() {
       zoom: 8.5,
       zoomControl: false,
       attributionControl: true,
-      zoomDelta: 0.5,
-      zoomSnap: 0.25,
+      zoomDelta: 1,
+      zoomSnap: 0,
       wheelPxPerZoomLevel: 120,
+      wheelDebounceTime: 80,
     });
 
     L.tileLayer('https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png', {

@@ -104,9 +104,10 @@ export function MapView() {
       zoom: 8,
       zoomControl: false,
       attributionControl: true,
-      zoomDelta: 0.5,           // Half-level per scroll tick (smoother zoom)
-      zoomSnap: 0.25,           // Allow quarter-level zoom stops
+      zoomDelta: 1,             // One full level per scroll tick
+      zoomSnap: 0,              // Smooth fractional zoom (no snap = no two-step animation)
       wheelPxPerZoomLevel: 120, // Require more scroll to change zoom (default 60)
+      wheelDebounceTime: 80,    // Coalesce rapid scroll events (ms)
     });
 
     // Add tile layer
