@@ -265,8 +265,8 @@ export const eoStaringDefense: ScenarioDefinition = {
     },
 
     // Phase 2: Shahed-136 formation (5 drones) — wider spacing for EO resolution
-    // EO angular resolution ~0.1° → at 25 km range, minimum resolvable separation ~45m.
-    // Spacing widened to ~1.5 km between drones for realistic EO tracking challenge.
+    // ~3 km spacing between members — above the 2 km merge threshold for separate
+    // track detection by both radar and EO core triangulation.
     // Starts within N cluster coverage at ~28 km from center, heading south.
     {
       targetId: 'TGT-S136-1',
@@ -284,53 +284,53 @@ export const eoStaringDefense: ScenarioDefinition = {
     {
       targetId: 'TGT-S136-2',
       name: 'Shahed-136 Left Wing',
-      description: 'Left-wing drone, ~1.5 km offset from lead.',
+      description: 'Left-wing drone, ~3 km west of lead.',
       classification: 'uav',
       rcs: 0.05,
       startTime: 305,
       waypoints: [
-        { time: 0, position: { lat: 31.499, lon: 34.785, alt: 500 }, velocity: { vx: 0, vy: -50, vz: 0 } },
-        { time: 150, position: { lat: 31.374, lon: 34.785, alt: 500 } },
-        { time: 300, position: { lat: 31.249, lon: 34.785, alt: 500 } },
+        { time: 0, position: { lat: 31.487, lon: 34.77, alt: 500 }, velocity: { vx: 0, vy: -50, vz: 0 } },
+        { time: 150, position: { lat: 31.362, lon: 34.77, alt: 500 } },
+        { time: 300, position: { lat: 31.237, lon: 34.77, alt: 500 } },
       ],
     },
     {
       targetId: 'TGT-S136-3',
       name: 'Shahed-136 Right Wing',
-      description: 'Right-wing drone, ~1.5 km offset from lead.',
+      description: 'Right-wing drone, ~3 km east of lead.',
       classification: 'uav',
       rcs: 0.05,
       startTime: 305,
       waypoints: [
-        { time: 0, position: { lat: 31.499, lon: 34.815, alt: 500 }, velocity: { vx: 0, vy: -50, vz: 0 } },
-        { time: 150, position: { lat: 31.374, lon: 34.815, alt: 500 } },
-        { time: 300, position: { lat: 31.249, lon: 34.815, alt: 500 } },
+        { time: 0, position: { lat: 31.487, lon: 34.83, alt: 500 }, velocity: { vx: 0, vy: -50, vz: 0 } },
+        { time: 150, position: { lat: 31.362, lon: 34.83, alt: 500 } },
+        { time: 300, position: { lat: 31.237, lon: 34.83, alt: 500 } },
       ],
     },
     {
       targetId: 'TGT-S136-4',
       name: 'Shahed-136 Left Trail',
-      description: 'Left-trail drone, ~2 km behind left wing.',
+      description: 'Left-trail drone, ~3 km behind and west of lead.',
       classification: 'uav',
       rcs: 0.05,
       startTime: 310,
       waypoints: [
-        { time: 0, position: { lat: 31.485, lon: 34.775, alt: 500 }, velocity: { vx: 0, vy: -50, vz: 0 } },
-        { time: 150, position: { lat: 31.360, lon: 34.775, alt: 500 } },
-        { time: 300, position: { lat: 31.235, lon: 34.775, alt: 500 } },
+        { time: 0, position: { lat: 31.473, lon: 34.755, alt: 500 }, velocity: { vx: 0, vy: -50, vz: 0 } },
+        { time: 150, position: { lat: 31.348, lon: 34.755, alt: 500 } },
+        { time: 300, position: { lat: 31.223, lon: 34.755, alt: 500 } },
       ],
     },
     {
       targetId: 'TGT-S136-5',
       name: 'Shahed-136 Right Trail',
-      description: 'Right-trail drone, ~2 km behind right wing.',
+      description: 'Right-trail drone, ~3 km behind and east of lead.',
       classification: 'uav',
       rcs: 0.05,
       startTime: 310,
       waypoints: [
-        { time: 0, position: { lat: 31.485, lon: 34.825, alt: 500 }, velocity: { vx: 0, vy: -50, vz: 0 } },
-        { time: 150, position: { lat: 31.360, lon: 34.825, alt: 500 } },
-        { time: 300, position: { lat: 31.235, lon: 34.825, alt: 500 } },
+        { time: 0, position: { lat: 31.473, lon: 34.845, alt: 500 }, velocity: { vx: 0, vy: -50, vz: 0 } },
+        { time: 150, position: { lat: 31.348, lon: 34.845, alt: 500 } },
+        { time: 300, position: { lat: 31.223, lon: 34.845, alt: 500 } },
       ],
     },
 

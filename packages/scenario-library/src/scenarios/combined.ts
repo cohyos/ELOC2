@@ -126,7 +126,8 @@ export const combined: ScenarioDefinition = {
   // ── Targets ──────────────────────────────────────────────────────────
   targets: [
     // ── Drone swarm from the east (t=0) ──
-    // 4 drones in loose diamond, heading west at 30 m/s
+    // 4 drones in loose diamond, heading west at 30 m/s.
+    // ~3 km spacing — above the 2 km merge threshold for separate track resolution.
     {
       targetId: 'TGT-CB-D1',
       name: 'Swarm Lead',
@@ -142,49 +143,50 @@ export const combined: ScenarioDefinition = {
     {
       targetId: 'TGT-CB-D2',
       name: 'Swarm Left',
-      description: 'Left-flank drone. Follows lead with ~200 m offset.',
+      description: 'Left-flank drone, ~3 km north of lead.',
       classification: 'drone',
       startTime: 0,
       waypoints: [
-        { time: 0, position: { lat: 31.602, lon: 35.402, alt: 1500 }, velocity: { vx: -30, vy: 0, vz: 0 } },
-        { time: 150, position: { lat: 31.602, lon: 35.152, alt: 1500 } },
-        { time: 300, position: { lat: 31.602, lon: 34.902, alt: 1500 } },
+        { time: 0, position: { lat: 31.627, lon: 35.43, alt: 1500 }, velocity: { vx: -30, vy: 0, vz: 0 } },
+        { time: 150, position: { lat: 31.627, lon: 35.18, alt: 1500 } },
+        { time: 300, position: { lat: 31.627, lon: 34.93, alt: 1500 } },
       ],
     },
     {
       targetId: 'TGT-CB-D3',
       name: 'Swarm Right',
-      description: 'Right-flank drone. Follows lead with ~200 m offset.',
+      description: 'Right-flank drone, ~3 km south of lead.',
       classification: 'drone',
       startTime: 0,
       waypoints: [
-        { time: 0, position: { lat: 31.598, lon: 35.402, alt: 1500 }, velocity: { vx: -30, vy: 0, vz: 0 } },
-        { time: 150, position: { lat: 31.598, lon: 35.152, alt: 1500 } },
-        { time: 300, position: { lat: 31.598, lon: 34.902, alt: 1500 } },
+        { time: 0, position: { lat: 31.573, lon: 35.43, alt: 1500 }, velocity: { vx: -30, vy: 0, vz: 0 } },
+        { time: 150, position: { lat: 31.573, lon: 35.18, alt: 1500 } },
+        { time: 300, position: { lat: 31.573, lon: 34.93, alt: 1500 } },
       ],
     },
     {
       targetId: 'TGT-CB-D4',
       name: 'Swarm Trail',
-      description: 'Trail drone. ~200 m behind lead.',
+      description: 'Trail drone, ~3 km behind lead.',
       classification: 'drone',
       startTime: 0,
       waypoints: [
-        { time: 0, position: { lat: 31.6, lon: 35.404, alt: 1500 }, velocity: { vx: -30, vy: 0, vz: 0 } },
-        { time: 150, position: { lat: 31.6, lon: 35.154, alt: 1500 } },
-        { time: 300, position: { lat: 31.6, lon: 34.904, alt: 1500 } },
+        { time: 0, position: { lat: 31.6, lon: 35.432, alt: 1500 }, velocity: { vx: -30, vy: 0, vz: 0 } },
+        { time: 150, position: { lat: 31.6, lon: 35.182, alt: 1500 } },
+        { time: 300, position: { lat: 31.6, lon: 34.932, alt: 1500 } },
       ],
     },
 
     // ── Grad barrage from the north (t=30) ──
     // 10 rockets, ~700 m/s, 60s flight, impact area around (31.5, 34.8)
+    // ~3 km grid spacing for separate track detection (above 2 km merge threshold)
     ...Array.from({ length: 10 }, (_, i) => {
       const row = Math.floor(i / 5);
       const col = i % 5;
-      const impactLat = 31.5 + (row - 0.5) * 0.0045;
-      const impactLon = 34.8 + (col - 2) * 0.0045;
-      const launchLat = 31.86 + (row - 0.5) * 0.0005;
-      const launchLon = 34.8 + (col - 2) * 0.0005;
+      const impactLat = 31.5 + (row - 0.5) * 0.027;
+      const impactLon = 34.8 + (col - 2) * 0.032;
+      const launchLat = 31.86 + (row - 0.5) * 0.003;
+      const launchLon = 34.8 + (col - 2) * 0.003;
 
       return {
         targetId: `TGT-CB-R${i + 1}`,
