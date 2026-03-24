@@ -21,3 +21,14 @@ export {
   type TaskAssignment,
   type InvestigatorConfig,
 } from './investigator-coordinator.js';
+
+// Sector Scan
+export {
+  SectorScanManager,
+  type SectorDefinition,
+  type SectorScanConfig,
+  type SectorScanState,
+  type ScannerAssignment,
+  type ScannerRole,
+  type SectorDetection,
+} from './sector-scan-manager.js';

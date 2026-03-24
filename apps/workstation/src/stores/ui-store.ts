@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 export type InvestigationMode = 'standard' | 'gt-comparison' | 'pyrite';
 
-export type DetailView = 'track' | 'sensor' | 'tasks' | 'investigation' | 'eo-window' | 'cue' | 'group' | 'geometry' | 'quality' | 'ground-truth' | 'none';
+export type DetailView = 'track' | 'sensor' | 'tasks' | 'investigation' | 'eo-window' | 'cue' | 'group' | 'geometry' | 'quality' | 'sector-scan' | 'ground-truth' | 'none';
 
 export interface LayerVisibility {
   tracks: boolean;

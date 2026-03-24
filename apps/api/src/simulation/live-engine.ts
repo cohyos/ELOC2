@@ -69,6 +69,9 @@ import {
   type FusionMode,
 } from '@eloc2/fusion-core';
 import { EoManagementModule } from '@eloc2/eo-management';
+import { SectorScanManager } from '@eloc2/eo-core';
+import type { SectorScanState, SectorDefinition } from '@eloc2/eo-core';
+import { SensorBus as SectorScanBus } from '@eloc2/sensor-bus';
 import type { EoModuleStatus } from '@eloc2/eo-management';
 import { getElevation } from '@eloc2/terrain';
 import { CoreEoTargetDetector } from './core-eo-detector.js';
@@ -473,6 +476,9 @@ export class LiveEngine {
     scanDirection: 1 | -1;     // 1 = clockwise, -1 = counter-clockwise
     idleTickCount: number;      // ticks with no candidates (activate after 3)
   }>();
+
+  // ── Sector Scan Manager ─────────────────────────────────────────────
+  private sectorScanManager: SectorScanManager | null = null;
 
   // ── Decision Chain Log ───────────────────────────────────────────────
   private decisionChains: DecisionChainEntry[] = [];
@@ -951,6 +957,7 @@ export class LiveEngine {
       bearingAssociations: this.bearingAssociations.filter(a => a.ambiguous || a.confidence < 1.0),
       multiSensorResolutions: this.multiSensorResolutions,
       searchModeStates: this.getSearchModeStatus().filter(s => s.active),
+      sectorScan: this.getSectorScanState() ?? undefined,
       convergenceStates: this.getConvergenceStates(),
       eoModuleStatus: this.cachedEoModuleStatus ?? undefined,
       latency: this.cachedLatency,
@@ -1898,6 +1905,9 @@ export class LiveEngine {
 
     // Continuous gimbal tracking: update EO sensor gimbal azimuth toward current target
     this.updateGimbalPointing();
+
+    // Sector scan: manage triangulation hopping
+    this.tickSectorScan();
 
     // Quality assessment: compute metrics comparing tracks vs ground truth
     this.computeQualityMetrics();
@@ -4452,6 +4462,116 @@ export class LiveEngine {
     return true;
   }
 
+  // ── Sector Scan API ──────────────────────────────────────────────────
+
+  /**
+   * Start a sector scan with assigned EO investigators.
+   * The SectorScanManager divides the sector and issues commands to sensors.
+   */
+  startSectorScan(
+    sector: SectorDefinition,
+    sensorIds: string[],
+  ): { scanId: string } | { error: string } {
+    // Validate sensor IDs — must be EO and online
+    const eoSensors = this.state.sensors.filter(
+      (s) => s.sensorType === 'eo' && sensorIds.includes(s.sensorId as string),
+    );
+    if (eoSensors.length === 0) {
+      return { error: 'No valid EO sensors found' };
+    }
+    if (eoSensors.length < 1 || eoSensors.length > 3) {
+      return { error: 'Assign 1-3 EO investigators' };
+    }
+
+    // Lazy-init manager if needed (no SensorBus in monolithic — use a minimal bus)
+    if (!this.sectorScanManager) {
+      this.sectorScanManager = new SectorScanManager(new SectorScanBus());
+    }
+
+    // Build sensor positions map
+    const sensorPositions = new Map<string, { lat: number; lon: number; alt: number }>();
+    for (const s of eoSensors) {
+      sensorPositions.set(s.sensorId as string, s.position);
+    }
+
+    const scanId = this.sectorScanManager.startScan(
+      sector,
+      eoSensors.map((s) => s.sensorId as string),
+      sensorPositions,
+      this.state.elapsedSec,
+    );
+
+    if (!scanId) {
+      return { error: 'Failed to start scan — invalid parameters' };
+    }
+
+    // Apply search patterns to the monolithic engine's sensors
+    const scanState = this.sectorScanManager.getState();
+    if (scanState) {
+      for (const scanner of scanState.scanners) {
+        this.setSearchModeControl(scanner.sensorId, {
+          enabled: true,
+          pattern: 'sector',
+          scanStart: scanner.subSectorStart,
+          scanEnd: scanner.subSectorEnd,
+        });
+      }
+    }
+
+    this.pushEvent('eo.sector_scan.started', `Sector scan ${scanId}: ${sensorIds.join(', ')}`);
+    this.notifyStateChange();
+    return { scanId };
+  }
+
+  /** Stop the active sector scan */
+  stopSectorScan(): boolean {
+    if (!this.sectorScanManager?.isActive()) return false;
+
+    const state = this.sectorScanManager.getState();
+    if (state) {
+      // Disable search mode for all assigned sensors
+      for (const scanner of state.scanners) {
+        this.setSearchModeControl(scanner.sensorId, { enabled: false });
+      }
+    }
+
+    this.sectorScanManager.stopScan(this.state.elapsedSec);
+    this.pushEvent('eo.sector_scan.stopped', 'Sector scan stopped');
+    this.notifyStateChange();
+    return true;
+  }
+
+  /** Get current sector scan state for API/WS broadcast */
+  getSectorScanState(): SectorScanState | null {
+    return this.sectorScanManager?.getState() ?? null;
+  }
+
+  /** Tick sector scan manager (call from main loop) */
+  private tickSectorScan(): void {
+    if (!this.sectorScanManager?.isActive()) return;
+
+    this.sectorScanManager.tick(this.state.elapsedSec);
+
+    // Sync triangulation commands back to the monolithic engine
+    const scanState = this.sectorScanManager.getState();
+    if (!scanState) return;
+
+    // If a triangulator was assigned, update the monolithic sensor's gimbal
+    if (scanState.triangulatorSensorId) {
+      const det = scanState.detections[scanState.currentDetectionIndex];
+      if (det) {
+        // Point the triangulator sensor's gimbal toward detection azimuth
+        const sensor = this.state.sensors.find(
+          (s) => (s.sensorId as string) === scanState.triangulatorSensorId,
+        );
+        if (sensor?.gimbal) {
+          // Let the search mode control handle it — disable search, then rely on gimbal tracking
+          this.setSearchModeControl(scanState.triangulatorSensorId, { enabled: false });
+        }
+      }
+    }
+  }
+
   /** Update EO gimbal azimuth to continuously track assigned targets. */
   private updateGimbalPointing(): void {
     const trackMap = new Map(this.state.tracks.map(t => [t.systemTrackId, t]));
@@ -5848,6 +5968,8 @@ export class LiveEngine {
       multiSensorResolutions: this.multiSensorResolutions,
       // Search mode states (REQ-5 Phase B)
       searchModeStates: this.getSearchModeStatus().filter(s => s.active),
+      // Sector scan state
+      sectorScan: this.getSectorScanState() ?? undefined,
       // Convergence states (REQ-5 Phase C)
       convergenceStates: this.getConvergenceStates(),
       // REQ-16: EO management module status

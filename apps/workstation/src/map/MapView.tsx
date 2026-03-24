@@ -32,6 +32,7 @@ export function MapView() {
   const trailHistory = useTrackStore(s => s.trailHistory);
   const sensors = useSensorStore(s => s.sensors);
   const searchModeStates = useSensorStore(s => s.searchModeStates);
+  const sectorScan = useSensorStore(s => s.sectorScan);
   const selectTrack = useUiStore(s => s.selectTrack);
   const selectSensor = useUiStore(s => s.selectSensor);
   const selectGroundTruth = useUiStore(s => s.selectGroundTruth);
@@ -505,6 +506,7 @@ export function MapView() {
           coverZones={coverZones}
           operationalZones={operationalZones}
           searchModeStates={searchModeStates}
+          sectorScan={sectorScan}
           fovOverlaps={fovOverlaps}
           bearingAssociations={bearingAssociations}
           multiSensorResolutions={multiSensorResolutions}

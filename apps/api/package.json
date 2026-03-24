@@ -30,7 +30,9 @@
     "@fastify/websocket": "^11.0.0",
     "fastify": "^5.2.0",
     "pdfmake": "^0.3.7",
-    "@eloc2/terrain": "workspace:*"
+    "@eloc2/terrain": "workspace:*",
+    "@eloc2/eo-core": "workspace:*",
+    "@eloc2/sensor-bus": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.3.0",

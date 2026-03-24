@@ -52,6 +52,65 @@ export async function sensorRoutes(app: FastifyInstance) {
     return { ok: true, sensorId, enabled };
   });
 
+  // ── Sector Scan ─────────────────────────────────────────────────────
+
+  // POST /api/eo/sector-scan/start — Start a sector threat scan
+  app.post<{
+    Body: {
+      azimuthStartDeg: number;
+      azimuthEndDeg: number;
+      sensorIds: string[];
+    };
+  }>('/api/eo/sector-scan/start', async (request, reply) => {
+    const { azimuthStartDeg, azimuthEndDeg, sensorIds } = request.body ?? {};
+
+    if (azimuthStartDeg == null || azimuthEndDeg == null || !Array.isArray(sensorIds)) {
+      return reply.code(400).send({
+        error: 'azimuthStartDeg, azimuthEndDeg (numbers) and sensorIds (string[]) required',
+      });
+    }
+    if (sensorIds.length < 1 || sensorIds.length > 3) {
+      return reply.code(400).send({ error: 'Assign 1-3 EO investigators' });
+    }
+
+    const result = engine.startSectorScan(
+      { azimuthStartDeg, azimuthEndDeg },
+      sensorIds,
+    );
+
+    if ('error' in result) {
+      return reply.code(400).send(result);
+    }
+    return { ok: true, ...result };
+  });
+
+  // POST /api/eo/sector-scan/stop — Stop the active sector scan
+  app.post('/api/eo/sector-scan/stop', async (_request, reply) => {
+    const stopped = engine.stopSectorScan();
+    if (!stopped) {
+      return reply.code(404).send({ error: 'No active sector scan' });
+    }
+    return { ok: true };
+  });
+
+  // GET /api/eo/sector-scan/status — Get current sector scan state
+  app.get('/api/eo/sector-scan/status', async () => {
+    return engine.getSectorScanState() ?? { active: false };
+  });
+
+  // GET /api/eo/available-investigators — EO sensors available for sector scan
+  app.get('/api/eo/available-investigators', async () => {
+    const sensors = engine.getState().sensors;
+    return sensors
+      .filter((s) => s.sensorType === 'eo' && s.online)
+      .map((s) => ({
+        sensorId: s.sensorId,
+        position: s.position,
+        slewRateDegPerSec: s.gimbal?.slewRateDegPerSec ?? 0,
+        online: s.online,
+      }));
+  });
+
   // GET /api/eo/fov-overlaps — Current FOV overlap data between EO sensors
   app.get('/api/eo/fov-overlaps', async () => {
     return engine.getFovOverlaps();

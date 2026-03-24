@@ -5,7 +5,8 @@ import type { LayerVisibility } from '../stores/ui-store';
 import { useUiStore } from '../stores/ui-store';
 import type { GroundTruthTarget } from '../stores/ground-truth-store';
 import type { CoverZone, OperationalZone } from '../stores/cover-zone-store';
-import type { SearchModeStateWS } from '../stores/sensor-store';
+import { useSensorStore } from '../stores/sensor-store';
+import type { SearchModeStateWS, SectorScanStateWS } from '../stores/sensor-store';
 import type { FovOverlap, BearingAssociation, MultiSensorResolution } from '../stores/fov-overlap-store';
 import type { BallisticEstimateWS } from '../stores/task-store';
 
@@ -133,6 +134,7 @@ interface DebugOverlayProps {
   multiSensorResolutions?: MultiSensorResolution[];
   convergedTrackIds?: Set<string>;
   ballisticEstimates?: BallisticEstimateWS[];
+  sectorScan?: SectorScanStateWS | null;
 }
 
 // ─── Layer group names ───────────────────────────────────────────────────────
@@ -157,7 +159,7 @@ export function DebugOverlay({
   selectedGroundTruthId, groundTruthTargets, showGroundTruth,
   coverZones, operationalZones, searchModeStates,
   fovOverlaps, bearingAssociations, multiSensorResolutions,
-  convergedTrackIds, ballisticEstimates,
+  convergedTrackIds, ballisticEstimates, sectorScan,
 }: DebugOverlayProps) {
 
   const groupsRef = useRef<LayerGroups | null>(null);
@@ -280,12 +282,25 @@ export function DebugOverlay({
       const sensor = sensors.find(s => (s.sensorId as string) === id);
       const isOnline = sensor?.online ?? true;
 
+      const isEo = sensor?.sensorType === 'eo';
+      const searchStates = useSensorStore.getState().searchModeStates;
+      const isSearching = searchStates.some(s => s.sensorId === id && s.active);
+
       actions.push(
         { label: 'Select', action: () => callbacksRef.current.onSelectSensor?.(id) },
         { label: isOnline ? 'Turn Off' : 'Turn On', action: () => { fetch('/api/operator/toggle-sensor', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ sensorId: id, online: !isOnline }) }).catch(() => {}); } },
         { label: 'Release Sensor', action: () => { fetch('/api/operator/release-sensor', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ sensorId: id }) }).catch(() => {}); } },
-        { label: 'Toggle Search Mode', action: () => { fetch('/api/operator/toggle-search', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ sensorId: id }) }).catch(() => {}); } },
       );
+      if (isEo) {
+        actions.push(
+          { label: isSearching ? 'Stop Search' : 'Start Search', action: () => {
+            fetch('/api/eo/search-control', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ sensorId: id, enabled: !isSearching }) }).catch(() => {});
+          } },
+          { label: 'Sector Scan...', action: () => {
+            useUiStore.getState().setDetailView('sector-scan');
+          } },
+        );
+      }
     } else if (type === 'gt') {
       actions.push(
         { label: 'Select', action: () => callbacksRef.current.onSelectGroundTruth?.(id) },
@@ -663,6 +678,75 @@ export function DebugOverlay({
       }
     }
 
+    // Sector scan arc visualization
+    if (sectorScan?.active && layerVisibility.sensors) {
+      // Draw sector arc from each assigned scanner's position
+      const sensorMap = new Map(sensors.map(s => [s.sensorId as string, s]));
+      for (const scanner of sectorScan.scanners) {
+        const sensor = sensorMap.get(scanner.sensorId);
+        if (!sensor) continue;
+        const { lon, lat } = sensor.position;
+        const rayLen = sensor.coverage.maxRangeM ?? 30000;
+
+        // Draw sub-sector boundary rays
+        const [s1Lon, s1Lat] = geoOffset(lon, lat, scanner.subSectorStart, rayLen);
+        const [s2Lon, s2Lat] = geoOffset(lon, lat, scanner.subSectorEnd, rayLen);
+
+        // Boundary lines
+        const sectorColor = scanner.role === 'triangulating' ? '#ff4444' : '#ff8800';
+        L.polyline([[lat, lon], [s1Lat, s1Lon]], {
+          color: sectorColor, weight: 2, opacity: 0.7, dashArray: '4,4', interactive: false,
+        }).addTo(g);
+        L.polyline([[lat, lon], [s2Lat, s2Lon]], {
+          color: sectorColor, weight: 2, opacity: 0.7, dashArray: '4,4', interactive: false,
+        }).addTo(g);
+
+        // Arc between boundaries (approximate with polyline segments)
+        const arcPoints: [number, number][] = [];
+        let startDeg = scanner.subSectorStart;
+        let endDeg = scanner.subSectorEnd;
+        if (endDeg <= startDeg) endDeg += 360;
+        const steps = Math.max(8, Math.round((endDeg - startDeg) / 5));
+        for (let i = 0; i <= steps; i++) {
+          const az = startDeg + (endDeg - startDeg) * (i / steps);
+          const [eLon, eLat] = geoOffset(lon, lat, az, rayLen);
+          arcPoints.push([eLat, eLon]);
+        }
+        L.polyline(arcPoints, {
+          color: sectorColor, weight: 1.5, opacity: 0.5, interactive: false,
+        }).addTo(g);
+
+        // Scanner role label
+        const midAz = (scanner.subSectorStart + scanner.subSectorEnd) / 2;
+        const [mlLon, mlLat] = geoOffset(lon, lat, midAz, rayLen * 0.3);
+        const roleLabel = scanner.role === 'triangulating' ? 'TRI' : 'SCAN';
+        L.marker([mlLat, mlLon], {
+          icon: icon(
+            `<span style="font:bold 9px monospace;color:${sectorColor};text-shadow:0 0 3px #000;">${roleLabel}</span>`,
+            [40, 10], [20, 5],
+          ),
+          interactive: false,
+        }).addTo(g);
+      }
+
+      // Detection markers
+      for (const det of sectorScan.detections) {
+        const detSensor = sensorMap.get(det.detectedBySensorId);
+        if (!detSensor) continue;
+        const { lon, lat } = detSensor.position;
+        const detRange = (detSensor.coverage.maxRangeM ?? 30000) * 0.5;
+        const [dLon, dLat] = geoOffset(lon, lat, det.azimuthDeg, detRange);
+        L.circleMarker([dLat, dLon], {
+          radius: 6,
+          color: det.triangulated ? '#00cc44' : '#ffcc00',
+          fillColor: det.triangulated ? '#00cc44' : '#ffcc00',
+          fillOpacity: 0.8,
+          weight: 2,
+          interactive: false,
+        }).addTo(g);
+      }
+    }
+
     // Triangulation rays (EO sensor → track lines)
     if (layerVisibility.triangulation && showEoLayers) {
       const sensorMap = new Map(sensors.map(s => [s.sensorId as string, s]));
@@ -684,7 +768,7 @@ export function DebugOverlay({
         }
       }
     }
-  }, [sensors, tracks, filteredTracks, layerVisibility.eoRays, layerVisibility.triangulation, layerVisibility.sensors, bearingAssociations, searchModeStates, multiSensorResolutions, pictureMode]);
+  }, [sensors, tracks, filteredTracks, layerVisibility.eoRays, layerVisibility.triangulation, layerVisibility.sensors, bearingAssociations, searchModeStates, multiSensorResolutions, pictureMode, sectorScan]);
 
   // ── SECTION: Ellipse layers (uncertainty ellipses) ──────────────────────────
   useEffect(() => {

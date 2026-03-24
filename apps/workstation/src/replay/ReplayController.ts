@@ -234,6 +234,13 @@ export class ReplayController {
     if (data.searchModeStates && Array.isArray(data.searchModeStates)) {
       useSensorStore.getState().setSearchModeStates(data.searchModeStates);
     }
+    if (data.sectorScan) {
+      useSensorStore.getState().setSectorScan(data.sectorScan);
+    } else if (data.sectorScan === null || data.sectorScan === undefined) {
+      // Clear if no sector scan active
+      const current = useSensorStore.getState().sectorScan;
+      if (current) useSensorStore.getState().setSectorScan(null);
+    }
     if (data.fovOverlaps && Array.isArray(data.fovOverlaps)) {
       useFovOverlapStore.getState().setFovOverlaps(data.fovOverlaps);
     }

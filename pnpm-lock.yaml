@@ -47,6 +47,9 @@ importers:
       '@eloc2/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@eloc2/eo-core':
+        specifier: workspace:*
+        version: link:../../packages/eo-core
       '@eloc2/eo-investigation':
         specifier: workspace:*
         version: link:../../packages/eo-investigation
@@ -74,6 +77,9 @@ importers:
       '@eloc2/scenario-library':
         specifier: workspace:*
         version: link:../../packages/scenario-library
+      '@eloc2/sensor-bus':
+        specifier: workspace:*
+        version: link:../../packages/sensor-bus
       '@eloc2/shared-utils':
         specifier: workspace:*
         version: link:../../packages/shared-utils
