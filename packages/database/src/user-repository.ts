@@ -1,7 +1,7 @@
 import type { Pool } from 'pg';
-import bcrypt from 'bcrypt';
+import bcryptjs from 'bcryptjs';
 
-const SALT_ROUNDS = 10;
+const SALT_ROUNDS = 12;
 
 export interface UserRow {
   id: string;
@@ -39,7 +39,7 @@ export async function createUser(
   password: string,
   role: 'instructor' | 'operator',
 ): Promise<UserInfo> {
-  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+  const passwordHash = await bcryptjs.hash(password, SALT_ROUNDS);
   const result = await pool.query<UserRow>(
     `INSERT INTO users (username, password_hash, role)
      VALUES ($1, $2, $3)
@@ -150,5 +150,5 @@ export async function verifyPassword(
   password: string,
   hash: string,
 ): Promise<boolean> {
-  return bcrypt.compare(password, hash);
+  return bcryptjs.compare(password, hash);
 }

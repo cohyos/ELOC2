@@ -23,8 +23,77 @@ import { engine } from './simulation/live-engine.js';
 
 
 const AUTH_ENABLED = process.env.AUTH_ENABLED === 'true';
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
-const server = Fastify({ logger: true });
+const server = Fastify({
+  logger: {
+    level: process.env.LOG_LEVEL || 'info',
+    // Redact sensitive fields from logs
+    redact: ['req.headers.authorization', 'req.headers.cookie', '*.password', '*.password_hash', '*.session_id'],
+  },
+  bodyLimit: 10 * 1024 * 1024, // 10MB max body size
+});
+
+// ── Security headers ─────────────────────────────────────────────────────
+server.addHook('onSend', (_request, reply, payload, done) => {
+  reply.header('X-Content-Type-Options', 'nosniff');
+  reply.header('X-Frame-Options', 'DENY');
+  reply.header('X-XSS-Protection', '1; mode=block');
+  reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  if (IS_PRODUCTION) {
+    reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  done(null, payload);
+});
+
+// ── CORS ─────────────────────────────────────────────────────────────────
+const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',')
+  : (IS_PRODUCTION ? [] : ['http://localhost:3000', 'http://localhost:3001']);
+
+server.addHook('onRequest', (request, reply, done) => {
+  const origin = request.headers.origin;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    reply.header('Access-Control-Allow-Origin', origin);
+    reply.header('Access-Control-Allow-Credentials', 'true');
+    reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  }
+  if (request.method === 'OPTIONS') {
+    reply.code(204).send();
+    return;
+  }
+  done();
+});
+
+// ── Rate limiting on auth endpoints ──────────────────────────────────────
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const RATE_LIMIT_MAX = 10; // max 10 login attempts per 15 min per IP
+
+server.addHook('onRequest', (request, reply, done) => {
+  if (request.url === '/api/auth/login' && request.method === 'POST') {
+    const ip = request.ip;
+    const now = Date.now();
+    const entry = loginAttempts.get(ip);
+    if (entry && now < entry.resetAt) {
+      if (entry.count >= RATE_LIMIT_MAX) {
+        reply.code(429).send({ error: 'Too many login attempts. Try again later.' });
+        return;
+      }
+      entry.count++;
+    } else {
+      loginAttempts.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    }
+    // Periodic cleanup (every 100 requests)
+    if (loginAttempts.size > 1000) {
+      for (const [key, val] of loginAttempts) {
+        if (now >= val.resetAt) loginAttempts.delete(key);
+      }
+    }
+  }
+  done();
+});
 
 // Register WebSocket support
 await server.register(fastifyWebsocket);

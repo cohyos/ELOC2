@@ -175,6 +175,16 @@ export function registerAsterixRoutes(app: FastifyInstance, engine: LiveEngine) 
       const port = body.port ?? 30004;
       const intervalMs = body.intervalMs ?? 1000;
 
+      // Validate host (only allow localhost/loopback)
+      const allowedHosts = ['127.0.0.1', 'localhost', '::1', '0.0.0.0'];
+      if (!allowedHosts.includes(host)) {
+        return reply.code(400).send({ error: `host must be one of: ${allowedHosts.join(', ')}` });
+      }
+      // Validate port range
+      if (typeof port !== 'number' || port < 1024 || port > 65535) {
+        return reply.code(400).send({ error: 'port must be between 1024 and 65535' });
+      }
+
       const socket = createSocket('udp4');
 
       const intervalHandle = setInterval(() => {

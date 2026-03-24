@@ -1597,7 +1597,13 @@ export class LiveEngine {
     this.state = this.buildInitialState();
   }
 
-  addWsClient(client: WsClient, role?: 'instructor' | 'operator' | 'anonymous'): void {
+  private static readonly MAX_WS_CLIENTS = 50;
+
+  addWsClient(client: WsClient, role?: 'instructor' | 'operator' | 'anonymous'): boolean {
+    if (this.wsClients.size >= LiveEngine.MAX_WS_CLIENTS) {
+      console.warn(`[LiveEngine] Max WebSocket clients (${LiveEngine.MAX_WS_CLIENTS}) reached — rejecting connection`);
+      return false;
+    }
     this.wsClients.add(client);
     this.wsClientInfos.set(client, {
       client,
@@ -1605,6 +1611,7 @@ export class LiveEngine {
       connectedAt: Date.now(),
     });
     this.onUserConnected();
+    return true;
   }
 
   removeWsClient(client: WsClient): void {

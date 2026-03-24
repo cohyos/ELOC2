@@ -62,7 +62,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     // Set cookie
     reply.header(
       'Set-Cookie',
-      `session-id=${session.session_id}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${24 * 3600}`,
+      `session-id=${session.session_id}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${24 * 3600}${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`,
     );
 
     return {
@@ -131,8 +131,11 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     if (!['instructor', 'operator'].includes(role)) {
       return reply.code(400).send({ error: 'role must be instructor or operator' });
     }
-    if (password.length < 6) {
-      return reply.code(400).send({ error: 'password must be at least 6 characters' });
+    if (password.length < 8) {
+      return reply.code(400).send({ error: 'password must be at least 8 characters' });
+    }
+    if (password.length > 128) {
+      return reply.code(400).send({ error: 'password must be at most 128 characters' });
     }
 
     const pool = getPool();

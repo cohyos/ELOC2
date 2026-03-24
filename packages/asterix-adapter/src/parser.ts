@@ -281,8 +281,9 @@ function parseCAT048Record(
     }
     // If FX bit set, more sub-field indicators follow (simplified: skip)
     if (subPresence & 1) {
-      // Extension — for now skip any additional bytes
-      while (pos < payload.length) {
+      // Extension — for now skip any additional bytes (cap iterations to prevent DoS)
+      let extIter = 0;
+      while (pos < payload.length && extIter++ < 64) {
         const ext = payload.readUInt8(pos);
         pos++;
         for (let bit = 7; bit >= 1; bit--) {
@@ -310,7 +311,7 @@ function parseCAT048Record(
   // Field index 9: I048/250 — Mode S MB Data (variable: 1 byte count + N*8 bytes)
   if (fields.length > 9 && fields[9]) {
     if (pos >= payload.length) return { record: null, bytesConsumed: pos - offset };
-    const repCount = payload.readUInt8(pos);
+    const repCount = Math.min(payload.readUInt8(pos), 32); // Cap at 32 repetitions to prevent DoS
     pos += 1 + repCount * 8;
   }
 

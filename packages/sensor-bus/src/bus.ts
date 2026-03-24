@@ -17,7 +17,11 @@ export class SensorBus {
 
   constructor() {
     // Allow many sensors to subscribe without warnings
-    this.emitter.setMaxListeners(100);
+    this.emitter.setMaxListeners(200);
+    // Prevent process crash on unhandled 'error' events
+    this.emitter.on('error', (err: unknown) => {
+      console.error('[SensorBus] Unhandled error event:', err);
+    });
   }
 
   // ── Sensor → System (upstream) ──────────────────────────────

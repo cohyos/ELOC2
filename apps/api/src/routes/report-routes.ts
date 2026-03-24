@@ -38,7 +38,8 @@ export function registerReportRoutes(app: FastifyInstance, engine: LiveEngine) {
       reply.header('Content-Disposition', `attachment; filename="${filename}"`);
       return pdfBuffer;
     } catch (err: any) {
-      return reply.code(500).send({ error: 'Report generation failed', details: err.message });
+      app.log.error(err, 'Report generation failed');
+      return reply.code(500).send({ error: 'Report generation failed' });
     }
   });
 

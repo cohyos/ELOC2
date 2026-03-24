@@ -143,6 +143,14 @@ export class EoTrackManager {
         track.status = 'stale';
       }
     }
+
+    // Prune long-dropped tracks to prevent unbounded Map growth
+    const pruneAfterSec = (this.config.dropTimeoutSec ?? 30) * 2;
+    for (const [id, track] of this.tracks) {
+      if (track.status === 'dropped' && simTimeSec - track.lastUpdateSec > pruneAfterSec) {
+        this.tracks.delete(id);
+      }
+    }
   }
 
   /** Get all tracks (including dropped) */
