@@ -296,22 +296,28 @@ export function DebugOverlay({
         { label: 'Release Sensor', action: () => { fetch('/api/operator/release-sensor', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ sensorId: id }) }).catch(() => {}); } },
       );
       if (isEo) {
-        const sectorScanState = useSensorStore.getState().sectorScan;
-        const isSectorScanning = sectorScanState?.active && sectorScanState.scanners.some(s => s.sensorId === id);
+        const isStaring = !sensor?.gimbal || sensor.gimbal.slewRateDegPerSec === 0;
         actions.push(
           { label: isSearching ? 'Stop Search' : 'Start Search', action: () => {
             fetch('/api/eo/search-control', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ sensorId: id, enabled: !isSearching }) }).catch(() => {});
           } },
-          { label: 'Sector Scan...', action: () => {
-            useUiStore.getState().setDetailView('sector-scan');
-          } },
         );
-        if (isSectorScanning) {
+        // Sector scan requires a gimbal that can slew — not available for staring sensors
+        if (!isStaring) {
+          const sectorScanState = useSensorStore.getState().sectorScan;
+          const isSectorScanning = sectorScanState?.active && sectorScanState.scanners.some(s => s.sensorId === id);
           actions.push(
-            { label: 'Stop Sector Scan', action: () => {
-              fetch('/api/eo/sector-scan/stop', { method: 'POST' }).catch(() => {});
+            { label: 'Sector Scan...', action: () => {
+              useUiStore.getState().setDetailView('sector-scan');
             } },
           );
+          if (isSectorScanning) {
+            actions.push(
+              { label: 'Stop Sector Scan', action: () => {
+                fetch('/api/eo/sector-scan/stop', { method: 'POST' }).catch(() => {});
+              } },
+            );
+          }
         }
       }
     } else if (type === 'gt') {
