@@ -3,9 +3,11 @@ import L from 'leaflet';
 import type { SystemTrack, SensorState } from '@eloc2/domain';
 import type { LayerVisibility } from '../stores/ui-store';
 import { useUiStore } from '../stores/ui-store';
+import { useGroundTruthStore } from '../stores/ground-truth-store';
 import type { GroundTruthTarget } from '../stores/ground-truth-store';
 import type { CoverZone, OperationalZone } from '../stores/cover-zone-store';
-import type { SearchModeStateWS } from '../stores/sensor-store';
+import { useSensorStore } from '../stores/sensor-store';
+import type { SearchModeStateWS, SectorScanStateWS } from '../stores/sensor-store';
 import type { FovOverlap, BearingAssociation, MultiSensorResolution } from '../stores/fov-overlap-store';
 import type { BallisticEstimateWS } from '../stores/task-store';
 
@@ -133,6 +135,7 @@ interface DebugOverlayProps {
   multiSensorResolutions?: MultiSensorResolution[];
   convergedTrackIds?: Set<string>;
   ballisticEstimates?: BallisticEstimateWS[];
+  sectorScan?: SectorScanStateWS | null;
 }
 
 // ─── Layer group names ───────────────────────────────────────────────────────
@@ -157,7 +160,7 @@ export function DebugOverlay({
   selectedGroundTruthId, groundTruthTargets, showGroundTruth,
   coverZones, operationalZones, searchModeStates,
   fovOverlaps, bearingAssociations, multiSensorResolutions,
-  convergedTrackIds, ballisticEstimates,
+  convergedTrackIds, ballisticEstimates, sectorScan,
 }: DebugOverlayProps) {
 
   const groupsRef = useRef<LayerGroups | null>(null);
@@ -256,9 +259,12 @@ export function DebugOverlay({
     const classify = (cls: string) => { fetch('/api/operator/classify', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ trackId: id, classification: cls }) }).catch(() => {}); };
 
     if (type === 'track') {
+      const hasTrajectory = useUiStore.getState().trajectoryTrackIds.has(id);
       actions.push(
         { label: 'Select', action: () => callbacksRef.current.onSelectTrack?.(id) },
+        { label: hasTrajectory ? 'Hide Trajectory' : 'Show Trajectory', action: () => useUiStore.getState().toggleTrajectory(id) },
         { label: 'Cue EO', action: () => { fetch('/api/operator/priority', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ trackId: id, priority: true }) }).catch(() => {}); } },
+        { label: 'Stop Cue EO', action: () => { fetch('/api/operator/priority', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ trackId: id, priority: false }) }).catch(() => {}); } },
         { label: 'Set Priority', action: () => { fetch('/api/operator/set-priority', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ trackId: id, priority: 'high' }) }).catch(() => {}); } },
         { label: 'Open EO Video', action: () => useUiStore.getState().setEoVideoPopupTrackId(id) },
       );
@@ -280,15 +286,39 @@ export function DebugOverlay({
       const sensor = sensors.find(s => (s.sensorId as string) === id);
       const isOnline = sensor?.online ?? true;
 
+      const isEo = sensor?.sensorType === 'eo';
+      const searchStates = useSensorStore.getState().searchModeStates;
+      const isSearching = searchStates.some(s => s.sensorId === id && s.active);
+
       actions.push(
         { label: 'Select', action: () => callbacksRef.current.onSelectSensor?.(id) },
         { label: isOnline ? 'Turn Off' : 'Turn On', action: () => { fetch('/api/operator/toggle-sensor', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ sensorId: id, online: !isOnline }) }).catch(() => {}); } },
         { label: 'Release Sensor', action: () => { fetch('/api/operator/release-sensor', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ sensorId: id }) }).catch(() => {}); } },
-        { label: 'Toggle Search Mode', action: () => { fetch('/api/operator/toggle-search', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ sensorId: id }) }).catch(() => {}); } },
       );
+      if (isEo) {
+        const sectorScanState = useSensorStore.getState().sectorScan;
+        const isSectorScanning = sectorScanState?.active && sectorScanState.scanners.some(s => s.sensorId === id);
+        actions.push(
+          { label: isSearching ? 'Stop Search' : 'Start Search', action: () => {
+            fetch('/api/eo/search-control', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ sensorId: id, enabled: !isSearching }) }).catch(() => {});
+          } },
+          { label: 'Sector Scan...', action: () => {
+            useUiStore.getState().setDetailView('sector-scan');
+          } },
+        );
+        if (isSectorScanning) {
+          actions.push(
+            { label: 'Stop Sector Scan', action: () => {
+              fetch('/api/eo/sector-scan/stop', { method: 'POST' }).catch(() => {});
+            } },
+          );
+        }
+      }
     } else if (type === 'gt') {
+      const hasGtTraj = useUiStore.getState().trajectoryTrackIds.has(`gt-${id}`);
       actions.push(
         { label: 'Select', action: () => callbacksRef.current.onSelectGroundTruth?.(id) },
+        { label: hasGtTraj ? 'Hide Trajectory' : 'Show Trajectory', action: () => useUiStore.getState().toggleTrajectory(`gt-${id}`) },
       );
     }
 
@@ -663,6 +693,75 @@ export function DebugOverlay({
       }
     }
 
+    // Sector scan arc visualization
+    if (sectorScan?.active && layerVisibility.sensors) {
+      // Draw sector arc from each assigned scanner's position
+      const sensorMap = new Map(sensors.map(s => [s.sensorId as string, s]));
+      for (const scanner of sectorScan.scanners) {
+        const sensor = sensorMap.get(scanner.sensorId);
+        if (!sensor) continue;
+        const { lon, lat } = sensor.position;
+        const rayLen = sensor.coverage.maxRangeM ?? 30000;
+
+        // Draw sub-sector boundary rays
+        const [s1Lon, s1Lat] = geoOffset(lon, lat, scanner.subSectorStart, rayLen);
+        const [s2Lon, s2Lat] = geoOffset(lon, lat, scanner.subSectorEnd, rayLen);
+
+        // Boundary lines
+        const sectorColor = scanner.role === 'triangulating' ? '#ff4444' : '#ff8800';
+        L.polyline([[lat, lon], [s1Lat, s1Lon]], {
+          color: sectorColor, weight: 2, opacity: 0.7, dashArray: '4,4', interactive: false,
+        }).addTo(g);
+        L.polyline([[lat, lon], [s2Lat, s2Lon]], {
+          color: sectorColor, weight: 2, opacity: 0.7, dashArray: '4,4', interactive: false,
+        }).addTo(g);
+
+        // Arc between boundaries (approximate with polyline segments)
+        const arcPoints: [number, number][] = [];
+        let startDeg = scanner.subSectorStart;
+        let endDeg = scanner.subSectorEnd;
+        if (endDeg <= startDeg) endDeg += 360;
+        const steps = Math.max(8, Math.round((endDeg - startDeg) / 5));
+        for (let i = 0; i <= steps; i++) {
+          const az = startDeg + (endDeg - startDeg) * (i / steps);
+          const [eLon, eLat] = geoOffset(lon, lat, az, rayLen);
+          arcPoints.push([eLat, eLon]);
+        }
+        L.polyline(arcPoints, {
+          color: sectorColor, weight: 1.5, opacity: 0.5, interactive: false,
+        }).addTo(g);
+
+        // Scanner role label
+        const midAz = (scanner.subSectorStart + scanner.subSectorEnd) / 2;
+        const [mlLon, mlLat] = geoOffset(lon, lat, midAz, rayLen * 0.3);
+        const roleLabel = scanner.role === 'triangulating' ? 'TRI' : 'SCAN';
+        L.marker([mlLat, mlLon], {
+          icon: icon(
+            `<span style="font:bold 9px monospace;color:${sectorColor};text-shadow:0 0 3px #000;">${roleLabel}</span>`,
+            [40, 10], [20, 5],
+          ),
+          interactive: false,
+        }).addTo(g);
+      }
+
+      // Detection markers
+      for (const det of sectorScan.detections) {
+        const detSensor = sensorMap.get(det.detectedBySensorId);
+        if (!detSensor) continue;
+        const { lon, lat } = detSensor.position;
+        const detRange = (detSensor.coverage.maxRangeM ?? 30000) * 0.5;
+        const [dLon, dLat] = geoOffset(lon, lat, det.azimuthDeg, detRange);
+        L.circleMarker([dLat, dLon], {
+          radius: 6,
+          color: det.triangulationCount > 0 ? '#00cc44' : '#ffcc00',
+          fillColor: det.triangulationCount > 0 ? '#00cc44' : '#ffcc00',
+          fillOpacity: 0.8,
+          weight: 2,
+          interactive: false,
+        }).addTo(g);
+      }
+    }
+
     // Triangulation rays (EO sensor → track lines)
     if (layerVisibility.triangulation && showEoLayers) {
       const sensorMap = new Map(sensors.map(s => [s.sensorId as string, s]));
@@ -684,7 +783,7 @@ export function DebugOverlay({
         }
       }
     }
-  }, [sensors, tracks, filteredTracks, layerVisibility.eoRays, layerVisibility.triangulation, layerVisibility.sensors, bearingAssociations, searchModeStates, multiSensorResolutions, pictureMode]);
+  }, [sensors, tracks, filteredTracks, layerVisibility.eoRays, layerVisibility.triangulation, layerVisibility.sensors, bearingAssociations, searchModeStates, multiSensorResolutions, pictureMode, sectorScan]);
 
   // ── SECTION: Ellipse layers (uncertainty ellipses) ──────────────────────────
   useEffect(() => {
@@ -800,13 +899,44 @@ export function DebugOverlay({
 
     const filteredTrackIds = new Set(filteredTracks.map(t => t.systemTrackId as string));
     const trackStatusMap = new Map(tracks.map(t => [t.systemTrackId as string, t.status]));
+    const trajectoryTrackIds = useUiStore.getState().trajectoryTrackIds;
+
     for (const [trackId, positions] of trailHistory) {
       if (!filteredTrackIds.has(trackId)) continue;
       const status = trackStatusMap.get(trackId) ?? 'tentative';
       const color = statusColor(status);
       const count = positions.length;
       const newestTrailIdx = count - 2;
+      const showTrajectory = trajectoryTrackIds.has(trackId);
 
+      // Trajectory polyline: draw connected path when toggled on
+      if (showTrajectory && count >= 2) {
+        const latlngs = positions
+          .filter(p => Number.isFinite(p.lon) && Number.isFinite(p.lat))
+          .map(p => [p.lat, p.lon] as [number, number]);
+        if (latlngs.length >= 2) {
+          L.polyline(latlngs, {
+            color, weight: 2.5, opacity: 0.9, interactive: false,
+          }).addTo(g);
+
+          // Altitude label at track's current position
+          const track = tracks.find(t => (t.systemTrackId as string) === trackId);
+          if (track) {
+            const alt = track.state.alt ?? 0;
+            const altLabel = alt >= 1000 ? `${(alt / 1000).toFixed(1)}km` : `${Math.round(alt)}m`;
+            const lastPos = latlngs[latlngs.length - 1];
+            L.marker(lastPos, {
+              icon: icon(
+                `<span style="font:bold 9px monospace;color:${color};text-shadow:0 0 3px #000;background:rgba(0,0,0,0.6);padding:1px 3px;border-radius:2px;">ALT ${altLabel}</span>`,
+                [60, 14], [30, -8],
+              ),
+              interactive: false,
+            }).addTo(g);
+          }
+        }
+      }
+
+      // Trail dots (always shown when trails visible)
       for (let i = 0; i < count - 1; i++) {
         const age = count - 1 - i;
         const isNewest = i === newestTrailIdx;
@@ -815,7 +945,6 @@ export function DebugOverlay({
         if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
 
         if (isNewest) {
-          // Newest trail dot: use divIcon for flash animation
           L.marker([lat, lon], {
             icon: icon(
               `<div style="width:8px;height:8px;border-radius:50%;background:${color};box-shadow:0 0 6px 2px ${color};animation:trail-flash 0.8s ease-out;"></div>`,
@@ -1078,13 +1207,39 @@ export function DebugOverlay({
         const { vx, vy } = target.velocity;
         const speed = Math.sqrt(vx * vx + vy * vy);
         if (speed > 0.1) {
-          // Convert velocity to geographic offset (30px equivalent at ~40m/s baseline)
           const scale = 0.0003 / speed;
           const endLat = lat + vy * scale;
           const endLon = lon + vx * scale;
           L.polyline([[lat, lon], [endLat, endLon]], {
             color: '#00ffff', weight: 2, opacity: 0.8, interactive: false,
           }).addTo(g);
+        }
+      }
+
+      // GT trajectory polyline (when toggled on via context menu)
+      const gtTrajectoryIds = useUiStore.getState().trajectoryTrackIds;
+      if (gtTrajectoryIds.has(`gt-${gtId}`)) {
+        const gtTrails = useGroundTruthStore.getState().trailHistory;
+        const trail = gtTrails.get(gtId);
+        if (trail && trail.length >= 2) {
+          const latlngs = trail
+            .filter(p => Number.isFinite(p.lon) && Number.isFinite(p.lat))
+            .map(p => [p.lat, p.lon] as [number, number]);
+          if (latlngs.length >= 2) {
+            L.polyline(latlngs, {
+              color: '#00ffff', weight: 2.5, opacity: 0.8, dashArray: '6,3', interactive: false,
+            }).addTo(g);
+            // Altitude label
+            const alt = target.position.alt ?? 0;
+            const altLabel = alt >= 1000 ? `${(alt / 1000).toFixed(1)}km` : `${Math.round(alt)}m`;
+            L.marker([lat, lon], {
+              icon: icon(
+                `<span style="font:bold 9px monospace;color:#00ffff;text-shadow:0 0 3px #000;background:rgba(0,0,0,0.6);padding:1px 3px;border-radius:2px;">ALT ${altLabel}</span>`,
+                [60, 14], [30, -8],
+              ),
+              interactive: false,
+            }).addTo(g);
+          }
         }
       }
     }

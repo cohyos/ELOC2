@@ -33,6 +33,7 @@ import { QualityMetricsPanel } from './quality/QualityMetricsPanel';
 import { UserManagementView } from './admin/UserManagementView';
 import { LibrariesView } from './libraries/LibrariesView';
 import { FusionConfigPanel } from './components/FusionConfigPanel';
+import { SectorScanPanel } from './components/SectorScanPanel';
 import { useAuthStore } from './auth/auth-store';
 import { LoginPage } from './auth/LoginPage';
 import { ReportModal } from './reports/ReportModal';
@@ -776,6 +777,17 @@ export function App() {
               }
             }}>Quality</button>
 
+          {/* Sector Scan */}
+          <button style={{ ...btn, background: detailView === 'sector-scan' && detailPanelOpen ? '#ff8800' : '#333', color: detailView === 'sector-scan' && detailPanelOpen ? '#fff' : '#aaa' }}
+            onClick={() => {
+              const store = useUiStore.getState();
+              if (store.detailView === 'sector-scan' && store.detailPanelOpen) {
+                store.setDetailView('none');
+              } else {
+                store.setDetailView('sector-scan');
+              }
+            }}>Sector Scan</button>
+
           {/* Dark/Light toggle */}
           <button style={{ ...btn, background: darkMode ? '#4a9eff' : '#333', color: darkMode ? '#fff' : '#aaa' }} onClick={toggleDarkMode} title="Toggle dark/light map">
             {darkMode ? 'Dark' : 'Light'}
@@ -874,6 +886,7 @@ export function App() {
           {detailView === 'group' && <GroupDetailPanel />}
           {detailView === 'geometry' && <GeometryDetailPanel />}
           {detailView === 'quality' && <QualityMetricsPanel />}
+          {detailView === 'sector-scan' && <SectorScanPanel />}
           {detailView === 'ground-truth' && <GroundTruthDetailPanel />}
           {(detailView === 'none' || (basicHiddenPanels.includes(detailView))) && <DefaultPanel />}
         </div>
