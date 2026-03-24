@@ -121,7 +121,8 @@ export function MapView() {
     L.control.scale({ metric: true, imperial: false, position: 'bottomleft' }).addTo(leafletMap);
 
     // Suppress browser context menu over the map
-    container.addEventListener('contextmenu', (e) => e.preventDefault());
+    const suppressCtx = (e: Event) => e.preventDefault();
+    container.addEventListener('contextmenu', suppressCtx);
 
     const adapter = new LeafletAdapter(leafletMap);
     adapterRef.current = adapter;
@@ -138,6 +139,7 @@ export function MapView() {
     console.log('[MapView] Leaflet initialized');
 
     return () => {
+      container.removeEventListener('contextmenu', suppressCtx);
       cleanupBoxZoom();
       leafletMap.remove();
       adapterRef.current = null;

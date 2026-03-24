@@ -83,7 +83,9 @@ export function DeploymentMap() {
     L.control.scale({ metric: true, imperial: false, position: 'bottomleft' }).addTo(map);
 
     // Suppress browser context menu over the map
-    mapContainerRef.current.addEventListener('contextmenu', (e: Event) => e.preventDefault());
+    const container = mapContainerRef.current;
+    const suppressCtx = (e: Event) => e.preventDefault();
+    container.addEventListener('contextmenu', suppressCtx);
 
     // Ctrl+drag box zoom
     const adapter = new LeafletAdapter(map);
@@ -120,6 +122,12 @@ export function DeploymentMap() {
     mapRef.current = map;
 
     return () => {
+      // Clean up any in-progress drag handlers
+      if (dragState.current) {
+        dragState.current = null;
+        map.dragging.enable();
+      }
+      container.removeEventListener('contextmenu', suppressCtx);
       cleanupBoxZoom();
       map.remove();
       mapRef.current = null;

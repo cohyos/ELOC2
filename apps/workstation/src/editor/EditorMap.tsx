@@ -128,7 +128,9 @@ export function EditorMap() {
     L.control.scale({ metric: true, imperial: false, position: 'bottomleft' }).addTo(map);
 
     // Suppress browser context menu over the map
-    mapContainer.current.addEventListener('contextmenu', (e: Event) => e.preventDefault());
+    const container = mapContainer.current;
+    const suppressCtx = (e: Event) => e.preventDefault();
+    container.addEventListener('contextmenu', suppressCtx);
 
     // Ctrl+drag box zoom
     const adapter = new LeafletAdapter(map);
@@ -236,6 +238,12 @@ export function EditorMap() {
     console.log('[EditorMap] Leaflet initialized');
 
     return () => {
+      // Clean up any in-progress drag handlers
+      if (dragState.current) {
+        dragState.current = null;
+        map.dragging.enable();
+      }
+      container.removeEventListener('contextmenu', suppressCtx);
       cleanupBoxZoom();
       map.remove();
       mapRef.current = null;
