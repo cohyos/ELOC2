@@ -3,6 +3,7 @@ import L from 'leaflet';
 import type { SystemTrack, SensorState } from '@eloc2/domain';
 import type { LayerVisibility } from '../stores/ui-store';
 import { useUiStore } from '../stores/ui-store';
+import { useGroundTruthStore } from '../stores/ground-truth-store';
 import type { GroundTruthTarget } from '../stores/ground-truth-store';
 import type { CoverZone, OperationalZone } from '../stores/cover-zone-store';
 import { useSensorStore } from '../stores/sensor-store';
@@ -314,8 +315,10 @@ export function DebugOverlay({
         }
       }
     } else if (type === 'gt') {
+      const hasGtTraj = useUiStore.getState().trajectoryTrackIds.has(`gt-${id}`);
       actions.push(
         { label: 'Select', action: () => callbacksRef.current.onSelectGroundTruth?.(id) },
+        { label: hasGtTraj ? 'Hide Trajectory' : 'Show Trajectory', action: () => useUiStore.getState().toggleTrajectory(`gt-${id}`) },
       );
     }
 
@@ -1204,13 +1207,39 @@ export function DebugOverlay({
         const { vx, vy } = target.velocity;
         const speed = Math.sqrt(vx * vx + vy * vy);
         if (speed > 0.1) {
-          // Convert velocity to geographic offset (30px equivalent at ~40m/s baseline)
           const scale = 0.0003 / speed;
           const endLat = lat + vy * scale;
           const endLon = lon + vx * scale;
           L.polyline([[lat, lon], [endLat, endLon]], {
             color: '#00ffff', weight: 2, opacity: 0.8, interactive: false,
           }).addTo(g);
+        }
+      }
+
+      // GT trajectory polyline (when toggled on via context menu)
+      const gtTrajectoryIds = useUiStore.getState().trajectoryTrackIds;
+      if (gtTrajectoryIds.has(`gt-${gtId}`)) {
+        const gtTrails = useGroundTruthStore.getState().trailHistory;
+        const trail = gtTrails.get(gtId);
+        if (trail && trail.length >= 2) {
+          const latlngs = trail
+            .filter(p => Number.isFinite(p.lon) && Number.isFinite(p.lat))
+            .map(p => [p.lat, p.lon] as [number, number]);
+          if (latlngs.length >= 2) {
+            L.polyline(latlngs, {
+              color: '#00ffff', weight: 2.5, opacity: 0.8, dashArray: '6,3', interactive: false,
+            }).addTo(g);
+            // Altitude label
+            const alt = target.position.alt ?? 0;
+            const altLabel = alt >= 1000 ? `${(alt / 1000).toFixed(1)}km` : `${Math.round(alt)}m`;
+            L.marker([lat, lon], {
+              icon: icon(
+                `<span style="font:bold 9px monospace;color:#00ffff;text-shadow:0 0 3px #000;background:rgba(0,0,0,0.6);padding:1px 3px;border-radius:2px;">ALT ${altLabel}</span>`,
+                [60, 14], [30, -8],
+              ),
+              interactive: false,
+            }).addTo(g);
+          }
         }
       }
     }
