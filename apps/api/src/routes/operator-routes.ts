@@ -126,6 +126,7 @@ export function registerOperatorRoutes(app: FastifyInstance, engine: LiveEngine)
     }
     sensor.online = online;
     sensor.lastUpdateTime = Date.now() as any;
+    engine.notifyStateChange();
     return { ok: true, sensorId, online };
   });
 

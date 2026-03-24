@@ -709,15 +709,13 @@ export function App() {
           >Demo</InstructorButton>
 
           {/* Live Inject */}
-          {simulationState !== 'idle' && (
-            <InstructorButton isInstructor={isInstructor}
-              style={{ ...btn, background: injectionMode ? '#ff8800' : '#333', color: injectionMode ? '#fff' : '#aaa', border: injectionMode ? '1px solid #ff880066' : 'none', fontWeight: injectionMode ? 600 : 400 }}
-              onClick={toggleInjectionMode}
-              title="Toggle live injection toolbar (Ctrl+I)"
-            >
-              Live Inject
-            </InstructorButton>
-          )}
+          <InstructorButton isInstructor={isInstructor}
+            style={{ ...btn, background: injectionMode ? '#ff8800' : '#333', color: simulationState === 'idle' ? '#555' : injectionMode ? '#fff' : '#aaa', border: injectionMode ? '1px solid #ff880066' : 'none', fontWeight: injectionMode ? 600 : 400, opacity: simulationState === 'idle' ? 0.5 : 1, cursor: simulationState === 'idle' ? 'not-allowed' : 'pointer' }}
+            onClick={simulationState !== 'idle' ? toggleInjectionMode : undefined}
+            title={simulationState === 'idle' ? 'Start a scenario first' : 'Toggle live injection toolbar (Ctrl+I)'}
+          >
+            Live Inject
+          </InstructorButton>
 
           {/* GT (Ground Truth) toggle */}
           <InstructorButton isInstructor={isInstructor} style={{ ...btn, background: showGroundTruth ? '#0a2a2a' : '#333', color: showGroundTruth ? '#00ffff' : '#aaa', border: showGroundTruth ? '1px solid #00ffff' : '1px solid transparent' }} onClick={toggleGroundTruth} title="Toggle ground truth overlay">
