@@ -9,7 +9,8 @@ import type { TriangulationOutput, EoCoreTrack, EoCoreConfig } from './types.js'
 const DEFAULT_CONFIG: EoCoreConfig = {
   staleTimeoutSec: 10,
   dropTimeoutSec: 30,
-  trackAssociationDistanceM: 500, // Reduced from 2000m to distinguish formation members
+  trackAssociationDistanceM: 150, // Base gate: EO staring sensors resolve ~300m formation spacing
+  useTargetIdAffinity: true,       // Enable targetId affinity for formation resolution
 };
 
 export class EoTrackManager {
@@ -20,11 +21,16 @@ export class EoTrackManager {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
 
-  /** Find nearest existing active/stale track to a triangulation result */
-  findNearestTrack(result: TriangulationOutput): EoCoreTrack | null {
+  /**
+   * Find nearest existing active/stale track to a triangulation result.
+   * Uses targetId affinity to prefer matching the same bearing-group target
+   * to the same track — critical for resolving tight formations where
+   * multiple targets are within the association gate.
+   */
+  findNearestTrack(result: TriangulationOutput, targetId?: string, simTimeSec?: number): EoCoreTrack | null {
     let best: EoCoreTrack | null = null;
     let bestScore = Infinity;
-    const maxDist = this.config.trackAssociationDistanceM;
+    const baseGate = this.config.trackAssociationDistanceM;
 
     for (const track of this.tracks.values()) {
       if (track.status === 'dropped') continue;
@@ -34,27 +40,48 @@ export class EoTrackManager {
         result.position.lat,
         result.position.lon,
       );
-      if (dist >= maxDist) continue;
+
+      // Velocity-adaptive gate: expand base gate by track speed × elapsed time.
+      // Fast-moving targets need a wider gate to maintain continuity, but
+      // targetId affinity still prevents merging in tight formations.
+      // Cap at 5× base to handle fast movers (300+ m/s) while affinity
+      // prevents formation merging.
+      let effectiveGate = baseGate;
+      if (track.velocity && simTimeSec !== undefined) {
+        const speed = Math.sqrt(track.velocity.vx ** 2 + track.velocity.vy ** 2 + (track.velocity.vz ?? 0) ** 2);
+        const dt = Math.max(0, simTimeSec - track.lastUpdateSec);
+        effectiveGate = Math.min(baseGate * 5, baseGate + speed * dt * 1.5);
+      }
+      if (dist >= effectiveGate) continue;
 
       // Score: distance, penalized if track has velocity pointing away from result
       let score = dist;
       if (track.velocity && dist > 50) {
         const dLat = result.position.lat - track.position.lat;
         const dLon = result.position.lon - track.position.lon;
-        // Normalize position delta direction
         const mag = Math.sqrt(dLat * dLat + dLon * dLon);
         if (mag > 1e-10) {
           const nx = dLon / mag;
           const ny = dLat / mag;
-          // Normalize velocity direction
           const vMag = Math.sqrt(track.velocity.vx ** 2 + track.velocity.vy ** 2);
           if (vMag > 1) {
             const vnx = track.velocity.vx / vMag;
             const vny = track.velocity.vy / vMag;
             const dot = nx * vnx + ny * vny;
-            // Penalize misaligned tracks: score *= 1 + penalty for backwards movement
-            if (dot < 0) score *= (1.5 - dot); // Up to 2.5x penalty
+            if (dot < 0) score *= (1.5 - dot);
           }
+        }
+      }
+
+      // TargetId affinity: strong bonus for matching the same target.
+      // This prevents oscillation in tight formations where multiple
+      // triangulations fall within the gate distance.
+      if (this.config.useTargetIdAffinity && targetId && track.targetIdAffinity) {
+        if (track.targetIdAffinity === targetId) {
+          score *= 0.1; // 10x preference for same targetId
+        } else {
+          // Different targetId already owns this track — penalize heavily
+          score *= 3.0;
         }
       }
 
@@ -67,7 +94,7 @@ export class EoTrackManager {
   }
 
   /** Create a new EO track from a triangulation result */
-  createTrack(result: TriangulationOutput, simTimeSec: number): EoCoreTrack {
+  createTrack(result: TriangulationOutput, simTimeSec: number, targetId?: string): EoCoreTrack {
     const track: EoCoreTrack = {
       trackId: `EO-${generateId().slice(0, 8)}`,
       position: { ...result.position },
@@ -78,6 +105,7 @@ export class EoTrackManager {
       updateCount: 1,
       lastUpdateSec: simTimeSec,
       status: 'active',
+      targetIdAffinity: targetId,
     };
     this.tracks.set(track.trackId, track);
     return track;
@@ -88,7 +116,10 @@ export class EoTrackManager {
     track: EoCoreTrack,
     result: TriangulationOutput,
     simTimeSec: number,
+    targetId?: string,
   ): void {
+    // Refresh targetId affinity
+    if (targetId) track.targetIdAffinity = targetId;
     // Estimate velocity from position delta
     const dt = simTimeSec - track.lastUpdateSec;
     if (dt > 0.1) {
