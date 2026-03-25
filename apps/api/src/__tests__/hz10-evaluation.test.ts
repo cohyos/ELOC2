@@ -393,25 +393,62 @@ describe('10 Hz Pipeline Evaluation', () => {
     expect(result.totalTicks).toBe(1200);
   }, 120_000);
 
-  // ── Test 4: 20 Hz calibrated ───────────────────────────────────────────
+  // ── Test 4: 15 Hz calibrated ───────────────────────────────────────────
+
+  const HZ15_CALIBRATED: RunConfig = {
+    label: '15 Hz Calibrated',
+    dtSec: 1 / 15,               // ~66.7ms
+    radarUpdateSec: 1 / 15,
+    eoUpdateSec: 1 / 15,
+    fuserConfig: {
+      // Tuned: fast confirm, moderate drop, tight gate
+      confirmAfter: 5,            // ~333ms to confirm (fast initial track)
+      coastingMissThreshold: 15,  // ~1.0s to coast
+      dropAfterMisses: 45,        // ~3.0s to drop
+      mergeDistanceM: 150,
+      correlationThreshold: 120,   // wider gate for smaller covariance at 15Hz
+    },
+    description: '15Hz all sensors, tuned: fast confirm (5), moderate drop (45), gate=120',
+  };
+
+  it('should run 15 Hz calibrated', () => {
+    console.log('\n═══ Running 15 Hz CALIBRATED ═══');
+    const result = runPipeline(HZ15_CALIBRATED);
+    results.push(result);
+
+    console.log(`  Ticks: ${result.totalTicks}`);
+    console.log(`  Wall clock: ${result.wallClockMs}ms`);
+    console.log(`  Avg tick: ${result.avgTickMs.toFixed(2)}ms, Max: ${result.maxTickMs.toFixed(2)}ms`);
+    console.log(`  Peak system tracks: ${result.peakSystemTracks}`);
+    console.log(`  Final: ${result.confirmedTracks} confirmed, ${result.tentativeTracks} tentative, ${result.droppedTracks} dropped`);
+    console.log(`  Peak heap: ${result.peakHeapMB.toFixed(1)}MB`);
+    console.log(`  Crashed: ${result.crashed}${result.crashError ? ' — ' + result.crashError : ''}`);
+
+    expect(result.crashed).toBe(false);
+    expect(result.totalTicks).toBe(1800);
+  }, 180_000);
+
+  // ── Test 5: 20 Hz re-tuned ───────────────────────────────────────────
 
   const HZ20_CALIBRATED: RunConfig = {
-    label: '20 Hz Calibrated',
+    label: '20 Hz Tuned',
     dtSec: 0.05,
     radarUpdateSec: 0.05,
     eoUpdateSec: 0.05,
     fuserConfig: {
-      confirmAfter: 14,          // 3 × (20/1) × 0.23 ≈ 14 (~700ms)
-      coastingMissThreshold: 30, // ~1.5s at 20Hz
-      dropAfterMisses: 80,       // ~4s at 20Hz
+      // Re-tuned: fast confirm like 10Hz uncalibrated (best scorer),
+      // moderate drop to avoid stale track accumulation
+      confirmAfter: 5,            // ~250ms to confirm (was 14 → too slow)
+      coastingMissThreshold: 20,  // ~1.0s to coast (was 30 → too slow)
+      dropAfterMisses: 60,        // ~3.0s to drop (was 80 → stale buildup)
       mergeDistanceM: 150,
-      correlationThreshold: 150,  // wider gate for even smaller covariance
+      correlationThreshold: 120,   // moderate gate (was 150 → too wide)
     },
-    description: '20Hz all sensors, recalibrated for 20x frequency',
+    description: '20Hz re-tuned: fast confirm (5), drop at 3s (60), gate=120',
   };
 
-  it('should run 20 Hz calibrated', () => {
-    console.log('\n═══ Running 20 Hz CALIBRATED ═══');
+  it('should run 20 Hz re-tuned', () => {
+    console.log('\n═══ Running 20 Hz RE-TUNED ═══');
     const result = runPipeline(HZ20_CALIBRATED);
     results.push(result);
 
@@ -427,25 +464,26 @@ describe('10 Hz Pipeline Evaluation', () => {
     expect(result.totalTicks).toBe(2400);
   }, 180_000);
 
-  // ── Test 5: 50 Hz calibrated ───────────────────────────────────────────
+  // ── Test 6: 50 Hz re-tuned ───────────────────────────────────────────
 
   const HZ50_CALIBRATED: RunConfig = {
-    label: '50 Hz Calibrated',
+    label: '50 Hz Tuned',
     dtSec: 0.02,
     radarUpdateSec: 0.02,
     eoUpdateSec: 0.02,
     fuserConfig: {
-      confirmAfter: 35,           // ~700ms at 50Hz
-      coastingMissThreshold: 75,  // ~1.5s at 50Hz
-      dropAfterMisses: 200,       // ~4s at 50Hz
+      // Same fast-confirm philosophy
+      confirmAfter: 5,            // ~100ms to confirm
+      coastingMissThreshold: 50,  // ~1.0s to coast
+      dropAfterMisses: 150,       // ~3.0s to drop
       mergeDistanceM: 150,
-      correlationThreshold: 250,   // much wider gate
+      correlationThreshold: 120,   // consistent gate
     },
-    description: '50Hz all sensors, recalibrated for 50x frequency',
+    description: '50Hz re-tuned: fast confirm (5), drop at 3s (150), gate=120',
   };
 
-  it('should run 50 Hz calibrated', () => {
-    console.log('\n═══ Running 50 Hz CALIBRATED ═══');
+  it('should run 50 Hz re-tuned', () => {
+    console.log('\n═══ Running 50 Hz RE-TUNED ═══');
     const result = runPipeline(HZ50_CALIBRATED);
     results.push(result);
 
@@ -461,18 +499,18 @@ describe('10 Hz Pipeline Evaluation', () => {
     expect(result.totalTicks).toBe(6000);
   }, 300_000);
 
-  // ── Test 6: Comparison & grading ──────────────────────────────────────────
+  // ── Test 7: Comparison & grading ──────────────────────────────────────────
 
   it('should produce comparison report', () => {
     console.log('\n═══════════════════════════════════════════════════════');
     console.log('    FREQUENCY SCALING EVALUATION — COMPARISON REPORT');
     console.log('═══════════════════════════════════════════════════════\n');
 
-    if (results.length < 5) {
-      console.log(`Only ${results.length}/5 runs completed — showing available`);
+    if (results.length < 6) {
+      console.log(`Only ${results.length}/6 runs completed — showing available`);
     }
 
-    const [baseline, raw10, cal10, cal20, cal50] = results;
+    const [baseline, raw10, cal10, cal15, cal20, cal50] = results;
 
     // ── All-configs comparison ──
     const allConfigs = results.filter(Boolean);
