@@ -237,7 +237,7 @@ export function DebugOverlay({
           });
         }
       }
-    }, 50); // 50ms debounce — enough to collect overlapping clicks
+    }, 120); // 120ms debounce — enough to collect overlapping clicks and survive re-renders at 2Hz WS rate
   };
 
   // ── Right-click context menu for operations ─────────────────────────────
@@ -1012,7 +1012,7 @@ export function DebugOverlay({
         marker.bindTooltip(`${shortSensorLabel(sensor)} — ${sensor.sensorId}`, { direction: 'top', offset: [0, -14] });
         marker.on('click', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); addClickCandidate('sensor', sensor.sensorId as string, `${shortSensorLabel(sensor)} (${sensor.sensorType})`, color, e.latlng); });
         marker.on('mousedown', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); L.DomEvent.preventDefault(e.originalEvent); });
-        marker.on('contextmenu', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); showContextMenu('sensor', sensor.sensorId as string, shortSensorLabel(sensor), e.latlng); });
+        marker.on('contextmenu', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); L.DomEvent.preventDefault(e.originalEvent); showContextMenu('sensor', sensor.sensorId as string, shortSensorLabel(sensor), e.latlng); });
         marker.addTo(g);
       }
 
@@ -1081,7 +1081,7 @@ export function DebugOverlay({
         marker.bindTooltip(title, { direction: 'top', offset: [0, -14] });
         marker.on('click', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); addClickCandidate('track', trackId, `${shortTrackLabel(track)} — ${track.status}`, color, e.latlng); });
         marker.on('mousedown', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); L.DomEvent.preventDefault(e.originalEvent); });
-        marker.on('contextmenu', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); showContextMenu('track', trackId, shortTrackLabel(track), e.latlng); });
+        marker.on('contextmenu', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); L.DomEvent.preventDefault(e.originalEvent); showContextMenu('track', trackId, shortTrackLabel(track), e.latlng); });
         marker.on('dblclick', () => useUiStore.getState().setEoVideoPopupTrackId(trackId));
         marker.addTo(g);
 
@@ -1174,7 +1174,7 @@ export function DebugOverlay({
       marker.bindTooltip(`GT: ${target.name} — ${target.classification ?? 'unclassified'}`, { direction: 'top', offset: [0, -12] });
       marker.on('click', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); addClickCandidate('gt', gtId, `GT: ${target.name}`, '#00ffff', e.latlng); });
       marker.on('mousedown', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); L.DomEvent.preventDefault(e.originalEvent); });
-      marker.on('contextmenu', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); showContextMenu('gt', gtId, `GT: ${target.name}`, e.latlng); });
+      marker.on('contextmenu', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); L.DomEvent.preventDefault(e.originalEvent); showContextMenu('gt', gtId, `GT: ${target.name}`, e.latlng); });
       marker.addTo(g);
 
       // Selection ring + GT-to-track connection line

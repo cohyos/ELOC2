@@ -229,8 +229,9 @@ const DEFAULT_INVESTIGATION_PARAMETERS: InvestigationParameters = {
 const EO_TASKING_INTERVAL_SEC = 3;
 
 /** Workstation broadcast rate (Hz). At 15 Hz internal tick, throttle WS output.
+ *  2 Hz = 500ms updates — smooth enough for operator, prevents UI re-render storms.
  *  Set to 0 to broadcast every tick (no throttling). */
-const WS_BROADCAST_RATE_HZ = 4;
+const WS_BROADCAST_RATE_HZ = 2;
 
 // ---------------------------------------------------------------------------
 // Cover-zone helpers
@@ -1909,7 +1910,7 @@ export class LiveEngine {
     this.state.activeCues = [...this.activeCuesById.values()];
 
     // Search mode: scan sectors when no targets available
-    this.updateSearchMode(1); // dtSec = 1 (fixed tick)
+    this.updateSearchMode(1 / 15); // dtSec = 1/15 at 15 Hz pipeline rate
 
     // Continuous gimbal tracking: update EO sensor gimbal azimuth toward current target
     this.updateGimbalPointing();
@@ -4366,8 +4367,8 @@ export class LiveEngine {
 
       searchState.idleTickCount++;
 
-      if (!searchState.active && searchState.idleTickCount >= 3) {
-        // Activate search mode after 3 idle ticks
+      if (!searchState.active && searchState.idleTickCount >= 45) {
+        // Activate search mode after ~3 seconds idle (45 ticks at 15 Hz)
         searchState.active = true;
         searchState.currentAzimuth = sensor.gimbal.azimuthDeg ?? 0;
         this.pushEvent('eo.search.activated', `${sId}: search mode (idle)`);
@@ -4629,7 +4630,7 @@ export class LiveEngine {
       let tLat = track.state.lat;
       let tLon = track.state.lon;
       if (track.velocity) {
-        const dtSec = 1; // 1-tick prediction
+        const dtSec = 1 / 15; // 1-tick prediction at 15 Hz
         const mPerDegLat = 111320;
         const mPerDegLon = 111320 * Math.cos(tLat * Math.PI / 180);
         if (mPerDegLon > 0) {
