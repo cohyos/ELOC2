@@ -64,9 +64,9 @@ export interface SystemFuserConfig {
 }
 
 export const DEFAULT_SYSTEM_FUSER_CONFIG: SystemFuserConfig = {
-  correlationThreshold: 50,
-  coastingMissThreshold: 5,
-  dropAfterMisses: 12,
-  confirmAfter: 3,
-  mergeDistanceM: 150, // Reduced from 500m to preserve formation member tracks
+  correlationThreshold: 120, // 15 Hz: wider gate for smaller covariance (was 50 at 1Hz)
+  coastingMissThreshold: 15, // 15 Hz: ~1.0s to coast (was 5 at 1Hz)
+  dropAfterMisses: 45,       // 15 Hz: ~3.0s to drop (was 12 at 1Hz)
+  confirmAfter: 5,           // 15 Hz: ~333ms to confirm (was 3 at 1Hz)
+  mergeDistanceM: 150,       // Spatial — unchanged
 };
