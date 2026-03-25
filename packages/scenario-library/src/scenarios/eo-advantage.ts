@@ -1,4 +1,5 @@
 import type { ScenarioDefinition } from '../types.js';
+import { STARING_SENSOR_PROFILE, INVESTIGATOR_SENSOR_PROFILE } from '@eloc2/geometry';
 
 /**
  * EO Advantage Demonstration — "Why EO Beats Radar"
@@ -79,6 +80,7 @@ function makeStaringSensor(idx: number, angleDeg: number): ScenarioDefinition['s
     fov: { halfAngleHDeg: 180, halfAngleVDeg: 15 },
     slewRateDegPerSec: 0,  // staring — no gimbal
     maxDetectionRangeM: 40_000,
+    eoSpec: STARING_SENSOR_PROFILE.wideSpec,
   };
 }
 
@@ -145,18 +147,20 @@ export const eoAdvantage: ScenarioDefinition = {
       type: 'eo' as const,
       position: { lat: CENTER_LAT + 0.015, lon: CENTER_LON - 0.01, alt: 20 },
       coverage: { minAzDeg: 0, maxAzDeg: 360, minElDeg: -5, maxElDeg: 60, maxRangeM: 35_000 },
-      fov: { halfAngleHDeg: 1.0, halfAngleVDeg: 0.75 },
+      fov: { halfAngleHDeg: 5.0, halfAngleVDeg: 3.75 }, // 10° search FOV
       slewRateDegPerSec: 60,
       maxDetectionRangeM: 35_000,
+      eoSpec: INVESTIGATOR_SENSOR_PROFILE.wideSpec,
     },
     {
       sensorId: 'EO-INV-2',
       type: 'eo' as const,
       position: { lat: CENTER_LAT - 0.015, lon: CENTER_LON + 0.01, alt: 20 },
       coverage: { minAzDeg: 0, maxAzDeg: 360, minElDeg: -5, maxElDeg: 60, maxRangeM: 35_000 },
-      fov: { halfAngleHDeg: 1.0, halfAngleVDeg: 0.75 },
+      fov: { halfAngleHDeg: 5.0, halfAngleVDeg: 3.75 }, // 10° search FOV
       slewRateDegPerSec: 60,
       maxDetectionRangeM: 35_000,
+      eoSpec: INVESTIGATOR_SENSOR_PROFILE.wideSpec,
     },
 
     // 1 Green Pine radar — for comparison (deliberately disadvantaged at low-RCS)
@@ -186,7 +190,7 @@ export const eoAdvantage: ScenarioDefinition = {
       name: 'Shahed-136 Alpha',
       description: 'Phase 1: Low-RCS drone (0.01 m²) from north — radar Pd < 30%, EO detects by IR',
       classification: 'uav' as const,
-      rcs: 0.01, // extremely low — radar barely sees this
+      rcs: 0.01, irEmission: 150, // extremely low RCS + low IR — radar barely sees this
       startTime: 0,
       waypoints: approachFromBearing(0, 40, 5, 300, 45, 180),
     },
@@ -196,7 +200,7 @@ export const eoAdvantage: ScenarioDefinition = {
       name: 'Shahed-136 Beta',
       description: 'Phase 1: Low-RCS drone (0.03 m²) from NE',
       classification: 'uav' as const,
-      rcs: 0.03,
+      rcs: 0.03, irEmission: 180,
       startTime: 20,
       waypoints: approachFromBearing(45, 38, 8, 250, 50, 160),
     },
@@ -206,7 +210,7 @@ export const eoAdvantage: ScenarioDefinition = {
       name: 'Shahed-136 Gamma',
       description: 'Phase 1: Low-RCS drone (0.05 m²) from NW',
       classification: 'uav' as const,
-      rcs: 0.05,
+      rcs: 0.05, irEmission: 200,
       startTime: 40,
       waypoints: approachFromBearing(315, 42, 3, 350, 42, 180),
     },
@@ -239,7 +243,7 @@ export const eoAdvantage: ScenarioDefinition = {
         name: `Drone Formation ${['Lead', 'L1', 'R1', 'L2', 'R2'][i]}`,
         description: `Phase 2: Tight V-formation drone #${i + 1}, 200m spacing — radar merges, EO resolves`,
         classification: 'uav' as const,
-        rcs: 0.05,
+        rcs: 0.05, irEmission: 200,
         startTime: 120,
         waypoints: [
           {
@@ -273,7 +277,7 @@ export const eoAdvantage: ScenarioDefinition = {
       name: 'Cruise Missile Alpha',
       description: 'Phase 3: Cruise missile at 50m AGL from south — terrain masks radar, EO tracks',
       classification: 'uav' as const, // classified as UAV since no cruise_missile type
-      rcs: 0.2,
+      rcs: 0.2, irEmission: 3_000,
       startTime: 240,
       waypoints: approachFromBearing(180, 35, 2, 50, 220, 240),
     },
@@ -282,7 +286,7 @@ export const eoAdvantage: ScenarioDefinition = {
       name: 'Cruise Missile Beta',
       description: 'Phase 3: Cruise missile at 80m AGL from SW — terrain masks radar, EO tracks',
       classification: 'uav' as const,
-      rcs: 0.15,
+      rcs: 0.15, irEmission: 2_500,
       startTime: 280,
       waypoints: approachFromBearing(200, 38, 5, 80, 240, 240),
     },
@@ -298,7 +302,7 @@ export const eoAdvantage: ScenarioDefinition = {
       name: 'Su-35 (ARM-equipped)',
       description: 'Phase 4: Fighter with ARM capability — radar emission is a liability, EO is passive',
       classification: 'fighter_aircraft' as const,
-      rcs: 4,
+      rcs: 4, irEmission: 18_000,
       startTime: 360,
       waypoints: [
         { time: 0, position: { lat: 31.65, lon: 34.40, alt: 12000 } },
@@ -311,7 +315,7 @@ export const eoAdvantage: ScenarioDefinition = {
       name: 'Su-30 (ARM-equipped)',
       description: 'Phase 4: Second fighter approaching from east',
       classification: 'fighter_aircraft' as const,
-      rcs: 5,
+      rcs: 5, irEmission: 20_000,
       startTime: 400,
       waypoints: [
         { time: 0, position: { lat: 31.30, lon: 35.40, alt: 10000 } },
@@ -330,7 +334,7 @@ export const eoAdvantage: ScenarioDefinition = {
       name: 'C-130 Transport (Friendly)',
       description: 'Phase 5: Friendly transport — radar cannot distinguish from threats, EO identifies',
       classification: 'civilian_aircraft' as const,
-      rcs: 40, // large transport
+      rcs: 40, irEmission: 12_000, // large transport
       startTime: 480,
       waypoints: [
         { time: 0, position: { lat: 31.50, lon: 34.50, alt: 6000 } },
@@ -342,7 +346,7 @@ export const eoAdvantage: ScenarioDefinition = {
       name: 'Mohajer-6 (Hostile)',
       description: 'Phase 5: Hostile drone at similar alt — only EO investigation can distinguish from friendly',
       classification: 'uav' as const,
-      rcs: 0.3,
+      rcs: 0.3, irEmission: 500,
       startTime: 500,
       waypoints: [
         { time: 0, position: { lat: 31.45, lon: 34.55, alt: 5500 } },
@@ -354,7 +358,7 @@ export const eoAdvantage: ScenarioDefinition = {
       name: 'Shahed-129 (Hostile)',
       description: 'Phase 5: Second hostile drone nearby — needs EO identification',
       classification: 'uav' as const,
-      rcs: 0.2,
+      rcs: 0.2, irEmission: 3_000,
       startTime: 520,
       waypoints: [
         { time: 0, position: { lat: 31.55, lon: 34.45, alt: 5800 } },
@@ -372,7 +376,7 @@ export const eoAdvantage: ScenarioDefinition = {
       name: 'Stress Drone 1',
       description: 'Phase 6: Combined stress — low-RCS drone',
       classification: 'uav' as const,
-      rcs: 0.02,
+      rcs: 0.02, irEmission: 150,
       startTime: 600,
       waypoints: approachFromBearing(30, 40, 5, 400, 48, 200),
     },
@@ -381,7 +385,7 @@ export const eoAdvantage: ScenarioDefinition = {
       name: 'Stress Drone 2',
       description: 'Phase 6: Combined stress — low-RCS drone',
       classification: 'uav' as const,
-      rcs: 0.03,
+      rcs: 0.03, irEmission: 180,
       startTime: 630,
       waypoints: approachFromBearing(150, 38, 8, 350, 45, 200),
     },
@@ -391,7 +395,7 @@ export const eoAdvantage: ScenarioDefinition = {
       name: 'Stress Cruise Missile',
       description: 'Phase 6: Combined stress — low-altitude cruise missile',
       classification: 'uav' as const,
-      rcs: 0.15,
+      rcs: 0.15, irEmission: 2_500,
       startTime: 660,
       waypoints: approachFromBearing(270, 35, 3, 60, 250, 180),
     },
@@ -401,7 +405,7 @@ export const eoAdvantage: ScenarioDefinition = {
       name: 'Stress Fighter',
       description: 'Phase 6: Combined stress — fighter aircraft',
       classification: 'fighter_aircraft' as const,
-      rcs: 6,
+      rcs: 6, irEmission: 15_000,
       startTime: 700,
       waypoints: [
         { time: 0, position: { lat: 31.60, lon: 34.40, alt: 9000 } },
@@ -414,7 +418,7 @@ export const eoAdvantage: ScenarioDefinition = {
       name: 'Stress Helicopter',
       description: 'Phase 6: Combined stress — helicopter',
       classification: 'helicopter' as const,
-      rcs: 10,
+      rcs: 10, irEmission: 5_000,
       startTime: 720,
       waypoints: [
         { time: 0, position: { lat: 31.40, lon: 34.55, alt: 200 } },

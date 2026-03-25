@@ -1,4 +1,5 @@
 import type { ScenarioDefinition } from '../types.js';
+import { STARING_SENSOR_PROFILE, INVESTIGATOR_SENSOR_PROFILE } from '@eloc2/geometry';
 
 /**
  * Green Pine Air Defense — Full 1-hour engagement scenario.
@@ -67,7 +68,8 @@ function makeStaringSensors(
     },
     fov: { halfAngleHDeg: 180, halfAngleVDeg: 10 }, // full azimuth, 20° vertical
     slewRateDegPerSec: 0, // staring — no gimbal
-    maxDetectionRangeM: 40_000,
+    maxDetectionRangeM: 40_000, // legacy fallback — overridden by eoSpec when IR data available
+    eoSpec: STARING_SENSOR_PROFILE.wideSpec,
   }));
 }
 
@@ -81,14 +83,14 @@ function generateRandomTargets(): ScenarioDefinition['targets'] {
   const rand = () => { rng = (rng * 1103515245 + 12345) & 0x7fffffff; return rng / 0x7fffffff; };
 
   const types: Array<{
-    name: string; cls: string; alt: [number, number]; speed: [number, number]; rcs: number;
+    name: string; cls: string; alt: [number, number]; speed: [number, number]; rcs: number; ir: number;
   }> = [
-    { name: 'Fighter', cls: 'fighter_aircraft', alt: [5000, 15000], speed: [250, 500], rcs: 5 },
-    { name: 'Shahed-136', cls: 'uav', alt: [100, 1500], speed: [40, 55], rcs: 0.05 },
-    { name: 'UAV', cls: 'uav', alt: [500, 4000], speed: [30, 80], rcs: 0.1 },
-    { name: 'Helicopter', cls: 'helicopter', alt: [200, 800], speed: [50, 80], rcs: 10 },
-    { name: 'BM', cls: 'missile', alt: [25000, 120000], speed: [1000, 2200], rcs: 0.3 },
-    { name: 'Cruise Missile', cls: 'uav', alt: [50, 500], speed: [200, 260], rcs: 0.2 },
+    { name: 'Fighter', cls: 'fighter_aircraft', alt: [5000, 15000], speed: [250, 500], rcs: 5, ir: 15_000 },
+    { name: 'Shahed-136', cls: 'uav', alt: [100, 1500], speed: [40, 55], rcs: 0.05, ir: 200 },
+    { name: 'UAV', cls: 'uav', alt: [500, 4000], speed: [30, 80], rcs: 0.1, ir: 500 },
+    { name: 'Helicopter', cls: 'helicopter', alt: [200, 800], speed: [50, 80], rcs: 10, ir: 5_000 },
+    { name: 'BM', cls: 'missile', alt: [25000, 120000], speed: [1000, 2200], rcs: 0.3, ir: 50_000 },
+    { name: 'Cruise Missile', cls: 'uav', alt: [50, 500], speed: [200, 260], rcs: 0.2, ir: 3_000 },
   ];
 
   let currentTime = 900;
@@ -129,6 +131,7 @@ function generateRandomTargets(): ScenarioDefinition['targets'] {
         description: `Random ${t.name} #${idx + 1}, phase 4.`,
         classification: t.cls as any,
         rcs: t.rcs,
+        irEmission: t.ir,
         startTime: currentTime,
         waypoints: [
           { time: 0, position: { lat: lLat, lon: lLon, alt: 5000 }, velocity: { vx: 0, vy: -speed * 0.7, vz: speed * 0.7 } },
@@ -143,6 +146,7 @@ function generateRandomTargets(): ScenarioDefinition['targets'] {
         description: `Random ${t.name} #${idx + 1}, phase 4.`,
         classification: t.cls as any,
         rcs: t.rcs,
+        irEmission: t.ir,
         startTime: currentTime,
         waypoints: [
           { time: 0, position: { lat: startLat, lon: startLon, alt: alt } },
@@ -188,6 +192,8 @@ export const greenPineDefense: ScenarioDefinition = {
     },
 
     // 3 EO investigators (gimbal, narrow FOV) — near the Green Pine
+    // Search/scan at 10° FOV (wideSpec), cue to target at 0.4° (narrowSpec)
+    // Detection range derived from IR physics when target irEmission is set
     {
       sensorId: 'EO-INV-1',
       type: 'eo',
@@ -196,9 +202,10 @@ export const greenPineDefense: ScenarioDefinition = {
         minAzDeg: 0, maxAzDeg: 360, minElDeg: -5, maxElDeg: 90,
         maxRangeM: 40_000,
       },
-      fov: { halfAngleHDeg: 1.0, halfAngleVDeg: 0.75 },
+      fov: { halfAngleHDeg: 5.0, halfAngleVDeg: 3.75 }, // 10° search FOV
       slewRateDegPerSec: 60,
       maxDetectionRangeM: 40_000,
+      eoSpec: INVESTIGATOR_SENSOR_PROFILE.wideSpec, // search mode; cue uses narrowSpec
     },
     {
       sensorId: 'EO-INV-2',
@@ -208,9 +215,10 @@ export const greenPineDefense: ScenarioDefinition = {
         minAzDeg: 0, maxAzDeg: 360, minElDeg: -5, maxElDeg: 90,
         maxRangeM: 40_000,
       },
-      fov: { halfAngleHDeg: 1.0, halfAngleVDeg: 0.75 },
+      fov: { halfAngleHDeg: 5.0, halfAngleVDeg: 3.75 },
       slewRateDegPerSec: 60,
       maxDetectionRangeM: 40_000,
+      eoSpec: INVESTIGATOR_SENSOR_PROFILE.wideSpec,
     },
     {
       sensorId: 'EO-INV-3',
@@ -220,9 +228,10 @@ export const greenPineDefense: ScenarioDefinition = {
         minAzDeg: 0, maxAzDeg: 360, minElDeg: -5, maxElDeg: 90,
         maxRangeM: 40_000,
       },
-      fov: { halfAngleHDeg: 1.0, halfAngleVDeg: 0.75 },
+      fov: { halfAngleHDeg: 5.0, halfAngleVDeg: 3.75 },
       slewRateDegPerSec: 60,
       maxDetectionRangeM: 40_000,
+      eoSpec: INVESTIGATOR_SENSOR_PROFILE.wideSpec,
     },
 
     // 9 staring 360° MWIR EO — 3 clusters × 3 masts each
@@ -240,6 +249,7 @@ export const greenPineDefense: ScenarioDefinition = {
       description: 'Single fighter aircraft crosses the defense area W→E at Mach 1.5, 10 km altitude.',
       classification: 'fighter_aircraft',
       rcs: 10,
+      irEmission: 20_000, // afterburner-capable fighter (W/sr)
       startTime: 0,
       waypoints: [
         { time: 0, position: { lat: 31.4, lon: 34.0, alt: 10000 }, velocity: { vx: 450, vy: 30, vz: 0 } },
@@ -261,6 +271,7 @@ export const greenPineDefense: ScenarioDefinition = {
       description: 'Lead drone of Shahed-136 formation, heading south at 50 m/s, 300m AGL.',
       classification: 'uav',
       rcs: 0.05,
+      irEmission: 200, // small piston engine drone (W/sr)
       startTime: 300,
       waypoints: [
         { time: 0, position: { lat: 31.75, lon: 34.80, alt: 300 }, velocity: { vx: 0, vy: -50, vz: 0 } },
@@ -330,6 +341,7 @@ export const greenPineDefense: ScenarioDefinition = {
         'Apogee ~80 km, reentry at ~1800 m/s.',
       classification: 'missile',
       rcs: 0.3,
+      irEmission: 50_000, // ballistic missile exhaust plume (W/sr)
       startTime: 600,
       waypoints: [
         // Launch phase — 150 km north, climbing

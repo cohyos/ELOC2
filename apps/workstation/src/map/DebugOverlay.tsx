@@ -237,7 +237,7 @@ export function DebugOverlay({
           });
         }
       }
-    }, 50); // 50ms debounce — enough to collect overlapping clicks
+    }, 120); // 120ms debounce — enough to collect overlapping clicks and survive re-renders at 2Hz WS rate
   };
 
   // ── Right-click context menu for operations ─────────────────────────────
@@ -427,6 +427,21 @@ export function DebugOverlay({
       sensors: L.layerGroup().addTo(map),
       tracks: L.layerGroup().addTo(map),
     };
+
+    // Ensure coverage/zones/rays panes don't block clicks on markers above.
+    // Leaflet's `interactive: false` only prevents the polygon itself from receiving
+    // events, but the SVG/Canvas layer can still block events from reaching markers
+    // in higher panes. Setting pointer-events:none on the overlay pane's children
+    // for non-interactive layers fixes this.
+    const coveragePane = map.getPane('overlayPane');
+    if (coveragePane) {
+      coveragePane.style.pointerEvents = 'none';
+    }
+    // Marker pane must still receive clicks
+    const markerPane = map.getPane('markerPane');
+    if (markerPane) {
+      markerPane.style.pointerEvents = 'auto';
+    }
     groupsRef.current = groups;
     return () => {
       Object.values(groups).forEach(g => { g.clearLayers(); map.removeLayer(g); });
@@ -1012,7 +1027,7 @@ export function DebugOverlay({
         marker.bindTooltip(`${shortSensorLabel(sensor)} — ${sensor.sensorId}`, { direction: 'top', offset: [0, -14] });
         marker.on('click', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); addClickCandidate('sensor', sensor.sensorId as string, `${shortSensorLabel(sensor)} (${sensor.sensorType})`, color, e.latlng); });
         marker.on('mousedown', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); L.DomEvent.preventDefault(e.originalEvent); });
-        marker.on('contextmenu', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); showContextMenu('sensor', sensor.sensorId as string, shortSensorLabel(sensor), e.latlng); });
+        marker.on('contextmenu', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); L.DomEvent.preventDefault(e.originalEvent); showContextMenu('sensor', sensor.sensorId as string, shortSensorLabel(sensor), e.latlng); });
         marker.addTo(g);
       }
 
@@ -1081,7 +1096,7 @@ export function DebugOverlay({
         marker.bindTooltip(title, { direction: 'top', offset: [0, -14] });
         marker.on('click', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); addClickCandidate('track', trackId, `${shortTrackLabel(track)} — ${track.status}`, color, e.latlng); });
         marker.on('mousedown', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); L.DomEvent.preventDefault(e.originalEvent); });
-        marker.on('contextmenu', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); showContextMenu('track', trackId, shortTrackLabel(track), e.latlng); });
+        marker.on('contextmenu', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); L.DomEvent.preventDefault(e.originalEvent); showContextMenu('track', trackId, shortTrackLabel(track), e.latlng); });
         marker.on('dblclick', () => useUiStore.getState().setEoVideoPopupTrackId(trackId));
         marker.addTo(g);
 
@@ -1174,7 +1189,7 @@ export function DebugOverlay({
       marker.bindTooltip(`GT: ${target.name} — ${target.classification ?? 'unclassified'}`, { direction: 'top', offset: [0, -12] });
       marker.on('click', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); addClickCandidate('gt', gtId, `GT: ${target.name}`, '#00ffff', e.latlng); });
       marker.on('mousedown', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); L.DomEvent.preventDefault(e.originalEvent); });
-      marker.on('contextmenu', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); showContextMenu('gt', gtId, `GT: ${target.name}`, e.latlng); });
+      marker.on('contextmenu', (e: L.LeafletMouseEvent) => { L.DomEvent.stopPropagation(e.originalEvent); L.DomEvent.preventDefault(e.originalEvent); showContextMenu('gt', gtId, `GT: ${target.name}`, e.latlng); });
       marker.addTo(g);
 
       // Selection ring + GT-to-track connection line

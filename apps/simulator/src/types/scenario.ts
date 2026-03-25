@@ -13,6 +13,7 @@ import type {
   WeatherCondition,
   ClutterZone,
 } from '@eloc2/domain';
+import type { EoSensorSpec } from '@eloc2/geometry';
 
 export interface WaypointDef {
   time: number;
@@ -27,7 +28,8 @@ export interface TargetDefinition {
   waypoints: WaypointDef[];
   startTime: number;
   classification?: TargetClassification;
-  rcs?: number;  // Radar Cross Section in m² (overrides TARGET_RCS lookup)
+  rcs?: number;         // Radar Cross Section in m² (overrides TARGET_RCS lookup)
+  irEmission?: number;  // IR emission in W/sr — enables physics-based EO detection
 }
 
 export interface SensorDefinition {
@@ -37,7 +39,9 @@ export interface SensorDefinition {
   coverage: CoverageArc;
   fov?: FieldOfView;
   slewRateDegPerSec?: number;
-  maxDetectionRangeM?: number;  // EO only — max detection range in meters
+  maxDetectionRangeM?: number;  // EO only — max detection range in meters (legacy, overridden by eoSpec)
+  /** EO hardware spec — enables physics-based IR detection range calculation */
+  eoSpec?: EoSensorSpec;
 }
 
 export interface FaultDefinition {

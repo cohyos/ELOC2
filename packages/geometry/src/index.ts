@@ -46,3 +46,25 @@ export type {
   LaunchEstimate,
   ImpactEstimate,
 } from './ballistic/ballistic-estimator.js';
+
+// IR Detection
+export {
+  computeIrDetectionRange,
+  checkIrDetection,
+  computeExtinctionCoeff,
+  atmosphericTransmission,
+  computeIfovMrad,
+  computeGsdM,
+  STARING_SENSOR_PROFILE,
+  INVESTIGATOR_SENSOR_PROFILE,
+  STANDARD_ATMOSPHERE,
+  GOOD_WEATHER_ATMOSPHERE,
+  HAZY_ATMOSPHERE,
+  RAIN_ATMOSPHERE,
+} from './ir-detection.js';
+export type {
+  EoSensorSpec,
+  EoSensorProfile,
+  AtmosphereCondition,
+  IrDetectionResult,
+} from './ir-detection.js';

@@ -19,6 +19,11 @@ import {
 } from '@eloc2/shared-utils';
 import type { Position3D } from '@eloc2/domain';
 import { checkLineOfSight } from '@eloc2/terrain';
+import {
+  checkIrDetection,
+  GOOD_WEATHER_ATMOSPHERE,
+} from '@eloc2/geometry';
+import type { EoSensorSpec, AtmosphereCondition } from '@eloc2/geometry';
 import type { SensorDefinition, FaultDefinition } from '../../types/scenario.js';
 import {
   applyAzimuthBias,
@@ -72,7 +77,15 @@ export function generateEoBearing(
   faults: FaultDefinition[],
   targetId: string = 'unknown',
   rng?: () => number,
-  options?: { terrainLos?: boolean; weather?: WeatherCondition; targetClassification?: TargetClassification },
+  options?: {
+    terrainLos?: boolean;
+    weather?: WeatherCondition;
+    targetClassification?: TargetClassification;
+    /** Target IR emission in W/sr — enables physics-based detection range */
+    irEmission?: number;
+    /** EO sensor hardware spec — enables physics-based detection range */
+    eoSensorSpec?: EoSensorSpec;
+  },
 ): EoBearingObservation | undefined {
   const sensorFaults = faults.filter((f) => f.sensorId === sensor.sensorId);
 
@@ -112,20 +125,47 @@ export function generateEoBearing(
     targetPos.lat, targetPos.lon,
   );
 
-  // DRI-based detection range check with time-of-day and weather modulation
+  // ── Detection range check ─────────────────────────────────────────────
+  // Priority: IR physics model (if irEmission + eoSensorSpec provided)
+  //           → legacy DRI model (if maxDetectionRangeM set)
+  //           → hard coverage range check (fallback)
   let driTier: DriTier | undefined;
-  if (sensor.maxDetectionRangeM !== undefined) {
+
+  if (options?.irEmission && options?.irEmission > 0 && options?.eoSensorSpec) {
+    // Physics-based IR detection using sensor specs + target IR emission
     const todModifier = timeOfDayRangeModifier(timeSec);
-    // Weather visibility reduction: full range at 10km+, linear reduction below
+    const atm: AtmosphereCondition = options?.weather
+      ? {
+          visibilityKm: options.weather.visibilityKm,
+          relativeHumidity: Math.min(1, options.weather.rainMmHr > 0 ? 0.95 : 0.5),
+          temperatureC: 20,
+          altitudeM: sensor.position.alt,
+        }
+      : GOOD_WEATHER_ATMOSPHERE;
+
+    // Apply time-of-day to IR emission (night: targets stand out MORE against cold background)
+    const effectiveIr = options.irEmission * (todModifier >= 1.0 ? 1.0 : 1.3); // night boost
+    const irCheck = checkIrDetection(
+      rangeM,
+      effectiveIr,
+      options?.targetClassification ?? 'unknown',
+      options.eoSensorSpec,
+      atm,
+    );
+    if (!irCheck.tier) {
+      return undefined; // Beyond IR detection range
+    }
+    driTier = irCheck.tier as DriTier;
+  } else if (sensor.maxDetectionRangeM !== undefined) {
+    // Legacy DRI model: hardcoded maxDetectionRangeM with modifiers
+    const todModifier = timeOfDayRangeModifier(timeSec);
     const weatherModifier = options?.weather
       ? Math.min(1, options.weather.visibilityKm / 10)
       : 1.0;
     const effectiveBaseRange = sensor.maxDetectionRangeM * todModifier * weatherModifier;
-
-    // Compute DRI tier based on target classification and range
     const dri = computeDriTier(rangeM, effectiveBaseRange, options?.targetClassification);
     if (!dri.tier) {
-      return undefined; // Beyond DRI detection range for this target type
+      return undefined;
     }
     driTier = dri.tier;
   } else {
