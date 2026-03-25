@@ -427,6 +427,21 @@ export function DebugOverlay({
       sensors: L.layerGroup().addTo(map),
       tracks: L.layerGroup().addTo(map),
     };
+
+    // Ensure coverage/zones/rays panes don't block clicks on markers above.
+    // Leaflet's `interactive: false` only prevents the polygon itself from receiving
+    // events, but the SVG/Canvas layer can still block events from reaching markers
+    // in higher panes. Setting pointer-events:none on the overlay pane's children
+    // for non-interactive layers fixes this.
+    const coveragePane = map.getPane('overlayPane');
+    if (coveragePane) {
+      coveragePane.style.pointerEvents = 'none';
+    }
+    // Marker pane must still receive clicks
+    const markerPane = map.getPane('markerPane');
+    if (markerPane) {
+      markerPane.style.pointerEvents = 'auto';
+    }
     groupsRef.current = groups;
     return () => {
       Object.values(groups).forEach(g => { g.clearLayers(); map.removeLayer(g); });
