@@ -2314,14 +2314,25 @@ export class LiveEngine {
 
     // Create a virtual task for this cue
     this.state.tasks.push({
-      taskId: generateId(),
+      taskId: generateId() as TaskId,
       cueId: cue.cueId,
-      sensorId: sensor.sensorId as string,
-      targetTrackId: trackId,
+      sensorId: sensor.sensorId as SensorId,
+      systemTrackId: trackId as SystemTrackId,
       status: 'executing',
-      priority: 5,
-      assignedAt: Date.now(),
-    } as any);
+      scoreBreakdown: {
+        total: 5,
+        threatScore: 2,
+        uncertaintyReduction: 1,
+        geometryGain: 1,
+        operatorIntent: 1,
+        slewCost: 0,
+        occupancyCost: 0,
+      },
+      policyMode: this.currentParameters.policyMode,
+      operatorOverride: undefined,
+      createdAt: Date.now() as Timestamp,
+      completedAt: undefined,
+    });
 
     return cue.cueId;
   }
