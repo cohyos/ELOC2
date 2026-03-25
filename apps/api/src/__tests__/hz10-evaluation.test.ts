@@ -393,82 +393,147 @@ describe('10 Hz Pipeline Evaluation', () => {
     expect(result.totalTicks).toBe(1200);
   }, 120_000);
 
-  // ── Test 4: Comparison & grading ──────────────────────────────────────────
+  // ── Test 4: 20 Hz calibrated ───────────────────────────────────────────
+
+  const HZ20_CALIBRATED: RunConfig = {
+    label: '20 Hz Calibrated',
+    dtSec: 0.05,
+    radarUpdateSec: 0.05,
+    eoUpdateSec: 0.05,
+    fuserConfig: {
+      confirmAfter: 14,          // 3 × (20/1) × 0.23 ≈ 14 (~700ms)
+      coastingMissThreshold: 30, // ~1.5s at 20Hz
+      dropAfterMisses: 80,       // ~4s at 20Hz
+      mergeDistanceM: 150,
+      correlationThreshold: 150,  // wider gate for even smaller covariance
+    },
+    description: '20Hz all sensors, recalibrated for 20x frequency',
+  };
+
+  it('should run 20 Hz calibrated', () => {
+    console.log('\n═══ Running 20 Hz CALIBRATED ═══');
+    const result = runPipeline(HZ20_CALIBRATED);
+    results.push(result);
+
+    console.log(`  Ticks: ${result.totalTicks}`);
+    console.log(`  Wall clock: ${result.wallClockMs}ms`);
+    console.log(`  Avg tick: ${result.avgTickMs.toFixed(2)}ms, Max: ${result.maxTickMs.toFixed(2)}ms`);
+    console.log(`  Peak system tracks: ${result.peakSystemTracks}`);
+    console.log(`  Final: ${result.confirmedTracks} confirmed, ${result.tentativeTracks} tentative, ${result.droppedTracks} dropped`);
+    console.log(`  Peak heap: ${result.peakHeapMB.toFixed(1)}MB`);
+    console.log(`  Crashed: ${result.crashed}${result.crashError ? ' — ' + result.crashError : ''}`);
+
+    expect(result.crashed).toBe(false);
+    expect(result.totalTicks).toBe(2400);
+  }, 180_000);
+
+  // ── Test 5: 50 Hz calibrated ───────────────────────────────────────────
+
+  const HZ50_CALIBRATED: RunConfig = {
+    label: '50 Hz Calibrated',
+    dtSec: 0.02,
+    radarUpdateSec: 0.02,
+    eoUpdateSec: 0.02,
+    fuserConfig: {
+      confirmAfter: 35,           // ~700ms at 50Hz
+      coastingMissThreshold: 75,  // ~1.5s at 50Hz
+      dropAfterMisses: 200,       // ~4s at 50Hz
+      mergeDistanceM: 150,
+      correlationThreshold: 250,   // much wider gate
+    },
+    description: '50Hz all sensors, recalibrated for 50x frequency',
+  };
+
+  it('should run 50 Hz calibrated', () => {
+    console.log('\n═══ Running 50 Hz CALIBRATED ═══');
+    const result = runPipeline(HZ50_CALIBRATED);
+    results.push(result);
+
+    console.log(`  Ticks: ${result.totalTicks}`);
+    console.log(`  Wall clock: ${result.wallClockMs}ms`);
+    console.log(`  Avg tick: ${result.avgTickMs.toFixed(2)}ms, Max: ${result.maxTickMs.toFixed(2)}ms`);
+    console.log(`  Peak system tracks: ${result.peakSystemTracks}`);
+    console.log(`  Final: ${result.confirmedTracks} confirmed, ${result.tentativeTracks} tentative, ${result.droppedTracks} dropped`);
+    console.log(`  Peak heap: ${result.peakHeapMB.toFixed(1)}MB`);
+    console.log(`  Crashed: ${result.crashed}${result.crashError ? ' — ' + result.crashError : ''}`);
+
+    // 50 Hz may or may not crash — this is an exploration
+    expect(result.totalTicks).toBe(6000);
+  }, 300_000);
+
+  // ── Test 6: Comparison & grading ──────────────────────────────────────────
 
   it('should produce comparison report', () => {
     console.log('\n═══════════════════════════════════════════════════════');
-    console.log('    10 Hz EVALUATION — COMPARISON REPORT');
+    console.log('    FREQUENCY SCALING EVALUATION — COMPARISON REPORT');
     console.log('═══════════════════════════════════════════════════════\n');
 
-    if (results.length < 3) {
-      console.log('Not all runs completed — skipping comparison');
-      return;
+    if (results.length < 5) {
+      console.log(`Only ${results.length}/5 runs completed — showing available`);
     }
 
-    const [baseline, raw10, cal10] = results;
+    const [baseline, raw10, cal10, cal20, cal50] = results;
 
-    // ── Performance comparison ──
-    console.log('┌─────────────────────────────────────────────────────┐');
-    console.log('│ PERFORMANCE                                         │');
-    console.log('├──────────────────┬──────────┬──────────┬────────────┤');
-    console.log('│ Metric           │ 1 Hz     │ 10Hz Raw │ 10Hz Cal   │');
-    console.log('├──────────────────┼──────────┼──────────┼────────────┤');
-    const row = (label: string, fn: (r: RunResult) => string) =>
-      console.log(`│ ${label.padEnd(16)} │ ${fn(baseline).padEnd(8)} │ ${fn(raw10).padEnd(8)} │ ${fn(cal10).padEnd(10)} │`);
+    // ── All-configs comparison ──
+    const allConfigs = results.filter(Boolean);
+    const labels = allConfigs.map(r => r.config.label);
 
+    // Helper: print a row across all configs
+    const hdr = labels.map(l => l.slice(0, 10).padEnd(10)).join(' │ ');
+    const sep = labels.map(() => '──────────').join('─┼─');
+
+    console.log(`  Metric           │ ${hdr}`);
+    console.log(`  ─────────────────┼─${sep}`);
+    const row = (label: string, fn: (r: RunResult) => string) => {
+      const vals = allConfigs.map(r => fn(r).padEnd(10)).join(' │ ');
+      console.log(`  ${label.padEnd(17)}│ ${vals}`);
+    };
+
+    console.log('\n── PERFORMANCE ──');
     row('Total ticks', r => String(r.totalTicks));
     row('Wall clock ms', r => String(r.wallClockMs));
-    row('Avg tick ms', r => r.avgTickMs.toFixed(2));
+    row('Avg tick ms', r => r.avgTickMs.toFixed(3));
     row('Max tick ms', r => r.maxTickMs.toFixed(2));
     row('Peak heap MB', r => r.peakHeapMB.toFixed(1));
     row('Crashed', r => String(r.crashed));
-    console.log('└──────────────────┴──────────┴──────────┴────────────┘\n');
 
-    // ── Track quality comparison ──
-    console.log('┌─────────────────────────────────────────────────────┐');
-    console.log('│ TRACK QUALITY                                       │');
-    console.log('├──────────────────┬──────────┬──────────┬────────────┤');
-    console.log('│ Metric           │ 1 Hz     │ 10Hz Raw │ 10Hz Cal   │');
-    console.log('├──────────────────┼──────────┼──────────┼────────────┤');
+    console.log('\n── TRACK QUALITY ──');
     row('Peak sys tracks', r => String(r.peakSystemTracks));
     row('Confirmed', r => String(r.confirmedTracks));
     row('Tentative', r => String(r.tentativeTracks));
     row('Dropped', r => String(r.droppedTracks));
     row('GT targets', r => String(r.totalGtTargets));
     row('Track/GT ratio', r => r.trackToGtRatio.toFixed(2));
-    console.log('└──────────────────┴──────────┴──────────┴────────────┘\n');
 
     // ── Per-second track evolution (sample every 10s) ──
-    console.log('Track count evolution (every 10s):');
-    console.log('  Time │ GT │  1Hz │ 10Hz-R │ 10Hz-C');
-    console.log('  ─────┼────┼──────┼────────┼───────');
+    console.log('\n── TRACK EVOLUTION (every 10s) ──');
+    const evoHdr = ['Time', 'GT', ...labels.map(l => l.slice(0, 8))].map(s => s.padStart(8)).join(' │');
+    console.log(`  ${evoHdr}`);
     for (let t = 10; t <= 120; t += 10) {
-      const bSnap = baseline.snapshots.find(s => Math.abs(s.simTime - t) < 1);
-      const rSnap = raw10.snapshots.find(s => Math.abs(s.simTime - t) < 1);
-      const cSnap = cal10.snapshots.find(s => Math.abs(s.simTime - t) < 1);
       const gt = getActiveTargets(t).length;
-      console.log(`  ${String(t).padStart(4)}s│ ${String(gt).padStart(2)} │ ${String(bSnap?.systemTrackCount ?? '?').padStart(4)} │ ${String(rSnap?.systemTrackCount ?? '?').padStart(6)} │ ${String(cSnap?.systemTrackCount ?? '?').padStart(5)}`);
+      const vals = allConfigs.map(r => {
+        const snap = r.snapshots.find(s => Math.abs(s.simTime - t) < 1);
+        return String(snap?.systemTrackCount ?? '?').padStart(8);
+      }).join(' │');
+      console.log(`  ${String(t + 's').padStart(8)} │${String(gt).padStart(8)} │${vals}`);
     }
 
     // ── Scoring ──
     console.log('\n── SCORING ──');
 
     function score(r: RunResult): { total: number; stability: number; quality: number; perf: number } {
-      // Stability: no crash = 30pts, low proliferation = 20pts
       let stability = r.crashed ? 0 : 30;
       const prolif = r.peakSystemTracks / Math.max(1, r.totalGtTargets);
       if (prolif <= 2) stability += 20;
       else if (prolif <= 4) stability += 10;
       else stability += 0;
 
-      // Quality: confirmed tracks close to GT count
       const ratio = r.confirmedTracks / Math.max(1, r.totalGtTargets);
       let quality = 0;
       if (ratio >= 0.8 && ratio <= 1.5) quality = 30;
       else if (ratio >= 0.5 && ratio <= 2.0) quality = 20;
       else if (ratio >= 0.25) quality = 10;
 
-      // Performance: avg tick under budget
       let perf = 0;
       if (r.avgTickMs < 5) perf = 20;
       else if (r.avgTickMs < 20) perf = 15;
@@ -478,36 +543,32 @@ describe('10 Hz Pipeline Evaluation', () => {
       return { total: stability + quality + perf, stability, quality, perf };
     }
 
-    const bScore = score(baseline);
-    const rScore = score(raw10);
-    const cScore = score(cal10);
-
     const grade = (s: number) => s >= 80 ? 'A' : s >= 60 ? 'B' : s >= 40 ? 'C' : s >= 20 ? 'D' : 'F';
 
-    console.log(`  Baseline 1Hz:      ${bScore.total}/100 (${grade(bScore.total)}) — stability:${bScore.stability} quality:${bScore.quality} perf:${bScore.perf}`);
-    console.log(`  10Hz Uncalibrated: ${rScore.total}/100 (${grade(rScore.total)}) — stability:${rScore.stability} quality:${rScore.quality} perf:${rScore.perf}`);
-    console.log(`  10Hz Calibrated:   ${cScore.total}/100 (${grade(cScore.total)}) — stability:${cScore.stability} quality:${cScore.quality} perf:${cScore.perf}`);
+    const scores = allConfigs.map(r => ({ label: r.config.label, ...score(r) }));
+    for (const s of scores) {
+      console.log(`  ${s.label.padEnd(20)} ${s.total}/100 (${grade(s.total)}) — stab:${s.stability} qual:${s.quality} perf:${s.perf}`);
+    }
 
     // ── Recommendation ──
     console.log('\n── RECOMMENDATION ──');
-    if (cScore.total >= bScore.total - 10 && !cal10.crashed) {
-      console.log('  ✓ 10 Hz calibrated is VIABLE — quality comparable to baseline');
-      console.log('  ✓ Consider integration with workstation broadcast throttling');
-    } else if (cal10.crashed) {
-      console.log('  ✗ 10 Hz CRASHES — do NOT integrate without fixing stability');
-    } else {
-      console.log('  △ 10 Hz shows quality regression — needs further calibration');
-      console.log(`  △ Gap: baseline ${bScore.total} vs calibrated ${cScore.total} (${bScore.total - cScore.total} points)`);
+    const bestScore = Math.max(...scores.map(s => s.total));
+    const bestConfig = scores.find(s => s.total === bestScore);
+    console.log(`  Best: ${bestConfig?.label} — ${bestConfig?.total}/100 (${grade(bestConfig?.total ?? 0)})`);
+
+    const crashedConfigs = allConfigs.filter(r => r.crashed);
+    if (crashedConfigs.length > 0) {
+      console.log(`  WARNING: ${crashedConfigs.map(r => r.config.label).join(', ')} CRASHED`);
     }
 
     // ── Write report JSON ──
     const reportDir = path.resolve(process.cwd(), 'hz10-evaluation-reports');
     if (!fs.existsSync(reportDir)) fs.mkdirSync(reportDir, { recursive: true });
-    const reportPath = path.join(reportDir, `hz10-eval-${new Date().toISOString().slice(0, 19).replace(/:/g, '')}.json`);
+    const reportPath = path.join(reportDir, `freq-eval-${new Date().toISOString().slice(0, 19).replace(/:/g, '')}.json`);
     const report = {
       timestamp: new Date().toISOString(),
       scenario: { targets: TARGET_DEFS.length, sensors: 5, simDurationSec: 120 },
-      runs: results.map(r => ({
+      runs: results.filter(Boolean).map(r => ({
         label: r.config.label,
         description: r.config.description,
         dtSec: r.config.dtSec,
@@ -524,23 +585,15 @@ describe('10 Hz Pipeline Evaluation', () => {
         droppedTracks: r.droppedTracks,
         trackToGtRatio: r.trackToGtRatio,
         snapshotCount: r.snapshots.length,
-        snapshots: r.snapshots,
       })),
-      scores: {
-        baseline: bScore,
-        hz10_uncalibrated: rScore,
-        hz10_calibrated: cScore,
-      },
-      grades: {
-        baseline: grade(bScore.total),
-        hz10_uncalibrated: grade(rScore.total),
-        hz10_calibrated: grade(cScore.total),
-      },
+      scores: Object.fromEntries(scores.map(s => [s.label, s])),
+      grades: Object.fromEntries(scores.map(s => [s.label, grade(s.total)])),
     };
     fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
     console.log(`\nReport written to: ${reportPath}`);
 
-    // Assertion: calibrated should not crash
-    expect(cal10.crashed).toBe(false);
+    // Assertions
+    expect(allConfigs.length).toBeGreaterThanOrEqual(3);
+    expect(cal10?.crashed).toBe(false);
   }, 30_000);
 });
