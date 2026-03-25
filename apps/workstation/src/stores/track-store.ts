@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { SystemTrack, SystemTrackId } from '@eloc2/domain';
+import { useUiStore } from './ui-store';
 
 export interface RapSnapshot {
   tracks: SystemTrack[];
@@ -10,7 +11,8 @@ export interface RapSnapshot {
 }
 
 /** Max number of trail positions stored per track */
-const MAX_TRAIL = 5;
+const MAX_TRAIL = 5;         // breadcrumb dots (visual trail)
+const MAX_TRAJECTORY = 2000; // full trajectory path (toggled on from context menu)
 
 interface TrackState {
   tracks: SystemTrack[];
@@ -84,19 +86,24 @@ export const useTrackStore = create<TrackState>((set, get) => ({
     }
     // Update trail history: append current position, keep last MAX_TRAIL
     const prevTrail = get().trailHistory;
+    const trajectoryIds = useUiStore.getState().trajectoryTrackIds;
     const newTrail = new Map<string, Array<{ lon: number; lat: number }>>();
     const activeIds = new Set<string>();
     for (const t of tracks) {
       activeIds.add(t.systemTrackId);
       if (!t.state || !Number.isFinite(t.state.lat) || !Number.isFinite(t.state.lon)) continue;
-      const prev = prevTrail.get(t.systemTrackId) ?? [];
+      const trackId = t.systemTrackId as string;
+      const prev = prevTrail.get(trackId) ?? [];
       const last = prev[prev.length - 1];
+      // When trajectory mode is ON: keep full path (up to MAX_TRAJECTORY)
+      // When OFF: keep only last MAX_TRAIL breadcrumbs
+      const maxPoints = trajectoryIds.has(trackId) ? MAX_TRAJECTORY : MAX_TRAIL;
       // Only append if position changed (>~10m threshold)
       if (!last || Math.abs(last.lat - t.state.lat) > 0.0001 || Math.abs(last.lon - t.state.lon) > 0.0001) {
         const updated = [...prev, { lon: t.state.lon, lat: t.state.lat }];
-        newTrail.set(t.systemTrackId, updated.length > MAX_TRAIL ? updated.slice(-MAX_TRAIL) : updated);
+        newTrail.set(trackId, updated.length > maxPoints ? updated.slice(-maxPoints) : updated);
       } else {
-        newTrail.set(t.systemTrackId, prev);
+        newTrail.set(trackId, prev);
       }
     }
     const confirmed = tracks.filter(t => t.status === 'confirmed').length;
