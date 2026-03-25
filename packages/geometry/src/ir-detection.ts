@@ -27,6 +27,8 @@ export interface EoSensorSpec {
   pixelPitchMicrons: number;
   /** Noise Equivalent Temperature Difference (mK) — lower = more sensitive */
   netdMk: number;
+  /** Aperture diameter in mm (overrides f-number calculation). If omitted, uses f/2. */
+  apertureDiameterMm?: number;
   /** Horizontal field of view in degrees (derived from array + focal length) */
   hfovDeg: number;
   /** Vertical field of view in degrees */
@@ -78,10 +80,12 @@ export interface IrDetectionResult {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 /** Standard atmosphere MWIR (3-5 μm) extinction coefficient (1/km)
- *  This accounts for molecular absorption (H2O, CO2) + aerosol scattering.
- *  Standard: 0.2/km at sea level, clear day, 50% RH.
- *  Range: 0.1 (very clear) to 2.0 (heavy rain/fog). */
-const STANDARD_EXTINCTION_KM = 0.2;
+ *  The 3-5μm atmospheric window has LOW extinction compared to visible:
+ *  - Visible extinction: ~0.2/km (Rayleigh + Mie scattering)
+ *  - MWIR extinction: ~0.06/km (window avoids H2O/CO2 absorption bands)
+ *  Standard: 0.06/km at sea level, clear day, moderate humidity.
+ *  Range: 0.03 (very clear/dry) to 1.5 (heavy rain/fog). */
+const STANDARD_EXTINCTION_KM = 0.06;
 
 /** Minimum SNR for reliable detection (industry standard: 5-7 for MWIR) */
 const MIN_DETECTION_SNR = 5.0;
@@ -134,16 +138,18 @@ export function computeExtinctionCoeff(atm: AtmosphereCondition): number {
   // Base extinction at sea level, clear conditions
   let sigma = STANDARD_EXTINCTION_KM;
 
-  // Humidity correction: H2O absorption increases with humidity
-  // At 100% RH, extinction doubles vs 0% RH in MWIR band
-  const humidityFactor = 1.0 + atm.relativeHumidity * 0.8;
+  // Humidity correction: H2O absorption in MWIR 3-5μm window
+  // The 3-5μm window avoids major H2O bands, but continuum absorption
+  // still increases with humidity. Effect is ~40% increase at 100% RH.
+  const humidityFactor = 1.0 + atm.relativeHumidity * 0.4;
   sigma *= humidityFactor;
 
   // Visibility correction: Koschmieder's law relates visibility to extinction
-  // V = 3.912 / σ_vis. For MWIR, empirical ratio is ~0.6 of visible extinction.
-  if (atm.visibilityKm < 23) {
+  // V = 3.912 / σ_vis. For MWIR, empirical ratio is ~0.3 of visible extinction
+  // (MWIR window penetrates fog/haze much better than visible).
+  if (atm.visibilityKm < 15) {
     const visExtinction = 3.912 / atm.visibilityKm;
-    const mwirVisExtinction = visExtinction * 0.6; // MWIR penetrates better than visible
+    const mwirVisExtinction = visExtinction * 0.3; // MWIR much better than visible in haze
     sigma = Math.max(sigma, mwirVisExtinction);
   }
 
@@ -220,7 +226,8 @@ export const STARING_SENSOR_PROFILE: EoSensorProfile = {
     bandMicrons: [3, 5],
     focalLengthMm: 50,         // short focal for wide FOV
     pixelPitchMicrons: 15,     // standard InSb/MCT MWIR pitch
-    netdMk: 20,                // cooled MWIR: 20 mK NETD (high sensitivity)
+    netdMk: 15,                // cooled InSb MWIR: 15 mK NETD (high-end production)
+    apertureDiameterMm: 75,    // 75mm effective aperture per sector (panoramic MWIR systems)
     hfovDeg: 360,              // full panoramic (or 90° per quadrant)
     vfovDeg: 20,
   },
@@ -302,35 +309,100 @@ export function computeIrDetectionRange(
   const targetDimM = TARGET_DIMENSIONS[targetClassification] ?? TARGET_DIMENSIONS.unknown;
 
   // ── SNR-based detection range ──────────────────────────────────────────
-  // Use iterative search: find max range where SNR ≥ MIN_DETECTION_SNR
-  // SNR model: simplified as proportional to irradiance / NETD
-  // The NETD is expressed in mK but represents the minimum detectable
-  // temperature difference. For a point source, we use the relationship:
-  //   SNR ≈ (targetIrWsr × transmission) / (range² × K_noise)
-  // where K_noise encapsulates NETD, pixel size, optics throughput.
+  // Point-source IR detection model for MWIR (3-5 μm) sensors.
+  //
+  // The sensor collects photons from the target's IR emission through its
+  // aperture. The signal is compared against the detector noise floor (NETD).
+  //
+  // Key physics:
+  //   Irradiance at sensor = (targetIrWsr × atmosphericTransmission) / range²
+  //   NEI (noise equivalent irradiance) = NETD × blackbodyContrast × pixelSolidAngle / throughput
+  //   SNR = irradiance / NEI × √(integrationFrames)  ← frame stacking
+  //
+  // Real-world MWIR sensor optics:
+  //   - Aperture: f/2 to f/2.5 (cooled sensors have fast optics)
+  //   - Frame rate: 24 Hz (MWIR standard)
+  //   - Integration: √N frame stacking over update interval
+  //   - Optical throughput: ~0.7 (lens + window transmission)
 
-  // Noise equivalent power: proportional to NETD × pixel area × bandwidth
-  // For MWIR (3-5μm), blackbody contrast ~4 W/m²/sr/K at 300K
-  const blackbodyContrast = 4.0; // W/m²/sr/K for MWIR at ~300K
-  const pixelAreaM2 = (sensorSpec.pixelPitchMicrons * 1e-6) ** 2;
-  const apertureAreaM2 = Math.PI * (sensorSpec.focalLengthMm * 0.001 * 0.25) ** 2; // f/4 assumption
-  const nep = (sensorSpec.netdMk * 0.001) * blackbodyContrast * pixelAreaM2 / apertureAreaM2;
+  // ── Point-source detection model ─────────────────────────────────────
+  //
+  // For point sources (sub-pixel targets), SNR depends on:
+  //   Signal = targetIrWsr × atmosphericTransmission × apertureArea × opticsEfficiency / range²
+  //   Noise  = NEP (detector noise equivalent power)
+  //   SNR    = Signal / Noise × √(integrationFrames)
+  //
+  // NEP derived from D* (specific detectivity):
+  //   NEP = √(detectorArea × bandwidth) / D*
+  //
+  // For cooled InSb MWIR (3-5μm):
+  //   D* ≈ 3-5 × 10¹⁰ cm·√Hz/W (production grade)
+  //   Bandwidth ≈ frame_rate / 2 (Nyquist)
 
-  // Binary search for max detection range
-  let snrRangeM = 1000; // start at 1 km
-  let lo = 100, hi = 200_000; // 100m to 200km
-  for (let i = 0; i < 40; i++) {
+  // Aperture: explicit diameter if provided, otherwise f/2
+  const apertureDiameterM = sensorSpec.apertureDiameterMm
+    ? sensorSpec.apertureDiameterMm * 0.001
+    : sensorSpec.focalLengthMm * 0.001 / 2.0;
+  const apertureAreaM2 = Math.PI * (apertureDiameterM / 2) ** 2;
+
+  // Optics throughput (lens + window + filter transmission)
+  const opticalThroughput = 0.65;
+
+  // Detector parameters
+  const pixelPitchM = sensorSpec.pixelPitchMicrons * 1e-6;
+  const detectorAreaM2 = pixelPitchM * pixelPitchM;
+  const dStar = 4e10; // D* in cm·√Hz/W — cooled InSb MWIR production grade
+  const dStarSI = dStar * 1e-2; // convert to m·√Hz/W
+  const FRAME_RATE_HZ = 24;
+  const bandwidth = FRAME_RATE_HZ / 2; // Hz (Nyquist)
+  // Detector NEP (noise equivalent power from detector thermal noise)
+  const detectorNep = Math.sqrt(detectorAreaM2 * bandwidth) / dStarSI;
+
+  // Background clutter NEP — in practice, thermal background from terrain/sky
+  // dominates over detector noise for ground-based MWIR sensors looking upward.
+  // Background radiance in MWIR: ~1-10 W/m²/sr depending on look angle.
+  // Looking up (sky): ~1 W/m²/sr. Looking at horizon (ground): ~5 W/m²/sr.
+  // Clutter noise = background × aperture × pixelSolidAngle × throughput
+  const pixelSolidAngleSr = (pixelPitchM / (sensorSpec.focalLengthMm * 1e-3)) ** 2;
+  // Sensor mode: staring (wide FOV panoramic) vs investigator (narrow FOV zoom)
+  const isStaringMode = sensorSpec.hfovDeg > 30;
+
+  // Background-limited noise: thermal background clutter through the pixel IFOV
+  // For wide IFOV (staring: 0.3 mrad), each pixel sees a large patch of sky/ground,
+  // collecting substantial background photon noise. For narrow IFOV (investigator:
+  // 0.01 mrad), pixel sees minimal background — detector-noise dominated.
+  const backgroundRadiance = 1.5; // W/m²/sr — average sky MWIR background
+  const rawClutterPower = backgroundRadiance * apertureAreaM2 * pixelSolidAngleSr * opticalThroughput;
+  // Temporal filtering (frame differencing) removes static background.
+  // Residual is ~3% for narrow IFOV, ~8% for wide IFOV (more atmospheric scintillation).
+  const clutterRejection = isStaringMode ? 0.08 : 0.03;
+  const clutterNep = rawClutterPower * clutterRejection;
+
+  // Total NEP: RSS of detector noise + clutter noise
+  const nep = Math.sqrt(detectorNep ** 2 + clutterNep ** 2);
+
+  // Frame integration: staring sensors integrate 24 Hz × ~2s = 48 frames
+  const UPDATE_INTERVAL_SEC = 2;
+  const integrationFrames = isStaringMode
+    ? FRAME_RATE_HZ * UPDATE_INTERVAL_SEC
+    : Math.min(12, FRAME_RATE_HZ * 0.5);
+  const integrationGain = Math.sqrt(integrationFrames);
+
+  // Binary search for max detection range where SNR ≥ threshold
+  let lo = 100, hi = 500_000; // 100m to 500km (BMs detectable at >150km)
+  for (let i = 0; i < 50; i++) {
     const mid = (lo + hi) / 2;
     const transmission = atmosphericTransmission(mid, extinctionCoeff);
-    const irradiance = (targetIrWsr * transmission) / (mid * mid);
-    const snr = irradiance / Math.max(nep, 1e-20);
+    // Point-source signal power at detector: I × T × A_aperture × η / R²
+    const signalPower = (targetIrWsr * transmission * apertureAreaM2 * opticalThroughput) / (mid * mid);
+    const snr = (signalPower / Math.max(nep, 1e-30)) * integrationGain;
     if (snr >= MIN_DETECTION_SNR) {
       lo = mid;
     } else {
       hi = mid;
     }
   }
-  snrRangeM = lo;
+  const snrRangeM = lo;
 
   // ── Johnson DRI range ─────────────────────────────────────────────────
   // Pixels on target at range R: N = targetDimM / GSD(R) = targetDimM / (IFOV_rad × R)
@@ -364,8 +436,8 @@ export function computeIrDetectionRange(
     : Math.min(snrRangeM * 0.35, johnsonIdentificationRangeM);
 
   const transmissionAtDetection = atmosphericTransmission(detectionRangeM, extinctionCoeff);
-  const irradianceAtDetection = (targetIrWsr * transmissionAtDetection) / (detectionRangeM ** 2);
-  const snrAtDetection = irradianceAtDetection / Math.max(nep, 1e-20);
+  const signalAtDetection = (targetIrWsr * transmissionAtDetection * apertureAreaM2 * opticalThroughput) / (detectionRangeM ** 2);
+  const snrAtDetection = (signalAtDetection / Math.max(nep, 1e-30)) * integrationGain;
 
   return {
     detectionRangeM: Math.round(detectionRangeM),
