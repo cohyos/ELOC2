@@ -1,0 +1,490 @@
+{
+  "version": "1.0.0",
+  "generated": "2026-03-25",
+  "summary": {
+    "totalFiles": 113,
+    "totalTests": 1045,
+    "categories": {
+      "unit": { "files": 61, "tests": 636 },
+      "integration": { "files": 9, "tests": 221 },
+      "stress": { "files": 3, "tests": 3 },
+      "performance": { "files": 2, "tests": 24 },
+      "tuning": { "files": 4, "tests": 21 },
+      "store": { "files": 1, "tests": 59 },
+      "e2e": { "files": 33, "tests": 81 }
+    }
+  },
+  "categories": {
+    "unit": {
+      "description": "Isolated unit tests for individual modules, classes, and functions",
+      "runner": "vitest",
+      "parallel": true
+    },
+    "integration": {
+      "description": "Cross-module integration tests exercising full or partial pipelines",
+      "runner": "vitest",
+      "parallel": false
+    },
+    "stress": {
+      "description": "High-load stress tests with many targets and sensors",
+      "runner": "vitest",
+      "parallel": false
+    },
+    "performance": {
+      "description": "Latency and throughput benchmarks with timing assertions",
+      "runner": "vitest",
+      "parallel": false
+    },
+    "tuning": {
+      "description": "Parameter optimization and validation matrix tests",
+      "runner": "vitest",
+      "parallel": false
+    },
+    "store": {
+      "description": "Zustand store unit tests for frontend state management",
+      "runner": "vitest",
+      "parallel": true
+    },
+    "e2e": {
+      "description": "End-to-end tests covering API, UI, GCP deployment, and scenario flows",
+      "runner": "playwright",
+      "parallel": false
+    }
+  },
+  "suites": [
+    {
+      "id": "UNIT-FC",
+      "name": "Fusion Core",
+      "category": "unit",
+      "package": "@eloc2/fusion-core",
+      "files": [
+        { "path": "packages/fusion-core/src/__tests__/track-manager.test.ts", "tests": 14, "tags": ["fusion", "tracks", "critical"] },
+        { "path": "packages/fusion-core/src/__tests__/correlation.test.ts", "tests": 6, "tags": ["fusion", "correlation"] },
+        { "path": "packages/fusion-core/src/__tests__/centralized-fuser.test.ts", "tests": 3, "tags": ["fusion", "centralized"] },
+        { "path": "packages/fusion-core/src/__tests__/conservative-fuser.test.ts", "tests": 3, "tags": ["fusion", "conservative"] },
+        { "path": "packages/fusion-core/src/__tests__/event-store.test.ts", "tests": 8, "tags": ["fusion", "events"] },
+        { "path": "packages/fusion-core/src/__tests__/rap-builder.test.ts", "tests": 5, "tags": ["fusion", "rap"] },
+        { "path": "packages/fusion-core/src/__tests__/fusion-mode-selector.test.ts", "tests": 5, "tags": ["fusion", "mode-selector"] },
+        { "path": "packages/fusion-core/src/__tests__/async-handler.test.ts", "tests": 4, "tags": ["fusion", "async"] }
+      ]
+    },
+    {
+      "id": "UNIT-GEO",
+      "name": "Geometry",
+      "category": "unit",
+      "package": "@eloc2/geometry",
+      "files": [
+        { "path": "packages/geometry/tests/triangulator.test.ts", "tests": 9, "tags": ["geometry", "triangulation"] },
+        { "path": "packages/geometry/tests/bearing-math.test.ts", "tests": 15, "tags": ["geometry", "bearing"] },
+        { "path": "packages/geometry/tests/quality-scorer.test.ts", "tests": 17, "tags": ["geometry", "quality"] },
+        { "path": "packages/geometry/tests/time-aligner.test.ts", "tests": 8, "tags": ["geometry", "time-alignment"] },
+        { "path": "packages/geometry/tests/geometry-projection.test.ts", "tests": 8, "tags": ["geometry", "projection"] },
+        { "path": "packages/geometry/tests/ballistic-estimator.test.ts", "tests": 8, "tags": ["geometry", "ballistic"] }
+      ]
+    },
+    {
+      "id": "UNIT-EI",
+      "name": "EO Investigation",
+      "category": "unit",
+      "package": "@eloc2/eo-investigation",
+      "files": [
+        { "path": "packages/eo-investigation/src/__tests__/cue-issuer.test.ts", "tests": 11, "tags": ["eo", "cueing", "critical"] },
+        { "path": "packages/eo-investigation/src/__tests__/gimbal.test.ts", "tests": 10, "tags": ["eo", "gimbal"] },
+        { "path": "packages/eo-investigation/src/__tests__/fov.test.ts", "tests": 6, "tags": ["eo", "fov"] },
+        { "path": "packages/eo-investigation/src/__tests__/report-handler.test.ts", "tests": 7, "tags": ["eo", "reports"] },
+        { "path": "packages/eo-investigation/src/__tests__/ambiguity-handler.test.ts", "tests": 14, "tags": ["eo", "ambiguity"] },
+        { "path": "packages/eo-investigation/src/__tests__/splitter.test.ts", "tests": 11, "tags": ["eo", "split"] },
+        { "path": "packages/eo-investigation/src/__tests__/merger.test.ts", "tests": 4, "tags": ["eo", "merge"] }
+      ]
+    },
+    {
+      "id": "UNIT-ET",
+      "name": "EO Tasking",
+      "category": "unit",
+      "package": "@eloc2/eo-tasking",
+      "files": [
+        { "path": "packages/eo-tasking/src/__tests__/scorer.test.ts", "tests": 16, "tags": ["eo", "tasking", "scoring"] },
+        { "path": "packages/eo-tasking/src/__tests__/generator.test.ts", "tests": 7, "tags": ["eo", "tasking", "candidates"] },
+        { "path": "packages/eo-tasking/src/__tests__/policy-engine.test.ts", "tests": 5, "tags": ["eo", "tasking", "policy"] },
+        { "path": "packages/eo-tasking/src/__tests__/assigner.test.ts", "tests": 14, "tags": ["eo", "tasking", "assignment"] }
+      ]
+    },
+    {
+      "id": "UNIT-EC",
+      "name": "EO Core",
+      "category": "unit",
+      "package": "@eloc2/eo-core",
+      "files": [
+        { "path": "packages/eo-core/src/__tests__/eo-core.test.ts", "tests": 11, "tags": ["eo", "core", "triangulation"] },
+        { "path": "packages/eo-core/src/__tests__/investigator-coordinator.test.ts", "tests": 10, "tags": ["eo", "core", "coordinator"] },
+        { "path": "packages/eo-core/src/__tests__/formation-resolution.test.ts", "tests": 9, "tags": ["eo", "core", "formation"] }
+      ]
+    },
+    {
+      "id": "UNIT-EM",
+      "name": "EO Management",
+      "category": "unit",
+      "package": "@eloc2/eo-management",
+      "files": [
+        { "path": "packages/eo-management/__tests__/eo-module.test.ts", "tests": 25, "tags": ["eo", "management", "module"] }
+      ]
+    },
+    {
+      "id": "UNIT-REG",
+      "name": "Registration",
+      "category": "unit",
+      "package": "@eloc2/registration",
+      "files": [
+        { "path": "packages/registration/src/__tests__/bias-estimator.test.ts", "tests": 5, "tags": ["registration", "bias"] },
+        { "path": "packages/registration/src/__tests__/clock-health.test.ts", "tests": 6, "tags": ["registration", "clock"] },
+        { "path": "packages/registration/src/__tests__/health-service.test.ts", "tests": 12, "tags": ["registration", "health"] }
+      ]
+    },
+    {
+      "id": "UNIT-SB",
+      "name": "Sensor Bus",
+      "category": "unit",
+      "package": "@eloc2/sensor-bus",
+      "files": [
+        { "path": "packages/sensor-bus/src/__tests__/bus.test.ts", "tests": 11, "tags": ["sensor-bus", "messaging"] }
+      ]
+    },
+    {
+      "id": "UNIT-SI",
+      "name": "Sensor Instances",
+      "category": "unit",
+      "package": "@eloc2/sensor-instances",
+      "files": [
+        { "path": "packages/sensor-instances/src/__tests__/base-sensor.test.ts", "tests": 19, "tags": ["sensor", "base", "critical"] },
+        { "path": "packages/sensor-instances/src/__tests__/radar-sensor.test.ts", "tests": 11, "tags": ["sensor", "radar"] },
+        { "path": "packages/sensor-instances/src/__tests__/eo-sensor.test.ts", "tests": 11, "tags": ["sensor", "eo"] },
+        { "path": "packages/sensor-instances/src/__tests__/c4isr-sensor.test.ts", "tests": 13, "tags": ["sensor", "c4isr"] }
+      ]
+    },
+    {
+      "id": "UNIT-SF",
+      "name": "System Fuser",
+      "category": "unit",
+      "package": "@eloc2/system-fuser",
+      "files": [
+        { "path": "packages/system-fuser/src/__tests__/system-fuser.test.ts", "tests": 22, "tags": ["fuser", "track-fusion", "critical"] },
+        { "path": "packages/system-fuser/src/__tests__/integration.test.ts", "tests": 11, "tags": ["fuser", "pipeline"] },
+        { "path": "packages/system-fuser/src/__tests__/lifecycle-manager.test.ts", "tests": 15, "tags": ["fuser", "lifecycle"] }
+      ]
+    },
+    {
+      "id": "UNIT-SU",
+      "name": "Shared Utils",
+      "category": "unit",
+      "package": "@eloc2/shared-utils",
+      "files": [
+        { "path": "packages/shared-utils/src/__tests__/geo-math.test.ts", "tests": 25, "tags": ["utils", "geo-math"] },
+        { "path": "packages/shared-utils/src/__tests__/matrix.test.ts", "tests": 10, "tags": ["utils", "matrix"] },
+        { "path": "packages/shared-utils/src/__tests__/matrix-nxn.test.ts", "tests": 16, "tags": ["utils", "matrix", "nxn"] }
+      ]
+    },
+    {
+      "id": "UNIT-DB",
+      "name": "Database",
+      "category": "unit",
+      "package": "@eloc2/database",
+      "files": [
+        { "path": "packages/database/tests/session-repository.test.ts", "tests": 9, "tags": ["database", "sessions"] },
+        { "path": "packages/database/tests/user-repository.test.ts", "tests": 14, "tags": ["database", "users"] }
+      ]
+    },
+    {
+      "id": "UNIT-DP",
+      "name": "Deployment Planner",
+      "category": "unit",
+      "package": "@eloc2/deployment-planner",
+      "files": [
+        { "path": "packages/deployment-planner/tests/optimizer.test.ts", "tests": 12, "tags": ["deployment", "optimizer"] },
+        { "path": "packages/deployment-planner/tests/export-e2e.test.ts", "tests": 12, "tags": ["deployment", "export"] }
+      ]
+    },
+    {
+      "id": "UNIT-AX",
+      "name": "ASTERIX Adapter",
+      "category": "unit",
+      "package": "@eloc2/asterix-adapter",
+      "files": [
+        { "path": "packages/asterix-adapter/src/__tests__/parser.test.ts", "tests": 15, "tags": ["asterix", "parser", "cat048", "cat062"] },
+        { "path": "packages/asterix-adapter/src/__tests__/exporter.test.ts", "tests": 14, "tags": ["asterix", "exporter"] }
+      ]
+    },
+    {
+      "id": "UNIT-DOM",
+      "name": "Domain",
+      "category": "unit",
+      "package": "@eloc2/domain",
+      "files": [
+        { "path": "packages/domain/src/__tests__/track-quality.test.ts", "tests": 8, "tags": ["domain", "track-quality"] }
+      ]
+    },
+    {
+      "id": "UNIT-VAL",
+      "name": "Validation",
+      "category": "unit",
+      "package": "@eloc2/validation",
+      "files": [
+        { "path": "packages/validation/tests/ambiguity-handling.test.ts", "tests": 4, "tags": ["validation", "ambiguity"] },
+        { "path": "packages/validation/tests/geometry-honesty.test.ts", "tests": 6, "tags": ["validation", "geometry"] },
+        { "path": "packages/validation/tests/registration-safety.test.ts", "tests": 5, "tags": ["validation", "registration"] },
+        { "path": "packages/validation/tests/runner.test.ts", "tests": 4, "tags": ["validation", "runner"] },
+        { "path": "packages/validation/tests/task-explanation.test.ts", "tests": 5, "tags": ["validation", "tasking"] },
+        { "path": "packages/validation/tests/track-continuity.test.ts", "tests": 6, "tags": ["validation", "tracks"] }
+      ]
+    },
+    {
+      "id": "UNIT-TER",
+      "name": "Terrain",
+      "category": "unit",
+      "package": "@eloc2/terrain",
+      "files": [
+        { "path": "packages/terrain/src/__tests__/los-checker.test.ts", "tests": 12, "tags": ["terrain", "los", "srtm"] }
+      ]
+    },
+    {
+      "id": "UNIT-SIM",
+      "name": "Simulator",
+      "category": "unit",
+      "package": "@eloc2/simulator",
+      "files": [
+        { "path": "apps/simulator/tests/eo-model.test.ts", "tests": 7, "tags": ["simulator", "eo-model"] },
+        { "path": "apps/simulator/tests/scenario-runner.test.ts", "tests": 12, "tags": ["simulator", "runner", "critical"] },
+        { "path": "apps/simulator/tests/radar-model.test.ts", "tests": 13, "tags": ["simulator", "radar-model"] },
+        { "path": "apps/simulator/tests/target-generator.test.ts", "tests": 18, "tags": ["simulator", "targets"] }
+      ]
+    },
+    {
+      "id": "INT-API",
+      "name": "API Integration",
+      "category": "integration",
+      "package": "@eloc2/api",
+      "files": [
+        { "path": "apps/api/src/__tests__/integration.test.ts", "tests": 33, "tags": ["api", "integration", "critical"] },
+        { "path": "apps/api/src/__tests__/instructor-ux.test.ts", "tests": 23, "tags": ["api", "instructor", "ux"] },
+        { "path": "apps/api/src/__tests__/report-e2e.test.ts", "tests": 8, "tags": ["api", "reports", "pdf"] }
+      ]
+    },
+    {
+      "id": "INT-SCEN",
+      "name": "Scenario Use-Cases",
+      "category": "integration",
+      "package": "@eloc2/api",
+      "files": [
+        { "path": "apps/api/src/__tests__/all-scenarios-usecase.test.ts", "tests": 40, "tags": ["scenarios", "use-case", "critical"] }
+      ]
+    },
+    {
+      "id": "INT-EO",
+      "name": "EO Cueing Use-Cases",
+      "category": "integration",
+      "package": "@eloc2/api",
+      "files": [
+        { "path": "apps/api/src/__tests__/eo-cueing-usecase.test.ts", "tests": 44, "tags": ["eo", "cueing", "use-case"] }
+      ]
+    },
+    {
+      "id": "INT-GP2",
+      "name": "Green Pine Sortie 2 Deep",
+      "category": "integration",
+      "package": "@eloc2/api",
+      "files": [
+        { "path": "apps/api/src/__tests__/gp-sortie2-eo-deep.test.ts", "tests": 29, "tags": ["green-pine", "eo", "deep-test"] }
+      ]
+    },
+    {
+      "id": "INT-ROOT",
+      "name": "Root Integration",
+      "category": "integration",
+      "package": "root",
+      "files": [
+        { "path": "tests/integration/scenario-pipeline.test.ts", "tests": 30, "tags": ["pipeline", "scenario", "critical"] },
+        { "path": "tests/integration/validation-runner.test.ts", "tests": 5, "tags": ["validation", "runner"] },
+        { "path": "tests/integration/live-engine.test.ts", "tests": 9, "tags": ["live-engine", "simulation"] }
+      ]
+    },
+    {
+      "id": "STRESS-GP",
+      "name": "Green Pine Stress",
+      "category": "stress",
+      "package": "@eloc2/api",
+      "files": [
+        { "path": "apps/api/src/__tests__/green-pine-stress.test.ts", "tests": 1, "tags": ["stress", "green-pine", "radar-eo"] }
+      ]
+    },
+    {
+      "id": "STRESS-EO",
+      "name": "EO Staring Stress",
+      "category": "stress",
+      "package": "@eloc2/api",
+      "files": [
+        { "path": "apps/api/src/__tests__/eo-staring-stress.test.ts", "tests": 1, "tags": ["stress", "eo-only", "19-sensors"] }
+      ]
+    },
+    {
+      "id": "STRESS-PIPE",
+      "name": "EO Pipeline Stages",
+      "category": "stress",
+      "package": "@eloc2/api",
+      "files": [
+        { "path": "apps/api/src/__tests__/eo-pipeline-stages.test.ts", "tests": 1, "tags": ["stress", "pipeline", "grading"] }
+      ]
+    },
+    {
+      "id": "PERF-LAT",
+      "name": "Pipeline Latency",
+      "category": "performance",
+      "package": "@eloc2/api",
+      "files": [
+        { "path": "apps/api/src/__tests__/pipeline-latency.test.ts", "tests": 15, "tags": ["performance", "latency", "timing"] }
+      ]
+    },
+    {
+      "id": "PERF-BENCH",
+      "name": "Performance Benchmarks",
+      "category": "performance",
+      "package": "@eloc2/api",
+      "files": [
+        { "path": "apps/api/src/__tests__/performance.test.ts", "tests": 9, "tags": ["performance", "benchmarks"] }
+      ]
+    },
+    {
+      "id": "TUNE-PARAM",
+      "name": "Parameter Optimization",
+      "category": "tuning",
+      "package": "@eloc2/api",
+      "files": [
+        { "path": "apps/api/src/__tests__/parameter-optimization.test.ts", "tests": 8, "tags": ["tuning", "parameters", "optimization"] }
+      ]
+    },
+    {
+      "id": "TUNE-MATRIX",
+      "name": "Validation Matrix",
+      "category": "tuning",
+      "package": "@eloc2/api",
+      "files": [
+        { "path": "apps/api/src/__tests__/pipeline-validation-matrix.test.ts", "tests": 3, "tags": ["tuning", "validation", "matrix"] }
+      ]
+    },
+    {
+      "id": "TUNE-EO",
+      "name": "EO Test Matrix",
+      "category": "tuning",
+      "package": "@eloc2/api",
+      "files": [
+        { "path": "apps/api/src/__tests__/eo-test-matrix.test.ts", "tests": 8, "tags": ["tuning", "eo", "matrix"] }
+      ]
+    },
+    {
+      "id": "TUNE-CONT",
+      "name": "Single Fighter Continuity",
+      "category": "tuning",
+      "package": "@eloc2/api",
+      "files": [
+        { "path": "apps/api/src/__tests__/single-fighter-continuity.test.ts", "tests": 2, "tags": ["tuning", "continuity", "single-target"] }
+      ]
+    },
+    {
+      "id": "STORE",
+      "name": "Zustand Stores",
+      "category": "store",
+      "package": "@eloc2/workstation",
+      "files": [
+        { "path": "apps/workstation/src/__tests__/store-tests.test.ts", "tests": 59, "tags": ["stores", "zustand", "frontend", "critical"] }
+      ]
+    },
+    {
+      "id": "E2E-API",
+      "name": "E2E API Tests",
+      "category": "e2e",
+      "package": "root",
+      "files": [
+        { "path": "tests/e2e/api/health.test.ts", "tests": 1, "tags": ["e2e", "api", "health"] },
+        { "path": "tests/e2e/api/rap.test.ts", "tests": 4, "tags": ["e2e", "api", "rap"] },
+        { "path": "tests/e2e/api/sensors.test.ts", "tests": 2, "tags": ["e2e", "api", "sensors"] },
+        { "path": "tests/e2e/api/websocket.test.ts", "tests": 2, "tags": ["e2e", "api", "websocket"] },
+        { "path": "tests/e2e/api/scenarios.test.ts", "tests": 7, "tags": ["e2e", "api", "scenarios"] },
+        { "path": "tests/e2e/api/tasks.test.ts", "tests": 4, "tags": ["e2e", "api", "tasks"] },
+        { "path": "tests/e2e/api/groups.test.ts", "tests": 3, "tags": ["e2e", "api", "groups"] },
+        { "path": "tests/e2e/api/replay.test.ts", "tests": 3, "tags": ["e2e", "api", "replay"] },
+        { "path": "tests/e2e/api/ui-equivalents.test.ts", "tests": 10, "tags": ["e2e", "api", "ui-equivalents"] }
+      ]
+    },
+    {
+      "id": "E2E-UI",
+      "name": "E2E UI Tests",
+      "category": "e2e",
+      "package": "root",
+      "files": [
+        { "path": "tests/e2e/ui/desktop/page-load.test.ts", "tests": 3, "tags": ["e2e", "ui", "desktop", "page-load"] },
+        { "path": "tests/e2e/ui/desktop/header.test.ts", "tests": 2, "tags": ["e2e", "ui", "desktop", "header"] },
+        { "path": "tests/e2e/ui/desktop/panels.test.ts", "tests": 2, "tags": ["e2e", "ui", "desktop", "panels"] },
+        { "path": "tests/e2e/ui/desktop/tracks.test.ts", "tests": 3, "tags": ["e2e", "ui", "desktop", "tracks"] },
+        { "path": "tests/e2e/ui/desktop/controls.test.ts", "tests": 5, "tags": ["e2e", "ui", "desktop", "controls"] },
+        { "path": "tests/e2e/ui/desktop/events.test.ts", "tests": 3, "tags": ["e2e", "ui", "desktop", "events"] },
+        { "path": "tests/e2e/ui/desktop/tasks.test.ts", "tests": 2, "tags": ["e2e", "ui", "desktop", "tasks"] },
+        { "path": "tests/e2e/ui/desktop/screenshots.test.ts", "tests": 1, "tags": ["e2e", "ui", "desktop", "screenshots"] },
+        { "path": "tests/e2e/ui/desktop/scenario.test.ts", "tests": 2, "tags": ["e2e", "ui", "desktop", "scenario"] },
+        { "path": "tests/e2e/ui/mobile/layout.test.ts", "tests": 4, "tags": ["e2e", "ui", "mobile", "layout"] }
+      ]
+    },
+    {
+      "id": "E2E-GCP",
+      "name": "E2E GCP Deployment",
+      "category": "e2e",
+      "package": "root",
+      "files": [
+        { "path": "tests/e2e/gcp/cloud-run.test.ts", "tests": 3, "tags": ["e2e", "gcp", "cloud-run"] },
+        { "path": "tests/e2e/gcp/build.test.ts", "tests": 1, "tags": ["e2e", "gcp", "build"] },
+        { "path": "tests/e2e/gcp/cold-start.test.ts", "tests": 1, "tags": ["e2e", "gcp", "cold-start"] },
+        { "path": "tests/e2e/gcp/websocket.test.ts", "tests": 1, "tags": ["e2e", "gcp", "websocket"] },
+        { "path": "tests/e2e/gcp/monitoring.test.ts", "tests": 3, "tags": ["e2e", "gcp", "monitoring"] },
+        { "path": "tests/e2e/gcp/artifacts.test.ts", "tests": 1, "tags": ["e2e", "gcp", "artifacts"] }
+      ]
+    },
+    {
+      "id": "E2E-SCEN",
+      "name": "E2E Scenario Tests",
+      "category": "e2e",
+      "package": "root",
+      "files": [
+        { "path": "tests/e2e/scenarios/single-target.test.ts", "tests": 1, "tags": ["e2e", "scenario", "single-target"] },
+        { "path": "tests/e2e/scenarios/multi-eo.test.ts", "tests": 1, "tags": ["e2e", "scenario", "multi-eo"] },
+        { "path": "tests/e2e/scenarios/crossed-tracks.test.ts", "tests": 1, "tags": ["e2e", "scenario", "crossed-tracks"] },
+        { "path": "tests/e2e/scenarios/bad-triangulation.test.ts", "tests": 1, "tags": ["e2e", "scenario", "bad-triangulation"] },
+        { "path": "tests/e2e/scenarios/good-triangulation.test.ts", "tests": 1, "tags": ["e2e", "scenario", "good-triangulation"] },
+        { "path": "tests/e2e/scenarios/central-israel.test.ts", "tests": 1, "tags": ["e2e", "scenario", "central-israel"] },
+        { "path": "tests/e2e/scenarios/sensor-fault.test.ts", "tests": 1, "tags": ["e2e", "scenario", "sensor-fault"] },
+        { "path": "tests/e2e/scenarios/operator-override.test.ts", "tests": 1, "tags": ["e2e", "scenario", "operator-override"] }
+      ]
+    }
+  ],
+  "requirementTraceability": {
+    "REQ-1": ["INT-API"],
+    "REQ-2": ["INT-API"],
+    "REQ-4": ["INT-API", "STORE"],
+    "REQ-5A": ["INT-API", "UNIT-EM"],
+    "REQ-5B": ["UNIT-EM"],
+    "REQ-5C": ["UNIT-EM"],
+    "REQ-6": ["UNIT-EI", "UNIT-EC"],
+    "REQ-7": ["INT-API", "UNIT-FC"],
+    "REQ-8": ["INT-API", "UNIT-GEO"],
+    "REQ-9": ["INT-API"],
+    "REQ-10": ["INT-API"],
+    "REQ-11": ["INT-API", "STORE"],
+    "REQ-12": ["INT-API"],
+    "REQ-13": ["INT-API"],
+    "REQ-15": ["UNIT-DP", "INT-API"],
+    "REQ-16": ["UNIT-EM"],
+    "REQ-17": ["INT-API"],
+    "REQ-18": ["INT-API"],
+    "REQ-19": ["INT-API"],
+    "REQ-20": ["INT-API", "STORE"],
+    "REQ-21": ["INT-API"],
+    "REQ-22": ["INT-API", "STORE"],
+    "REQ-23": ["INT-API", "UNIT-DB"]
+  }
+}

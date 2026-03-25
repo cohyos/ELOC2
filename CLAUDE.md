@@ -454,3 +454,75 @@ See `Knowledge_Base_and_Agents_instructions/Instructor_Operator_UX_Plan.md` for 
 - Sensor colors: radar=#4488ff, eo=#ff8800, c4isr=#aa44ff
 - Event-sourced: all state changes through EventStore
 - 3D honesty: bearing_only | candidate_3d | confirmed_3d — never overstate geometry
+
+## Agent Workflow Protocol
+
+**Full spec**: `Knowledge_Base_and_Agents_instructions/Agent_Workflow_Protocol.md`
+
+### Pre-Implementation (DEFAULT — skip if user says "start coding immediately")
+1. **Clarify**: Ask questions for anything unclear or ambiguous
+2. **Plan**: Prepare implementation plan for parallel agent execution — each unit independently testable
+3. **Integrate plan**: Add to Knowledge Base, reference in CLAUDE.md, track in implementation trace
+
+### During Implementation
+1. Track progress in todo list, mark complete after each step
+2. Record changes in `Knowledge_Base_and_Agents_instructions/Implementation_Traces/trace-YYYY-MM-DD-*.md`
+3. Run relevant tests after each change (no regressions)
+4. Update CLAUDE.md if project capabilities change
+
+### Agent Coordination
+- Each agent gets non-overlapping file scope
+- Each agent's work is testable independently before integration
+- Integration order specified before parallel launch
+- Use `/qa` skill to validate after integration
+
+## QA & Test Infrastructure
+
+### Test Manifest
+`tests/qa-test-manifest.json` — Complete inventory of all 120 test files, 813+ tests, categorized by:
+- **Unit** (64 files): Package-level algorithm/logic tests
+- **Integration** (6 files): API pipeline, scenario use-cases, EO cueing
+- **Stress** (3 files): Green Pine, EO staring, pipeline stages
+- **Performance** (2 files): Latency, benchmarks
+- **Tuning** (4 files): Parameter optimization, validation matrices
+- **Store** (1 file): Zustand state management (59 tests)
+- **Simulator** (4 files): ScenarioRunner, models
+- **E2E** (33 files): Playwright (mostly scaffolded)
+
+### QA Skill (`/qa`)
+- `/qa` — Run core tests (unit + integration + store)
+- `/qa unit` — Package unit tests only
+- `/qa integration` — API pipeline tests only
+- `/qa stress` — Green Pine + EO stress tests
+- `/qa full` — Everything including E2E
+
+### Test Categories & When to Run
+
+| Change Type | Run | Command |
+|-------------|-----|---------|
+| Package algorithm | Unit tests | `/qa unit` |
+| API/pipeline | Integration | `/qa integration` |
+| Frontend store | Store tests | `/qa store` |
+| Algorithm tuning | Tuning tests | `/qa stress` |
+| Pre-deployment | Full suite | `/qa full` |
+
+## Memory Architecture
+
+### Tier 1: CLAUDE.md (Always Loaded)
+- Architecture, key files, completion status, conventions
+- Points to KB documents for deep context
+- Updated after every significant change
+
+### Tier 2: Knowledge Base (On-Demand)
+- `Knowledge_Base_and_Agents_instructions/` — 30+ design documents
+- Navigate via `Chunk_index.md`
+- Read only when deep domain context needed
+
+### Tier 3: Test Manifest (QA Memory)
+- `tests/qa-test-manifest.json` — test inventory
+- Used by `/qa` skill, avoids re-scanning file tree
+
+### Tier 4: Implementation Traces (Session History)
+- `Knowledge_Base_and_Agents_instructions/Implementation_Traces/`
+- One file per implementation session
+- Enables continuity across disconnected sessions
