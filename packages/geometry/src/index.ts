@@ -53,6 +53,7 @@ export {
   checkIrDetection,
   computeExtinctionCoeff,
   atmosphericTransmission,
+  slantPathTransmission,
   computeIfovMrad,
   computeGsdM,
   STARING_SENSOR_PROFILE,

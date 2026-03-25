@@ -15,10 +15,10 @@ import {
 
 describe('IR Detection Range Calculator', () => {
   describe('atmospheric model', () => {
-    it('standard atmosphere extinction ~0.2/km', () => {
+    it('standard MWIR atmosphere extinction ~0.06-0.1/km', () => {
       const sigma = computeExtinctionCoeff(STANDARD_ATMOSPHERE);
-      expect(sigma).toBeGreaterThan(0.1);
-      expect(sigma).toBeLessThan(0.5);
+      expect(sigma).toBeGreaterThan(0.04);
+      expect(sigma).toBeLessThan(0.15);
     });
 
     it('good weather has lower extinction than standard', () => {
@@ -62,31 +62,31 @@ describe('IR Detection Range Calculator', () => {
   describe('detection ranges — staring sensor', () => {
     const staringSpec = STARING_SENSOR_PROFILE.wideSpec;
 
-    it('fighter aircraft (high IR) detected at 30-60 km', () => {
+    it('fighter aircraft (high IR) detected at 60-120 km', () => {
       const result = computeIrDetectionRange(15_000, 'fighter_aircraft', staringSpec, GOOD_WEATHER_ATMOSPHERE);
-      expect(result.detectionRangeM).toBeGreaterThan(20_000);
-      expect(result.detectionRangeM).toBeLessThan(80_000);
+      expect(result.detectionRangeM).toBeGreaterThan(60_000);
+      expect(result.detectionRangeM).toBeLessThan(120_000);
       console.log(`Staring → Fighter (15kW/sr): detect=${(result.detectionRangeM/1000).toFixed(1)}km, recog=${(result.recognitionRangeM/1000).toFixed(1)}km, id=${(result.identificationRangeM/1000).toFixed(1)}km`);
     });
 
-    it('Shahed-136 drone (low IR) detected at 5-20 km', () => {
+    it('Shahed-136 drone (low IR) detected at 20-60 km', () => {
       const result = computeIrDetectionRange(200, 'uav', staringSpec, GOOD_WEATHER_ATMOSPHERE);
-      expect(result.detectionRangeM).toBeGreaterThan(3_000);
-      expect(result.detectionRangeM).toBeLessThan(30_000);
+      expect(result.detectionRangeM).toBeGreaterThan(20_000);
+      expect(result.detectionRangeM).toBeLessThan(60_000);
       console.log(`Staring → Shahed-136 (200W/sr): detect=${(result.detectionRangeM/1000).toFixed(1)}km, recog=${(result.recognitionRangeM/1000).toFixed(1)}km, id=${(result.identificationRangeM/1000).toFixed(1)}km`);
     });
 
-    it('ballistic missile (very high IR) detected at 20-60 km', () => {
+    it('ballistic missile (very high IR) detected at 80-150 km', () => {
       const result = computeIrDetectionRange(65_000, 'missile', staringSpec, GOOD_WEATHER_ATMOSPHERE);
-      expect(result.detectionRangeM).toBeGreaterThan(15_000);
-      expect(result.detectionRangeM).toBeLessThan(80_000);
+      expect(result.detectionRangeM).toBeGreaterThan(80_000);
+      expect(result.detectionRangeM).toBeLessThan(150_000);
       console.log(`Staring → BM (65kW/sr): detect=${(result.detectionRangeM/1000).toFixed(1)}km, recog=${(result.recognitionRangeM/1000).toFixed(1)}km, id=${(result.identificationRangeM/1000).toFixed(1)}km`);
     });
 
-    it('helicopter (medium IR) detected at 15-40 km', () => {
+    it('helicopter (medium IR) detected at 50-100 km', () => {
       const result = computeIrDetectionRange(5_000, 'helicopter', staringSpec, GOOD_WEATHER_ATMOSPHERE);
-      expect(result.detectionRangeM).toBeGreaterThan(10_000);
-      expect(result.detectionRangeM).toBeLessThan(60_000);
+      expect(result.detectionRangeM).toBeGreaterThan(50_000);
+      expect(result.detectionRangeM).toBeLessThan(100_000);
       console.log(`Staring → Helicopter (5kW/sr): detect=${(result.detectionRangeM/1000).toFixed(1)}km, recog=${(result.recognitionRangeM/1000).toFixed(1)}km, id=${(result.identificationRangeM/1000).toFixed(1)}km`);
     });
   });
@@ -106,6 +106,33 @@ describe('IR Detection Range Calculator', () => {
       const result = computeIrDetectionRange(200, 'uav', zoomSpec, GOOD_WEATHER_ATMOSPHERE);
       expect(result.identificationRangeM).toBeGreaterThan(1_000);
       console.log(`Investigator zoom → Shahed-136: detect=${(result.detectionRangeM/1000).toFixed(1)}km, id=${(result.identificationRangeM/1000).toFixed(1)}km`);
+    });
+  });
+
+  describe('path-integral atmosphere (high-altitude targets)', () => {
+    const staringSpec = STARING_SENSOR_PROFILE.wideSpec;
+
+    it('BM at 50 km altitude detected at 150+ km (reduced atmospheric path)', () => {
+      const seaLevel = computeIrDetectionRange(65_000, 'missile', staringSpec, GOOD_WEATHER_ATMOSPHERE, 0);
+      const highAlt = computeIrDetectionRange(65_000, 'missile', staringSpec, GOOD_WEATHER_ATMOSPHERE, 50_000);
+      expect(highAlt.detectionRangeM).toBeGreaterThan(150_000); // 150+ km
+      expect(highAlt.detectionRangeM).toBeGreaterThan(seaLevel.detectionRangeM * 1.3); // significantly longer
+      console.log(`BM: sea-level=${(seaLevel.detectionRangeM/1000).toFixed(1)}km vs 50km-alt=${(highAlt.detectionRangeM/1000).toFixed(1)}km (${((highAlt.detectionRangeM/seaLevel.detectionRangeM)*100).toFixed(0)}%)`);
+    });
+
+    it('fighter at 10 km altitude has longer range than at sea level', () => {
+      const low = computeIrDetectionRange(15_000, 'fighter_aircraft', staringSpec, GOOD_WEATHER_ATMOSPHERE, 0);
+      const high = computeIrDetectionRange(15_000, 'fighter_aircraft', staringSpec, GOOD_WEATHER_ATMOSPHERE, 10_000);
+      expect(high.detectionRangeM).toBeGreaterThan(low.detectionRangeM);
+      console.log(`Fighter: sea-level=${(low.detectionRangeM/1000).toFixed(1)}km vs 10km-alt=${(high.detectionRangeM/1000).toFixed(1)}km`);
+    });
+
+    it('low-altitude drone (300m) has minimal benefit from path integral', () => {
+      const ground = computeIrDetectionRange(200, 'uav', staringSpec, GOOD_WEATHER_ATMOSPHERE, 0);
+      const low = computeIrDetectionRange(200, 'uav', staringSpec, GOOD_WEATHER_ATMOSPHERE, 300);
+      // Less than 5% improvement at 300m altitude
+      expect(low.detectionRangeM).toBeLessThan(ground.detectionRangeM * 1.1);
+      console.log(`Drone: ground=${(ground.detectionRangeM/1000).toFixed(1)}km vs 300m-alt=${(low.detectionRangeM/1000).toFixed(1)}km`);
     });
   });
 

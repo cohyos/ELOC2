@@ -959,11 +959,15 @@ export function DebugOverlay({
         }
       }
 
-      // Trail dots (always shown when trails visible)
-      for (let i = 0; i < count - 1; i++) {
+      // Trail dots (breadcrumbs): show last 10 positions when trajectory is off,
+      // or skip breadcrumbs when trajectory polyline is already drawn
+      if (showTrajectory) continue; // trajectory polyline already shows the path
+      const BREADCRUMB_COUNT = 10;
+      const startIdx = Math.max(0, count - 1 - BREADCRUMB_COUNT);
+      for (let i = startIdx; i < count - 1; i++) {
         const age = count - 1 - i;
-        const isNewest = i === newestTrailIdx;
-        const opacity = isNewest ? 1.0 : Math.max(0.15, 1.0 - (age / 5) * 0.85);
+        const isNewest = i === count - 2;
+        const opacity = isNewest ? 1.0 : Math.max(0.15, 1.0 - (age / BREADCRUMB_COUNT) * 0.85);
         const { lon, lat } = positions[i];
         if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
 

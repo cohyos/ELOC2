@@ -9,8 +9,8 @@ export interface GroundTruthTarget {
   active: boolean;
 }
 
-/** Max trail positions to keep per GT target */
-const MAX_GT_TRAIL = 60;
+const MAX_GT_TRAIL = 10;         // breadcrumbs shown when trajectory off
+const MAX_GT_TRAJECTORY = 2000;  // always accumulated — displayed when toggled on
 
 interface GroundTruthState {
   targets: GroundTruthTarget[];
@@ -35,10 +35,10 @@ export const useGroundTruthStore = create<GroundTruthState>((set, get) => ({
       const id = t.targetId ?? t.name;
       const trail = next.get(id) ?? [];
       const last = trail[trail.length - 1];
-      // Only add if position changed
+      // Always accumulate full trajectory — display layer decides how much to show
       if (!last || last.lat !== t.position.lat || last.lon !== t.position.lon) {
         trail.push({ lat: t.position.lat, lon: t.position.lon, alt: t.position.alt });
-        if (trail.length > MAX_GT_TRAIL) trail.shift();
+        if (trail.length > MAX_GT_TRAJECTORY) trail.shift();
         next.set(id, trail);
       }
     }
