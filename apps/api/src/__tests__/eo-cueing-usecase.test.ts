@@ -336,14 +336,13 @@ describe('EO Bearing Observations', () => {
 // ===========================================================================
 
 describe('Triangulation and 3D Tracks', () => {
-  it('geometry map exists with good triangulation', () => {
+  it('produces geometry estimates with good triangulation', () => {
     const engine = new LiveEngine('good-triangulation');
     advanceTo(engine, 60);
     const state = engine.getState();
 
-    // geometryEstimates is a Map — may be empty if EO-only scenario
-    // doesn't produce system tracks via the monolithic pipeline
     expect(state.geometryEstimates).toBeInstanceOf(Map);
+    expect(state.geometryEstimates.size).toBeGreaterThan(0);
   });
 
   it('geometry has valid classification', () => {
@@ -782,15 +781,23 @@ describe('Full Investigation Flow', () => {
     expect(late.eventLog.length).toBeGreaterThan(early.eventLog.length);
   });
 
-  it('good-triangulation scenario runs without crash', () => {
+  it('good-triangulation produces 3D geometry', () => {
     const engine = new LiveEngine('good-triangulation');
     advanceTo(engine, 90);
 
     const state = engine.getState();
-    // EO-only scenario — may not produce system tracks via monolithic pipeline
-    // but should run without errors
-    expect(state.sensors.length).toBeGreaterThan(0);
-    expect(state.geometryEstimates).toBeInstanceOf(Map);
+    expect(state.tracks.length).toBeGreaterThan(0);
+    expect(state.geometryEstimates.size).toBeGreaterThan(0);
+
+    // At least one estimate should have candidate_3d or confirmed_3d
+    let has3d = false;
+    for (const [, est] of state.geometryEstimates) {
+      if (est.classification === 'candidate_3d' || est.classification === 'confirmed_3d') {
+        has3d = true;
+        break;
+      }
+    }
+    expect(has3d).toBe(true);
   });
 
   it('one-cue-two-eo scenario generates cueing', () => {

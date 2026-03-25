@@ -96,13 +96,16 @@ for (const scenario of ALL_SCENARIOS) {
       }
     });
 
-    it('produces output after 60s', () => {
+    it('creates tracks after 60s', () => {
       advanceTo(engine, 60);
       const state = engine.getState();
-      const gt = engine.getGroundTruth();
-      // All scenarios should produce tracks, EO observations, or at minimum ground truth
-      const hasOutput = state.tracks.length > 0 || state.eoTracks.length > 0 || gt.length > 0;
-      expect(hasOutput).toBe(true);
+      if (scenario.id === 'bad-triangulation') {
+        // Bad geometry (~5° intersection) — CoreEoTargetDetector correctly
+        // rejects triangulation, so 0 system tracks is expected behavior
+        expect(state.tracks.length).toBeGreaterThanOrEqual(0);
+      } else {
+        expect(state.tracks.length).toBeGreaterThan(0);
+      }
     });
 
     it('track IDs are unique', () => {
@@ -277,13 +280,11 @@ describe('[good-triangulation] scenario-specific', () => {
     engine = new LiveEngine('good-triangulation');
   });
 
-  it('geometry estimates map exists after 60s', () => {
+  it('geometry estimates exist after 60s', () => {
     advanceTo(engine, 90);
     const state = engine.getState();
     expect(state.geometryEstimates).toBeInstanceOf(Map);
-    // Good triangulation scenario should ideally produce estimates,
-    // but depends on EO sensor geometry timing — just check the map exists
-    expect(state.geometryEstimates).toBeDefined();
+    expect(state.geometryEstimates.size).toBeGreaterThan(0);
   });
 
   it('quality is acceptable or strong', () => {

@@ -208,7 +208,7 @@ export const goodTriangulation: ScenarioDefinition = {
       position: { lat: 31.3, lon: 34.3, alt: 50 },
       coverage: { minAzDeg: 0, maxAzDeg: 360, minElDeg: -5, maxElDeg: 90, maxRangeM: 30_000 },
       fov: { halfAngleHDeg: 1.0, halfAngleVDeg: 0.75 },
-      slewRateDegPerSec: 60,
+      slewRateDegPerSec: 0, // staring — routes to CoreEoTargetDetector for triangulation
     },
     {
       sensorId: 'EO-E2',
@@ -216,7 +216,7 @@ export const goodTriangulation: ScenarioDefinition = {
       position: { lat: 31.3, lon: 34.6, alt: 50 },
       coverage: { minAzDeg: 0, maxAzDeg: 360, minElDeg: -5, maxElDeg: 90, maxRangeM: 30_000 },
       fov: { halfAngleHDeg: 1.0, halfAngleVDeg: 0.75 },
-      slewRateDegPerSec: 60,
+      slewRateDegPerSec: 0, // staring — routes to CoreEoTargetDetector for triangulation
     },
   ],
   targets: [
@@ -254,7 +254,7 @@ export const badTriangulation: ScenarioDefinition = {
       position: { lat: 31.3, lon: 34.4, alt: 50 },
       coverage: { minAzDeg: 0, maxAzDeg: 360, minElDeg: -5, maxElDeg: 90, maxRangeM: 30_000 },
       fov: { halfAngleHDeg: 1.0, halfAngleVDeg: 0.75 },
-      slewRateDegPerSec: 60,
+      slewRateDegPerSec: 0, // staring — routes to CoreEoTargetDetector
     },
     {
       sensorId: 'EO-F2',
@@ -262,7 +262,7 @@ export const badTriangulation: ScenarioDefinition = {
       position: { lat: 31.32, lon: 34.42, alt: 50 }, // very close to EO-F1
       coverage: { minAzDeg: 0, maxAzDeg: 360, minElDeg: -5, maxElDeg: 90, maxRangeM: 30_000 },
       fov: { halfAngleHDeg: 1.0, halfAngleVDeg: 0.75 },
-      slewRateDegPerSec: 60,
+      slewRateDegPerSec: 0, // staring — routes to CoreEoTargetDetector
     },
   ],
   targets: [
