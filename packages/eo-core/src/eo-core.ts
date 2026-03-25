@@ -40,18 +40,34 @@ export class EoCoreEntity {
     // 1. Find cross-sensor matches (≥2 sensors reporting same target)
     const matches = this.aggregator.findCrossSensorMatches();
 
-    // 2. Triangulate each match
+    // 2. Triangulate each match and associate to tracks
+    //    Process all matches, then do a coordinated assignment to avoid
+    //    multiple targets claiming the same track in tight formations.
+    const triangulations: Array<{
+      result: import('./types.js').TriangulationOutput;
+      targetId: string;
+    }> = [];
+
     for (const match of matches) {
       const result = triangulateFromBearings(match.bearings);
       if (!result) continue;
       if (result.quality === 'insufficient') continue;
+      triangulations.push({ result, targetId: match.targetId });
+    }
 
-      // 3. Create or update EO track
-      const existingTrack = this.trackManager.findNearestTrack(result);
-      if (existingTrack) {
-        this.trackManager.updateTrack(existingTrack, result, simTimeSec);
+    // 3. Coordinated assignment: each triangulation claims a track,
+    //    already-claimed tracks are not available to subsequent triangulations.
+    const claimedTrackIds = new Set<string>();
+
+    for (const { result, targetId } of triangulations) {
+      const existingTrack = this.trackManager.findNearestTrack(result, targetId, simTimeSec);
+      if (existingTrack && !claimedTrackIds.has(existingTrack.trackId)) {
+        this.trackManager.updateTrack(existingTrack, result, simTimeSec, targetId);
+        claimedTrackIds.add(existingTrack.trackId);
       } else {
-        this.trackManager.createTrack(result, simTimeSec);
+        // No available track within gate → create new
+        const newTrack = this.trackManager.createTrack(result, simTimeSec, targetId);
+        claimedTrackIds.add(newTrack.trackId);
       }
     }
 

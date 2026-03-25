@@ -80,7 +80,8 @@ export const gradBarrage: ScenarioDefinition = {
 
   // ── Targets ──────────────────────────────────────────────────────────
   // All 10 rockets launch from the same point ~40 km north, spread to
-  // different impact points ~500 m apart in a grid pattern.
+  // different impact points ~3 km apart in a grid pattern.
+  // Spacing must exceed the 2 km track-merge threshold for separate detection.
   // Launch lat 31.86 (~40 km north of defense point at 31.5).
   // Impact area centered around lat 31.50, lon 34.80.
   // ~700 m/s average speed, 60 second flight time.
@@ -91,29 +92,30 @@ export const gradBarrage: ScenarioDefinition = {
     const impactBaseLat = 31.50;
     const impactBaseLon = 34.80;
 
-    // 500m spacing ≈ 0.0045 degrees latitude, 0.005 degrees longitude
+    // 3 km spacing ≈ 0.027° latitude, 0.032° longitude (at lat ~31.5°)
+    // 2×5 grid: 5 columns spaced 3 km, 2 rows spaced 3 km
     const offsets: Array<[number, number]> = [
-      [-2, -2], [-1, -2], [0, -2], [1, -2], [2, -2],
-      [-2,  0], [-1,  0], [0,  0], [1,  0], [2,  0],
+      [-2, -1], [-1, -1], [0, -1], [1, -1], [2, -1],
+      [-2,  1], [-1,  1], [0,  1], [1,  1], [2,  1],
     ];
 
-    return offsets.map(([dRow, dCol], i) => ({
+    return offsets.map(([dCol, dRow], i) => ({
       targetId: `TGT-GR-${i + 1}`,
       name: `Grad Rocket ${i + 1}`,
-      description: `Rocket ${i + 1} of 10 in simultaneous barrage.`,
+      description: `Rocket ${i + 1} of 10 in simultaneous barrage (~3 km grid).`,
       classification: 'missile' as const,
       startTime: 0,
       waypoints: [
         // Launch point (all rockets originate here)
         { time: 0, position: { lat: launchLat, lon: launchLon, alt: launchAlt }, velocity: { vx: 0, vy: -700, vz: 300 } },
         // Mid-flight — rockets begin to spread, climbing
-        { time: 15, position: { lat: launchLat - 0.09 + dRow * 0.001, lon: launchLon + dCol * 0.001, alt: 12000 } },
-        // Apex — maximum altitude
-        { time: 30, position: { lat: (launchLat + impactBaseLat) / 2 + dRow * 0.002, lon: (launchLon + impactBaseLon) / 2 + dCol * 0.002, alt: 18000 } },
-        // Descent — spreading further
-        { time: 45, position: { lat: impactBaseLat + 0.05 + dRow * 0.003, lon: impactBaseLon + dCol * 0.003, alt: 8000 } },
-        // Impact — final spread ~500m apart
-        { time: 60, position: { lat: impactBaseLat + dRow * 0.0045, lon: impactBaseLon + dCol * 0.005, alt: 200 } },
+        { time: 15, position: { lat: launchLat - 0.09 + dCol * 0.005, lon: launchLon + dRow * 0.005, alt: 12000 } },
+        // Apex — maximum altitude, spreading further
+        { time: 30, position: { lat: (launchLat + impactBaseLat) / 2 + dCol * 0.012, lon: (launchLon + impactBaseLon) / 2 + dRow * 0.012, alt: 18000 } },
+        // Descent — nearly at final spread
+        { time: 45, position: { lat: impactBaseLat + 0.05 + dCol * 0.020, lon: impactBaseLon + dRow * 0.020, alt: 8000 } },
+        // Impact — final 3 km grid: col*0.027° lat (~3 km), row*0.032° lon (~3 km)
+        { time: 60, position: { lat: impactBaseLat + dCol * 0.027, lon: impactBaseLon + dRow * 0.032, alt: 200 } },
       ],
     }));
   })(),

@@ -244,7 +244,11 @@ export const greenPineDefense: ScenarioDefinition = {
     },
 
     // ── Phase 2 (t=300–600s): Shahed-136 formation (5 drones) ──
-    // V-formation heading south toward Green Pine from the north
+    // V-formation heading south toward Green Pine from the north.
+    // Tight ~300m spacing — realistic for loitering munition swarm.
+    // Radar alone cannot resolve these (merge threshold 2km), but the
+    // 9 staring EO sensors with 0.1° angular resolution CAN distinguish
+    // individual drones at this spacing (0.1° at 25km = ~45m resolution).
     {
       targetId: 'TGT-S136-1',
       name: 'Shahed-136 Lead',

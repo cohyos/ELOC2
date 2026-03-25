@@ -12,6 +12,8 @@ export interface EoCoreTrack {
   updateCount: number;
   lastUpdateSec: number;
   status: 'active' | 'stale' | 'dropped';
+  /** Target ID affinity — remembers which bearing-group targetId last updated this track */
+  targetIdAffinity?: string;
 }
 
 /** Result of a triangulation attempt from the CORE wrapper */
@@ -30,6 +32,8 @@ export interface EoCoreConfig {
   staleTimeoutSec: number;
   /** Max seconds stale before dropping (default 30) */
   dropTimeoutSec: number;
-  /** Distance threshold for matching triangulation to existing track (meters, default 2000) */
+  /** Base distance threshold for matching triangulation to existing track (meters, default 150) */
   trackAssociationDistanceM: number;
+  /** Enable targetId affinity for formation discrimination (default true) */
+  useTargetIdAffinity: boolean;
 }
