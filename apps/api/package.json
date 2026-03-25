@@ -32,7 +32,9 @@
     "pdfmake": "^0.3.7",
     "@eloc2/terrain": "workspace:*",
     "@eloc2/eo-core": "workspace:*",
-    "@eloc2/sensor-bus": "workspace:*"
+    "@eloc2/sensor-bus": "workspace:*",
+    "@eloc2/sensor-instances": "workspace:*",
+    "@eloc2/system-fuser": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.3.0",

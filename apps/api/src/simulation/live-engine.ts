@@ -228,6 +228,10 @@ const DEFAULT_INVESTIGATION_PARAMETERS: InvestigationParameters = {
 /** Run EO tasking every N simulation seconds. */
 const EO_TASKING_INTERVAL_SEC = 3;
 
+/** Workstation broadcast rate (Hz). At 15 Hz internal tick, throttle WS output.
+ *  Set to 0 to broadcast every tick (no throttling). */
+const WS_BROADCAST_RATE_HZ = 4;
+
 // ---------------------------------------------------------------------------
 // Cover-zone helpers
 // ---------------------------------------------------------------------------
@@ -412,6 +416,8 @@ export class LiveEngine {
   /** Accumulates bearings per cueId within a tick for batch processing. */
   private pendingBearings = new Map<string, EoBearingObservation[]>();
   private lastEoTaskingSec = 0;
+  /** Last sim time when a WS broadcast was sent (for throttling). */
+  private lastBroadcastSec = 0;
   /** Tracks the active fusion mode per sensor for UI display. */
   private fusionModePerSensor = new Map<string, FusionMode>();
   /** Investigation parameters (runtime-tunable). */
@@ -724,14 +730,14 @@ export class LiveEngine {
     this.adjustSensorAltitudes();
     this.runner = new ScenarioRunner(this.scenario);
     this.trackManager = new TrackManager({
-      confirmAfter: 3,
-      dropAfterMisses: 12,
+      confirmAfter: 5,          // 15 Hz: ~333ms to confirm (was 3 at 1Hz = 3s)
+      dropAfterMisses: 45,      // 15 Hz: ~3.0s to drop (was 12 at 1Hz = 12s)
       // Enhanced radar track building
       enableExistence: true,
       existencePromotionThreshold: 0.5,
       existenceConfirmationThreshold: 0.8,
       existenceDeletionThreshold: 0.05,
-      coastingMissThreshold: 5,
+      coastingMissThreshold: 15, // 15 Hz: ~1.0s to coast (was 5 at 1Hz)
       pDetection: 0.9,
       pFalseAlarm: 0.01,
       maxCoastingTimeSec: 15,
@@ -1534,13 +1540,13 @@ export class LiveEngine {
     }
     this.runner = new ScenarioRunner(this.scenario);
     this.trackManager = new TrackManager({
-      confirmAfter: 3,
-      dropAfterMisses: 12,
+      confirmAfter: 5,          // 15 Hz: ~333ms to confirm
+      dropAfterMisses: 45,      // 15 Hz: ~3.0s to drop
       enableExistence: true,
       existencePromotionThreshold: 0.5,
       existenceConfirmationThreshold: 0.8,
       existenceDeletionThreshold: 0.05,
-      coastingMissThreshold: 5,
+      coastingMissThreshold: 15, // 15 Hz: ~1.0s to coast (was 5 at 1Hz)
       pDetection: 0.9,
       pFalseAlarm: 0.01,
       maxCoastingTimeSec: 15,
@@ -1562,6 +1568,7 @@ export class LiveEngine {
     this.cachedBallisticEstimates = [];
     this.pendingBearings.clear();
     this.lastEoTaskingSec = 0;
+    this.lastBroadcastSec = 0;
     this.fusionModePerSensor.clear();
     this.eventEnvelopes = [];
     this.operatorLockedSensors.clear();
@@ -1808,8 +1815,8 @@ export class LiveEngine {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    // 1-second sim steps, scaled by speed
-    const intervalMs = 1000 / this.state.speed;
+    // 15 Hz sim steps (~66.7ms per step), scaled by speed
+    const intervalMs = (1000 / 15) / this.state.speed;
     this.timer = setTimeout(() => {
       this.timer = null; // timer has fired, clear reference
       this.ticking = true;
@@ -1824,7 +1831,7 @@ export class LiveEngine {
 
   private tick(): void {
     this.tickStartTime = Date.now();
-    const dtSec = 1; // fixed 1-second simulation step
+    const dtSec = 1 / 15; // 15 Hz simulation step (~66.7ms)
     const result = this.runner.step(dtSec);
     this.state.elapsedSec = result.currentTimeSec;
 
@@ -5856,9 +5863,16 @@ export class LiveEngine {
   }
 
   private broadcastRap(_force = false): void {
-    // No throttling — every tick broadcasts to frontend regardless of speed.
-    // Speed compresses wall-clock time but must not skip pipeline steps or outputs.
-    // The frontend ReplayController already coalesces via requestAnimationFrame.
+    // Throttle WS broadcasts to WS_BROADCAST_RATE_HZ.
+    // Internal pipeline runs at 15 Hz but workstation only needs 2-4 updates/sec.
+    // Force=true bypasses throttle (used for snapshots, pause, scenario changes).
+    if (!_force && WS_BROADCAST_RATE_HZ > 0) {
+      const minIntervalSec = 1 / WS_BROADCAST_RATE_HZ;
+      if (this.state.elapsedSec - this.lastBroadcastSec < minIntervalSec) {
+        return; // Skip this tick's broadcast
+      }
+      this.lastBroadcastSec = this.state.elapsedSec;
+    }
 
     const tracks = this.state.tracks;
     // Strip lineage from broadcast to reduce WS payload size

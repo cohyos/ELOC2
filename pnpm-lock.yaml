@@ -80,12 +80,18 @@ importers:
       '@eloc2/sensor-bus':
         specifier: workspace:*
         version: link:../../packages/sensor-bus
+      '@eloc2/sensor-instances':
+        specifier: workspace:*
+        version: link:../../packages/sensor-instances
       '@eloc2/shared-utils':
         specifier: workspace:*
         version: link:../../packages/shared-utils
       '@eloc2/simulator':
         specifier: workspace:*
         version: link:../simulator
+      '@eloc2/system-fuser':
+        specifier: workspace:*
+        version: link:../../packages/system-fuser
       '@eloc2/terrain':
         specifier: workspace:*
         version: link:../../packages/terrain

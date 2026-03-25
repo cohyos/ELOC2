@@ -1,0 +1,139 @@
+{
+  "timestamp": "2026-03-25T08:23:55.023Z",
+  "scenario": {
+    "targets": 4,
+    "sensors": 5,
+    "simDurationSec": 120
+  },
+  "runs": [
+    {
+      "label": "Baseline (1 Hz)",
+      "description": "Current production rates: radar 1Hz, EO 0.5Hz, 1s sim steps",
+      "dtSec": 1,
+      "crashed": false,
+      "totalTicks": 120,
+      "wallClockMs": 252,
+      "avgTickMs": 2.059306591666667,
+      "maxTickMs": 6.433804000000009,
+      "peakHeapMB": 34.249290466308594,
+      "peakSystemTracks": 50,
+      "confirmedTracks": 12,
+      "tentativeTracks": 0,
+      "droppedTracks": 0,
+      "trackToGtRatio": 12,
+      "snapshotCount": 120
+    },
+    {
+      "label": "10 Hz Uncalibrated",
+      "description": "10Hz all sensors, NO parameter recalibration — stress test",
+      "dtSec": 0.1,
+      "crashed": false,
+      "totalTicks": 1200,
+      "wallClockMs": 297,
+      "avgTickMs": 0.23303660250000593,
+      "maxTickMs": 1.4582319999999527,
+      "peakHeapMB": 37.302947998046875,
+      "peakSystemTracks": 14,
+      "confirmedTracks": 6,
+      "tentativeTracks": 0,
+      "droppedTracks": 0,
+      "trackToGtRatio": 6,
+      "snapshotCount": 120
+    },
+    {
+      "label": "10 Hz Calibrated",
+      "description": "10Hz all sensors, recalibrated count thresholds + wider correlation gate",
+      "dtSec": 0.1,
+      "crashed": false,
+      "totalTicks": 1200,
+      "wallClockMs": 290,
+      "avgTickMs": 0.22880947583333278,
+      "maxTickMs": 1.8032980000000407,
+      "peakHeapMB": 39.441375732421875,
+      "peakSystemTracks": 19,
+      "confirmedTracks": 5,
+      "tentativeTracks": 0,
+      "droppedTracks": 0,
+      "trackToGtRatio": 5,
+      "snapshotCount": 120
+    },
+    {
+      "label": "20 Hz Calibrated",
+      "description": "20Hz all sensors, recalibrated for 20x frequency",
+      "dtSec": 0.05,
+      "crashed": false,
+      "totalTicks": 2400,
+      "wallClockMs": 440,
+      "avgTickMs": 0.17422219916667112,
+      "maxTickMs": 0.8536389999999301,
+      "peakHeapMB": 41.25940704345703,
+      "peakSystemTracks": 15,
+      "confirmedTracks": 9,
+      "tentativeTracks": 0,
+      "droppedTracks": 0,
+      "trackToGtRatio": 9,
+      "snapshotCount": 120
+    },
+    {
+      "label": "50 Hz Calibrated",
+      "description": "50Hz all sensors, recalibrated for 50x frequency",
+      "dtSec": 0.02,
+      "crashed": false,
+      "totalTicks": 6000,
+      "wallClockMs": 1216,
+      "avgTickMs": 0.19338433900000185,
+      "maxTickMs": 1.1840590000001612,
+      "peakHeapMB": 43.897125244140625,
+      "peakSystemTracks": 17,
+      "confirmedTracks": 7,
+      "tentativeTracks": 0,
+      "droppedTracks": 0,
+      "trackToGtRatio": 7,
+      "snapshotCount": 120
+    }
+  ],
+  "scores": {
+    "Baseline (1 Hz)": {
+      "label": "Baseline (1 Hz)",
+      "total": 60,
+      "stability": 30,
+      "quality": 10,
+      "perf": 20
+    },
+    "10 Hz Uncalibrated": {
+      "label": "10 Hz Uncalibrated",
+      "total": 90,
+      "stability": 40,
+      "quality": 30,
+      "perf": 20
+    },
+    "10 Hz Calibrated": {
+      "label": "10 Hz Calibrated",
+      "total": 80,
+      "stability": 30,
+      "quality": 30,
+      "perf": 20
+    },
+    "20 Hz Calibrated": {
+      "label": "20 Hz Calibrated",
+      "total": 70,
+      "stability": 40,
+      "quality": 10,
+      "perf": 20
+    },
+    "50 Hz Calibrated": {
+      "label": "50 Hz Calibrated",
+      "total": 70,
+      "stability": 30,
+      "quality": 20,
+      "perf": 20
+    }
+  },
+  "grades": {
+    "Baseline (1 Hz)": "B",
+    "10 Hz Uncalibrated": "A",
+    "10 Hz Calibrated": "A",
+    "20 Hz Calibrated": "B",
+    "50 Hz Calibrated": "B"
+  }
+}

@@ -1,0 +1,164 @@
+{
+  "timestamp": "2026-03-25T08:29:52.091Z",
+  "scenario": {
+    "targets": 4,
+    "sensors": 5,
+    "simDurationSec": 120
+  },
+  "runs": [
+    {
+      "label": "Baseline (1 Hz)",
+      "description": "Current production rates: radar 1Hz, EO 0.5Hz, 1s sim steps",
+      "dtSec": 1,
+      "crashed": false,
+      "totalTicks": 120,
+      "wallClockMs": 225,
+      "avgTickMs": 1.8245642749999997,
+      "maxTickMs": 3.253537999999992,
+      "peakHeapMB": 26.846702575683594,
+      "peakSystemTracks": 49,
+      "confirmedTracks": 13,
+      "tentativeTracks": 2,
+      "droppedTracks": 0,
+      "trackToGtRatio": 15,
+      "snapshotCount": 120
+    },
+    {
+      "label": "10 Hz Uncalibrated",
+      "description": "10Hz all sensors, NO parameter recalibration — stress test",
+      "dtSec": 0.1,
+      "crashed": false,
+      "totalTicks": 1200,
+      "wallClockMs": 367,
+      "avgTickMs": 0.2875362841666677,
+      "maxTickMs": 1.8833709999998973,
+      "peakHeapMB": 37.201171875,
+      "peakSystemTracks": 15,
+      "confirmedTracks": 4,
+      "tentativeTracks": 0,
+      "droppedTracks": 0,
+      "trackToGtRatio": 4,
+      "snapshotCount": 120
+    },
+    {
+      "label": "10 Hz Calibrated",
+      "description": "10Hz all sensors, recalibrated count thresholds + wider correlation gate",
+      "dtSec": 0.1,
+      "crashed": false,
+      "totalTicks": 1200,
+      "wallClockMs": 313,
+      "avgTickMs": 0.24680777083333444,
+      "maxTickMs": 1.3296650000002046,
+      "peakHeapMB": 39.451316833496094,
+      "peakSystemTracks": 17,
+      "confirmedTracks": 4,
+      "tentativeTracks": 1,
+      "droppedTracks": 0,
+      "trackToGtRatio": 5,
+      "snapshotCount": 120
+    },
+    {
+      "label": "15 Hz Calibrated",
+      "description": "15Hz all sensors, tuned: fast confirm (5), moderate drop (45), gate=120",
+      "dtSec": 0.06666666666666667,
+      "crashed": false,
+      "totalTicks": 1800,
+      "wallClockMs": 299,
+      "avgTickMs": 0.15663892222222128,
+      "maxTickMs": 0.7097459999999955,
+      "peakHeapMB": 41.14710235595703,
+      "peakSystemTracks": 17,
+      "confirmedTracks": 4,
+      "tentativeTracks": 0,
+      "droppedTracks": 0,
+      "trackToGtRatio": 4,
+      "snapshotCount": 120
+    },
+    {
+      "label": "20 Hz Tuned",
+      "description": "20Hz re-tuned: fast confirm (5), drop at 3s (60), gate=120",
+      "dtSec": 0.05,
+      "crashed": false,
+      "totalTicks": 2400,
+      "wallClockMs": 421,
+      "avgTickMs": 0.1665449225000012,
+      "maxTickMs": 0.8187629999999899,
+      "peakHeapMB": 42.67236328125,
+      "peakSystemTracks": 18,
+      "confirmedTracks": 7,
+      "tentativeTracks": 0,
+      "droppedTracks": 0,
+      "trackToGtRatio": 7,
+      "snapshotCount": 120
+    },
+    {
+      "label": "50 Hz Tuned",
+      "description": "50Hz re-tuned: fast confirm (5), drop at 3s (150), gate=120",
+      "dtSec": 0.02,
+      "crashed": false,
+      "totalTicks": 6000,
+      "wallClockMs": 1140,
+      "avgTickMs": 0.18146168016666647,
+      "maxTickMs": 0.8137160000001131,
+      "peakHeapMB": 45.502655029296875,
+      "peakSystemTracks": 17,
+      "confirmedTracks": 6,
+      "tentativeTracks": 0,
+      "droppedTracks": 0,
+      "trackToGtRatio": 6,
+      "snapshotCount": 120
+    }
+  ],
+  "scores": {
+    "Baseline (1 Hz)": {
+      "label": "Baseline (1 Hz)",
+      "total": 60,
+      "stability": 30,
+      "quality": 10,
+      "perf": 20
+    },
+    "10 Hz Uncalibrated": {
+      "label": "10 Hz Uncalibrated",
+      "total": 90,
+      "stability": 40,
+      "quality": 30,
+      "perf": 20
+    },
+    "10 Hz Calibrated": {
+      "label": "10 Hz Calibrated",
+      "total": 80,
+      "stability": 30,
+      "quality": 30,
+      "perf": 20
+    },
+    "15 Hz Calibrated": {
+      "label": "15 Hz Calibrated",
+      "total": 80,
+      "stability": 30,
+      "quality": 30,
+      "perf": 20
+    },
+    "20 Hz Tuned": {
+      "label": "20 Hz Tuned",
+      "total": 70,
+      "stability": 30,
+      "quality": 20,
+      "perf": 20
+    },
+    "50 Hz Tuned": {
+      "label": "50 Hz Tuned",
+      "total": 80,
+      "stability": 30,
+      "quality": 30,
+      "perf": 20
+    }
+  },
+  "grades": {
+    "Baseline (1 Hz)": "B",
+    "10 Hz Uncalibrated": "A",
+    "10 Hz Calibrated": "A",
+    "15 Hz Calibrated": "A",
+    "20 Hz Tuned": "B",
+    "50 Hz Tuned": "A"
+  }
+}

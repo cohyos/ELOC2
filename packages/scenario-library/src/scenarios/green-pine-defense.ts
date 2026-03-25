@@ -22,18 +22,24 @@ const GP_LAT = 31.25;
 const GP_LON = 34.80;
 
 // ── 3 clusters of 3 masts = 9 individual 360° MWIR staring sensors ──────
-// Clusters spread ~20 km from Green Pine for maximal area coverage.
-// Each cluster covers a different sector; overlapping 30 km detection
-// circles create cross-cluster triangulation baselines of ~35 km.
-// Within each cluster, 3 masts form a small triangle (~1.5 km sides)
-// for local triangulation accuracy.
-const CLUSTER_DIST_DEG = 0.18; // ~20 km from GP
+// Optimal equilateral triangle deployment (see Knowledge Base:
+// EO_Staring_Sensor_Deployment_Geometry.md):
+//   - Side length ~21 km → 60° min intersection angle at center
+//   - Center-to-vertex ~12.2 km → well within 40 km detection range
+//   - Baselines large enough for <30m CEP at 20 km range
+// Each cluster has 3 masts in a small triangle (~1.5 km sides)
+// for local triangulation refinement.
+const TRIANGLE_RADIUS_DEG = 0.11; // ~12.2 km center-to-vertex → ~21 km sides (optimal)
 const MAST_SPREAD_DEG = 0.013; // ~1.5 km between masts within cluster
-const CLUSTERS = [
-  { lat: GP_LAT + CLUSTER_DIST_DEG, lon: GP_LON, id: 'N' },                                        // North
-  { lat: GP_LAT - CLUSTER_DIST_DEG * 0.5, lon: GP_LON - CLUSTER_DIST_DEG * 0.866, id: 'SW' },      // Southwest
-  { lat: GP_LAT - CLUSTER_DIST_DEG * 0.5, lon: GP_LON + CLUSTER_DIST_DEG * 0.866, id: 'SE' },      // Southeast
-];
+const TRIANGLE_ANGLES = [90, 210, 330]; // North, SW, SE — equilateral triangle
+const CLUSTERS = TRIANGLE_ANGLES.map((angleDeg, i) => {
+  const rad = (angleDeg * Math.PI) / 180;
+  return {
+    id: ['N', 'SW', 'SE'][i],
+    lat: GP_LAT + TRIANGLE_RADIUS_DEG * Math.sin(rad),
+    lon: GP_LON + TRIANGLE_RADIUS_DEG * Math.cos(rad) / Math.cos(GP_LAT * Math.PI / 180),
+  };
+});
 
 // Helper: create 3 masts (each a 360° MWIR staring sensor) per cluster
 function makeStaringSensors(

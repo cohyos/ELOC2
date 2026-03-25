@@ -25,9 +25,12 @@ const CENTER_LAT = 31.25;
 const CENTER_LON = 34.80;
 
 // ── 5 clusters in pentagon formation for maximum triangulation coverage ──
-// Pentagon radius ~20 km from center; this gives ~24 km baselines between
-// adjacent clusters and ~38 km diagonals — excellent for triangulation.
-const CLUSTER_RADIUS_DEG = 0.18; // ~20 km
+// Optimal deployment geometry (see KB: EO_Staring_Sensor_Deployment_Geometry.md):
+//   - Pentagon radius 12.2 km → ~14.3 km adjacent baselines, ~23 km diagonals
+//   - Every point in defense zone covered by ≥3 staring sensors
+//   - Min intersection angle ≥36° (pentagon) vs 60° (triangle)
+//   - Redundancy: any 2-sensor failure still leaves 3-sensor coverage
+const CLUSTER_RADIUS_DEG = 0.11; // ~12.2 km — optimal center-to-vertex for 40 km detection range
 const MAST_SPREAD_DEG = 0.015;   // ~1.7 km between masts within cluster
 
 const PENTAGON_ANGLES = [

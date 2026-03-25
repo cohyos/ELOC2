@@ -1,0 +1,3692 @@
+{
+  "timestamp": "2026-03-25T08:02:49.513Z",
+  "scenario": {
+    "targets": 4,
+    "sensors": 5,
+    "simDurationSec": 120
+  },
+  "runs": [
+    {
+      "label": "Baseline (1 Hz)",
+      "description": "Current production rates: radar 1Hz, EO 0.5Hz, 1s sim steps",
+      "dtSec": 1,
+      "crashed": false,
+      "totalTicks": 120,
+      "wallClockMs": 295,
+      "avgTickMs": 2.4213134583333327,
+      "maxTickMs": 5.418196999999964,
+      "peakHeapMB": 26.931793212890625,
+      "peakSystemTracks": 51,
+      "confirmedTracks": 12,
+      "tentativeTracks": 0,
+      "droppedTracks": 0,
+      "trackToGtRatio": 12,
+      "snapshotCount": 120,
+      "snapshots": [
+        {
+          "simTime": 1,
+          "systemTrackCount": 1,
+          "eoCoreTracks": 0,
+          "totalObservations": 1,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 3.329451000000006,
+          "heapUsedMB": 18.583511352539062
+        },
+        {
+          "simTime": 2,
+          "systemTrackCount": 2,
+          "eoCoreTracks": 1,
+          "totalObservations": 5,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 3.5676879999999755,
+          "heapUsedMB": 18.846649169921875
+        },
+        {
+          "simTime": 3,
+          "systemTrackCount": 2,
+          "eoCoreTracks": 1,
+          "totalObservations": 1,
+          "totalLocalTracks": 2,
+          "activeGtTargets": 1,
+          "tickDurationMs": 1.5473139999999717,
+          "heapUsedMB": 19.061073303222656
+        },
+        {
+          "simTime": 4,
+          "systemTrackCount": 3,
+          "eoCoreTracks": 2,
+          "totalObservations": 5,
+          "totalLocalTracks": 2,
+          "activeGtTargets": 1,
+          "tickDurationMs": 1.2194410000000175,
+          "heapUsedMB": 19.35199737548828
+        },
+        {
+          "simTime": 5,
+          "systemTrackCount": 3,
+          "eoCoreTracks": 2,
+          "totalObservations": 1,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.6781080000000088,
+          "heapUsedMB": 19.612808227539062
+        },
+        {
+          "simTime": 6,
+          "systemTrackCount": 4,
+          "eoCoreTracks": 3,
+          "totalObservations": 5,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 1,
+          "tickDurationMs": 1.5132749999999646,
+          "heapUsedMB": 20.062942504882812
+        },
+        {
+          "simTime": 7,
+          "systemTrackCount": 4,
+          "eoCoreTracks": 3,
+          "totalObservations": 1,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.5912690000000111,
+          "heapUsedMB": 20.449356079101562
+        },
+        {
+          "simTime": 8,
+          "systemTrackCount": 5,
+          "eoCoreTracks": 4,
+          "totalObservations": 5,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.8362640000000283,
+          "heapUsedMB": 20.9344482421875
+        },
+        {
+          "simTime": 9,
+          "systemTrackCount": 5,
+          "eoCoreTracks": 4,
+          "totalObservations": 1,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 1,
+          "tickDurationMs": 2.1674670000000447,
+          "heapUsedMB": 18.506546020507812
+        },
+        {
+          "simTime": 10,
+          "systemTrackCount": 6,
+          "eoCoreTracks": 5,
+          "totalObservations": 5,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.8683560000000057,
+          "heapUsedMB": 19.13043212890625
+        },
+        {
+          "simTime": 11,
+          "systemTrackCount": 6,
+          "eoCoreTracks": 5,
+          "totalObservations": 1,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.7407810000000268,
+          "heapUsedMB": 19.745925903320312
+        },
+        {
+          "simTime": 12,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 6,
+          "totalObservations": 5,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 2,
+          "tickDurationMs": 1.0061600000000226,
+          "heapUsedMB": 20.515777587890625
+        },
+        {
+          "simTime": 13,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 5,
+          "totalObservations": 1,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 1.0340100000000234,
+          "heapUsedMB": 21.20733642578125
+        },
+        {
+          "simTime": 14,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 6,
+          "totalObservations": 6,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 2,
+          "tickDurationMs": 1.1174499999999625,
+          "heapUsedMB": 22.036277770996094
+        },
+        {
+          "simTime": 15,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 5,
+          "totalObservations": 1,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.8945420000000013,
+          "heapUsedMB": 22.80743408203125
+        },
+        {
+          "simTime": 16,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 6,
+          "totalObservations": 5,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 1.15175499999998,
+          "heapUsedMB": 23.71497344970703
+        },
+        {
+          "simTime": 17,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 5,
+          "totalObservations": 1,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.9494339999999966,
+          "heapUsedMB": 24.515419006347656
+        },
+        {
+          "simTime": 18,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 6,
+          "totalObservations": 6,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 2,
+          "tickDurationMs": 2.2965970000000198,
+          "heapUsedMB": 18.74962615966797
+        },
+        {
+          "simTime": 19,
+          "systemTrackCount": 10,
+          "eoCoreTracks": 5,
+          "totalObservations": 1,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.928764000000001,
+          "heapUsedMB": 19.718353271484375
+        },
+        {
+          "simTime": 20,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 7,
+          "totalObservations": 10,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 3,
+          "tickDurationMs": 1.171810999999991,
+          "heapUsedMB": 21.122146606445312
+        },
+        {
+          "simTime": 21,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 6,
+          "totalObservations": 2,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 3,
+          "tickDurationMs": 1.3844849999999838,
+          "heapUsedMB": 22.437049865722656
+        },
+        {
+          "simTime": 22,
+          "systemTrackCount": 15,
+          "eoCoreTracks": 8,
+          "totalObservations": 11,
+          "totalLocalTracks": 7,
+          "activeGtTargets": 3,
+          "tickDurationMs": 2.830266999999992,
+          "heapUsedMB": 24.44709014892578
+        },
+        {
+          "simTime": 23,
+          "systemTrackCount": 15,
+          "eoCoreTracks": 7,
+          "totalObservations": 2,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 3,
+          "tickDurationMs": 3.323104999999998,
+          "heapUsedMB": 18.344146728515625
+        },
+        {
+          "simTime": 24,
+          "systemTrackCount": 16,
+          "eoCoreTracks": 9,
+          "totalObservations": 10,
+          "totalLocalTracks": 8,
+          "activeGtTargets": 3,
+          "tickDurationMs": 1.9034070000000156,
+          "heapUsedMB": 20.69506072998047
+        },
+        {
+          "simTime": 25,
+          "systemTrackCount": 16,
+          "eoCoreTracks": 8,
+          "totalObservations": 2,
+          "totalLocalTracks": 7,
+          "activeGtTargets": 3,
+          "tickDurationMs": 1.6732070000000476,
+          "heapUsedMB": 22.731430053710938
+        },
+        {
+          "simTime": 26,
+          "systemTrackCount": 17,
+          "eoCoreTracks": 10,
+          "totalObservations": 10,
+          "totalLocalTracks": 8,
+          "activeGtTargets": 3,
+          "tickDurationMs": 2.1104219999999714,
+          "heapUsedMB": 25.340553283691406
+        },
+        {
+          "simTime": 27,
+          "systemTrackCount": 17,
+          "eoCoreTracks": 9,
+          "totalObservations": 2,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 3,
+          "tickDurationMs": 2.218547000000001,
+          "heapUsedMB": 19.712005615234375
+        },
+        {
+          "simTime": 28,
+          "systemTrackCount": 18,
+          "eoCoreTracks": 11,
+          "totalObservations": 9,
+          "totalLocalTracks": 8,
+          "activeGtTargets": 3,
+          "tickDurationMs": 2.21968499999997,
+          "heapUsedMB": 22.505630493164062
+        },
+        {
+          "simTime": 29,
+          "systemTrackCount": 18,
+          "eoCoreTracks": 10,
+          "totalObservations": 2,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 3,
+          "tickDurationMs": 2.214529999999968,
+          "heapUsedMB": 24.301513671875
+        },
+        {
+          "simTime": 30,
+          "systemTrackCount": 20,
+          "eoCoreTracks": 13,
+          "totalObservations": 13,
+          "totalLocalTracks": 9,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.123548000000028,
+          "heapUsedMB": 19.16748046875
+        },
+        {
+          "simTime": 31,
+          "systemTrackCount": 20,
+          "eoCoreTracks": 11,
+          "totalObservations": 3,
+          "totalLocalTracks": 7,
+          "activeGtTargets": 4,
+          "tickDurationMs": 1.4018159999999966,
+          "heapUsedMB": 21.29943084716797
+        },
+        {
+          "simTime": 32,
+          "systemTrackCount": 23,
+          "eoCoreTracks": 15,
+          "totalObservations": 14,
+          "totalLocalTracks": 10,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.103005000000053,
+          "heapUsedMB": 24.415817260742188
+        },
+        {
+          "simTime": 33,
+          "systemTrackCount": 23,
+          "eoCoreTracks": 13,
+          "totalObservations": 3,
+          "totalLocalTracks": 9,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.3661560000000463,
+          "heapUsedMB": 19.497421264648438
+        },
+        {
+          "simTime": 34,
+          "systemTrackCount": 25,
+          "eoCoreTracks": 17,
+          "totalObservations": 14,
+          "totalLocalTracks": 12,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.3044100000000753,
+          "heapUsedMB": 23.447555541992188
+        },
+        {
+          "simTime": 35,
+          "systemTrackCount": 26,
+          "eoCoreTracks": 15,
+          "totalObservations": 3,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.5374899999999343,
+          "heapUsedMB": 19.314918518066406
+        },
+        {
+          "simTime": 36,
+          "systemTrackCount": 29,
+          "eoCoreTracks": 19,
+          "totalObservations": 13,
+          "totalLocalTracks": 12,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.010154000000057,
+          "heapUsedMB": 23.97771453857422
+        },
+        {
+          "simTime": 37,
+          "systemTrackCount": 29,
+          "eoCoreTracks": 17,
+          "totalObservations": 3,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.254519000000073,
+          "heapUsedMB": 20.511802673339844
+        },
+        {
+          "simTime": 38,
+          "systemTrackCount": 33,
+          "eoCoreTracks": 20,
+          "totalObservations": 12,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.0065290000000005,
+          "heapUsedMB": 25.510169982910156
+        },
+        {
+          "simTime": 39,
+          "systemTrackCount": 34,
+          "eoCoreTracks": 18,
+          "totalObservations": 3,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.0264920000000757,
+          "heapUsedMB": 22.677940368652344
+        },
+        {
+          "simTime": 40,
+          "systemTrackCount": 36,
+          "eoCoreTracks": 21,
+          "totalObservations": 12,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.5202889999999343,
+          "heapUsedMB": 20.699432373046875
+        },
+        {
+          "simTime": 41,
+          "systemTrackCount": 37,
+          "eoCoreTracks": 18,
+          "totalObservations": 3,
+          "totalLocalTracks": 10,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.3133229999999685,
+          "heapUsedMB": 25.864234924316406
+        },
+        {
+          "simTime": 42,
+          "systemTrackCount": 38,
+          "eoCoreTracks": 21,
+          "totalObservations": 13,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 5.257655999999997,
+          "heapUsedMB": 24.33770751953125
+        },
+        {
+          "simTime": 43,
+          "systemTrackCount": 39,
+          "eoCoreTracks": 17,
+          "totalObservations": 3,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 4.833547999999951,
+          "heapUsedMB": 22.03192138671875
+        },
+        {
+          "simTime": 44,
+          "systemTrackCount": 40,
+          "eoCoreTracks": 19,
+          "totalObservations": 12,
+          "totalLocalTracks": 10,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.7332949999999983,
+          "heapUsedMB": 20.208740234375
+        },
+        {
+          "simTime": 45,
+          "systemTrackCount": 42,
+          "eoCoreTracks": 15,
+          "totalObservations": 3,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.035028000000011,
+          "heapUsedMB": 25.55718994140625
+        },
+        {
+          "simTime": 46,
+          "systemTrackCount": 43,
+          "eoCoreTracks": 17,
+          "totalObservations": 13,
+          "totalLocalTracks": 12,
+          "activeGtTargets": 4,
+          "tickDurationMs": 5.418196999999964,
+          "heapUsedMB": 24.313026428222656
+        },
+        {
+          "simTime": 47,
+          "systemTrackCount": 43,
+          "eoCoreTracks": 13,
+          "totalObservations": 3,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.345030999999949,
+          "heapUsedMB": 21.814712524414062
+        },
+        {
+          "simTime": 48,
+          "systemTrackCount": 45,
+          "eoCoreTracks": 15,
+          "totalObservations": 12,
+          "totalLocalTracks": 13,
+          "activeGtTargets": 4,
+          "tickDurationMs": 4.02815099999998,
+          "heapUsedMB": 20.42542266845703
+        },
+        {
+          "simTime": 49,
+          "systemTrackCount": 44,
+          "eoCoreTracks": 12,
+          "totalObservations": 3,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.052554999999984,
+          "heapUsedMB": 25.626693725585938
+        },
+        {
+          "simTime": 50,
+          "systemTrackCount": 46,
+          "eoCoreTracks": 14,
+          "totalObservations": 13,
+          "totalLocalTracks": 12,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.911519999999996,
+          "heapUsedMB": 23.898353576660156
+        },
+        {
+          "simTime": 51,
+          "systemTrackCount": 47,
+          "eoCoreTracks": 11,
+          "totalObservations": 3,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.3924919999999474,
+          "heapUsedMB": 21.351760864257812
+        },
+        {
+          "simTime": 52,
+          "systemTrackCount": 47,
+          "eoCoreTracks": 13,
+          "totalObservations": 12,
+          "totalLocalTracks": 12,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.7166469999999663,
+          "heapUsedMB": 19.65082550048828
+        },
+        {
+          "simTime": 53,
+          "systemTrackCount": 48,
+          "eoCoreTracks": 10,
+          "totalObservations": 3,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.9010379999999714,
+          "heapUsedMB": 24.66339111328125
+        },
+        {
+          "simTime": 54,
+          "systemTrackCount": 48,
+          "eoCoreTracks": 12,
+          "totalObservations": 12,
+          "totalLocalTracks": 12,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.7344130000000177,
+          "heapUsedMB": 22.923492431640625
+        },
+        {
+          "simTime": 55,
+          "systemTrackCount": 47,
+          "eoCoreTracks": 10,
+          "totalObservations": 3,
+          "totalLocalTracks": 10,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.4210520000000315,
+          "heapUsedMB": 20.005157470703125
+        },
+        {
+          "simTime": 56,
+          "systemTrackCount": 47,
+          "eoCoreTracks": 12,
+          "totalObservations": 12,
+          "totalLocalTracks": 12,
+          "activeGtTargets": 4,
+          "tickDurationMs": 4.636394999999993,
+          "heapUsedMB": 25.884490966796875
+        },
+        {
+          "simTime": 57,
+          "systemTrackCount": 47,
+          "eoCoreTracks": 10,
+          "totalObservations": 4,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 4.851617999999917,
+          "heapUsedMB": 23.34246826171875
+        },
+        {
+          "simTime": 58,
+          "systemTrackCount": 47,
+          "eoCoreTracks": 12,
+          "totalObservations": 13,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 4.457915999999955,
+          "heapUsedMB": 21.728408813476562
+        },
+        {
+          "simTime": 59,
+          "systemTrackCount": 47,
+          "eoCoreTracks": 10,
+          "totalObservations": 4,
+          "totalLocalTracks": 12,
+          "activeGtTargets": 4,
+          "tickDurationMs": 4.141889999999989,
+          "heapUsedMB": 19.674209594726562
+        },
+        {
+          "simTime": 60,
+          "systemTrackCount": 47,
+          "eoCoreTracks": 12,
+          "totalObservations": 14,
+          "totalLocalTracks": 14,
+          "activeGtTargets": 4,
+          "tickDurationMs": 4.118733999999904,
+          "heapUsedMB": 26.505401611328125
+        },
+        {
+          "simTime": 61,
+          "systemTrackCount": 46,
+          "eoCoreTracks": 10,
+          "totalObservations": 3,
+          "totalLocalTracks": 12,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.237139999999954,
+          "heapUsedMB": 23.943923950195312
+        },
+        {
+          "simTime": 62,
+          "systemTrackCount": 45,
+          "eoCoreTracks": 12,
+          "totalObservations": 13,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.6545340000000124,
+          "heapUsedMB": 21.712661743164062
+        },
+        {
+          "simTime": 63,
+          "systemTrackCount": 45,
+          "eoCoreTracks": 10,
+          "totalObservations": 3,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.0007260000000997,
+          "heapUsedMB": 18.80390167236328
+        },
+        {
+          "simTime": 64,
+          "systemTrackCount": 44,
+          "eoCoreTracks": 13,
+          "totalObservations": 14,
+          "totalLocalTracks": 10,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.209438999999975,
+          "heapUsedMB": 24.288467407226562
+        },
+        {
+          "simTime": 65,
+          "systemTrackCount": 44,
+          "eoCoreTracks": 11,
+          "totalObservations": 3,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.531594000000041,
+          "heapUsedMB": 21.232749938964844
+        },
+        {
+          "simTime": 66,
+          "systemTrackCount": 43,
+          "eoCoreTracks": 14,
+          "totalObservations": 14,
+          "totalLocalTracks": 10,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.37910700000009,
+          "heapUsedMB": 26.59009552001953
+        },
+        {
+          "simTime": 67,
+          "systemTrackCount": 43,
+          "eoCoreTracks": 12,
+          "totalObservations": 3,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.3540859999999384,
+          "heapUsedMB": 23.628684997558594
+        },
+        {
+          "simTime": 68,
+          "systemTrackCount": 42,
+          "eoCoreTracks": 15,
+          "totalObservations": 14,
+          "totalLocalTracks": 10,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.522557000000006,
+          "heapUsedMB": 21.246360778808594
+        },
+        {
+          "simTime": 69,
+          "systemTrackCount": 42,
+          "eoCoreTracks": 13,
+          "totalObservations": 3,
+          "totalLocalTracks": 12,
+          "activeGtTargets": 4,
+          "tickDurationMs": 1.984087000000045,
+          "heapUsedMB": 26.362892150878906
+        },
+        {
+          "simTime": 70,
+          "systemTrackCount": 41,
+          "eoCoreTracks": 16,
+          "totalObservations": 15,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.459687000000031,
+          "heapUsedMB": 24.34789276123047
+        },
+        {
+          "simTime": 71,
+          "systemTrackCount": 43,
+          "eoCoreTracks": 14,
+          "totalObservations": 3,
+          "totalLocalTracks": 13,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.329782000000023,
+          "heapUsedMB": 22.00025177001953
+        },
+        {
+          "simTime": 72,
+          "systemTrackCount": 42,
+          "eoCoreTracks": 17,
+          "totalObservations": 15,
+          "totalLocalTracks": 10,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.695088000000055,
+          "heapUsedMB": 20.07421112060547
+        },
+        {
+          "simTime": 73,
+          "systemTrackCount": 42,
+          "eoCoreTracks": 15,
+          "totalObservations": 3,
+          "totalLocalTracks": 12,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.44328900000005,
+          "heapUsedMB": 25.603294372558594
+        },
+        {
+          "simTime": 74,
+          "systemTrackCount": 40,
+          "eoCoreTracks": 18,
+          "totalObservations": 15,
+          "totalLocalTracks": 9,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.4924199999999246,
+          "heapUsedMB": 23.45648193359375
+        },
+        {
+          "simTime": 75,
+          "systemTrackCount": 41,
+          "eoCoreTracks": 15,
+          "totalObservations": 3,
+          "totalLocalTracks": 12,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.1590019999999868,
+          "heapUsedMB": 20.928733825683594
+        },
+        {
+          "simTime": 76,
+          "systemTrackCount": 41,
+          "eoCoreTracks": 18,
+          "totalObservations": 15,
+          "totalLocalTracks": 10,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.053696999999943,
+          "heapUsedMB": 26.711021423339844
+        },
+        {
+          "simTime": 77,
+          "systemTrackCount": 43,
+          "eoCoreTracks": 15,
+          "totalObservations": 3,
+          "totalLocalTracks": 13,
+          "activeGtTargets": 4,
+          "tickDurationMs": 1.9655199999999695,
+          "heapUsedMB": 24.478004455566406
+        },
+        {
+          "simTime": 78,
+          "systemTrackCount": 42,
+          "eoCoreTracks": 18,
+          "totalObservations": 15,
+          "totalLocalTracks": 10,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.49336500000004,
+          "heapUsedMB": 22.700218200683594
+        },
+        {
+          "simTime": 79,
+          "systemTrackCount": 43,
+          "eoCoreTracks": 15,
+          "totalObservations": 3,
+          "totalLocalTracks": 12,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.2153489999999465,
+          "heapUsedMB": 20.46380615234375
+        },
+        {
+          "simTime": 80,
+          "systemTrackCount": 44,
+          "eoCoreTracks": 18,
+          "totalObservations": 15,
+          "totalLocalTracks": 10,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.1188920000000735,
+          "heapUsedMB": 26.568992614746094
+        },
+        {
+          "simTime": 81,
+          "systemTrackCount": 45,
+          "eoCoreTracks": 15,
+          "totalObservations": 3,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.3632410000000164,
+          "heapUsedMB": 24.32195281982422
+        },
+        {
+          "simTime": 82,
+          "systemTrackCount": 46,
+          "eoCoreTracks": 18,
+          "totalObservations": 15,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.675702000000001,
+          "heapUsedMB": 23.026290893554688
+        },
+        {
+          "simTime": 83,
+          "systemTrackCount": 45,
+          "eoCoreTracks": 15,
+          "totalObservations": 4,
+          "totalLocalTracks": 10,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.1239969999999175,
+          "heapUsedMB": 20.770355224609375
+        },
+        {
+          "simTime": 84,
+          "systemTrackCount": 46,
+          "eoCoreTracks": 18,
+          "totalObservations": 15,
+          "totalLocalTracks": 10,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.802840999999944,
+          "heapUsedMB": 19.31884002685547
+        },
+        {
+          "simTime": 85,
+          "systemTrackCount": 47,
+          "eoCoreTracks": 15,
+          "totalObservations": 3,
+          "totalLocalTracks": 10,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.2147999999999683,
+          "heapUsedMB": 25.978469848632812
+        },
+        {
+          "simTime": 86,
+          "systemTrackCount": 48,
+          "eoCoreTracks": 18,
+          "totalObservations": 16,
+          "totalLocalTracks": 13,
+          "activeGtTargets": 4,
+          "tickDurationMs": 4.750071000000048,
+          "heapUsedMB": 19.318145751953125
+        },
+        {
+          "simTime": 87,
+          "systemTrackCount": 49,
+          "eoCoreTracks": 15,
+          "totalObservations": 4,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.403507999999988,
+          "heapUsedMB": 26.70612335205078
+        },
+        {
+          "simTime": 88,
+          "systemTrackCount": 49,
+          "eoCoreTracks": 18,
+          "totalObservations": 15,
+          "totalLocalTracks": 13,
+          "activeGtTargets": 4,
+          "tickDurationMs": 3.776116000000002,
+          "heapUsedMB": 26.864906311035156
+        },
+        {
+          "simTime": 89,
+          "systemTrackCount": 50,
+          "eoCoreTracks": 15,
+          "totalObservations": 3,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.3340799999999717,
+          "heapUsedMB": 25.207115173339844
+        },
+        {
+          "simTime": 90,
+          "systemTrackCount": 50,
+          "eoCoreTracks": 18,
+          "totalObservations": 16,
+          "totalLocalTracks": 14,
+          "activeGtTargets": 4,
+          "tickDurationMs": 2.791596000000027,
+          "heapUsedMB": 25.383392333984375
+        },
+        {
+          "simTime": 91,
+          "systemTrackCount": 50,
+          "eoCoreTracks": 15,
+          "totalObservations": 3,
+          "totalLocalTracks": 11,
+          "activeGtTargets": 3,
+          "tickDurationMs": 2.5277609999999413,
+          "heapUsedMB": 23.792808532714844
+        },
+        {
+          "simTime": 92,
+          "systemTrackCount": 50,
+          "eoCoreTracks": 17,
+          "totalObservations": 11,
+          "totalLocalTracks": 13,
+          "activeGtTargets": 3,
+          "tickDurationMs": 2.6035160000000133,
+          "heapUsedMB": 23.170669555664062
+        },
+        {
+          "simTime": 93,
+          "systemTrackCount": 51,
+          "eoCoreTracks": 14,
+          "totalObservations": 2,
+          "totalLocalTracks": 10,
+          "activeGtTargets": 3,
+          "tickDurationMs": 2.4095660000000407,
+          "heapUsedMB": 21.121505737304688
+        },
+        {
+          "simTime": 94,
+          "systemTrackCount": 49,
+          "eoCoreTracks": 16,
+          "totalObservations": 11,
+          "totalLocalTracks": 10,
+          "activeGtTargets": 3,
+          "tickDurationMs": 2.34495000000004,
+          "heapUsedMB": 19.704254150390625
+        },
+        {
+          "simTime": 95,
+          "systemTrackCount": 49,
+          "eoCoreTracks": 13,
+          "totalObservations": 2,
+          "totalLocalTracks": 8,
+          "activeGtTargets": 3,
+          "tickDurationMs": 2.4468919999999343,
+          "heapUsedMB": 24.5518798828125
+        },
+        {
+          "simTime": 96,
+          "systemTrackCount": 49,
+          "eoCoreTracks": 15,
+          "totalObservations": 11,
+          "totalLocalTracks": 9,
+          "activeGtTargets": 3,
+          "tickDurationMs": 3.1586680000000342,
+          "heapUsedMB": 22.43425750732422
+        },
+        {
+          "simTime": 97,
+          "systemTrackCount": 50,
+          "eoCoreTracks": 12,
+          "totalObservations": 2,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 3,
+          "tickDurationMs": 1.3862280000000737,
+          "heapUsedMB": 26.60101318359375
+        },
+        {
+          "simTime": 98,
+          "systemTrackCount": 47,
+          "eoCoreTracks": 14,
+          "totalObservations": 11,
+          "totalLocalTracks": 7,
+          "activeGtTargets": 3,
+          "tickDurationMs": 2.6341039999999794,
+          "heapUsedMB": 23.878890991210938
+        },
+        {
+          "simTime": 99,
+          "systemTrackCount": 49,
+          "eoCoreTracks": 11,
+          "totalObservations": 2,
+          "totalLocalTracks": 7,
+          "activeGtTargets": 3,
+          "tickDurationMs": 1.7816289999999526,
+          "heapUsedMB": 20.20142364501953
+        },
+        {
+          "simTime": 100,
+          "systemTrackCount": 47,
+          "eoCoreTracks": 13,
+          "totalObservations": 11,
+          "totalLocalTracks": 8,
+          "activeGtTargets": 3,
+          "tickDurationMs": 1.7305840000000217,
+          "heapUsedMB": 25.153106689453125
+        },
+        {
+          "simTime": 101,
+          "systemTrackCount": 46,
+          "eoCoreTracks": 10,
+          "totalObservations": 1,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 2,
+          "tickDurationMs": 1.5313609999999471,
+          "heapUsedMB": 20.874420166015625
+        },
+        {
+          "simTime": 102,
+          "systemTrackCount": 43,
+          "eoCoreTracks": 11,
+          "totalObservations": 6,
+          "totalLocalTracks": 7,
+          "activeGtTargets": 2,
+          "tickDurationMs": 1.4677409999999327,
+          "heapUsedMB": 24.821266174316406
+        },
+        {
+          "simTime": 103,
+          "systemTrackCount": 44,
+          "eoCoreTracks": 9,
+          "totalObservations": 1,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 2,
+          "tickDurationMs": 1.4152179999999817,
+          "heapUsedMB": 20.12531280517578
+        },
+        {
+          "simTime": 104,
+          "systemTrackCount": 40,
+          "eoCoreTracks": 10,
+          "totalObservations": 6,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 1.2454079999999976,
+          "heapUsedMB": 23.08356475830078
+        },
+        {
+          "simTime": 105,
+          "systemTrackCount": 40,
+          "eoCoreTracks": 8,
+          "totalObservations": 2,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 2,
+          "tickDurationMs": 1.295562000000018,
+          "heapUsedMB": 25.610092163085938
+        },
+        {
+          "simTime": 106,
+          "systemTrackCount": 38,
+          "eoCoreTracks": 10,
+          "totalObservations": 7,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 2,
+          "tickDurationMs": 1.6272350000000415,
+          "heapUsedMB": 20.775833129882812
+        },
+        {
+          "simTime": 107,
+          "systemTrackCount": 38,
+          "eoCoreTracks": 8,
+          "totalObservations": 2,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 2,
+          "tickDurationMs": 1.4181630000000496,
+          "heapUsedMB": 23.205467224121094
+        },
+        {
+          "simTime": 108,
+          "systemTrackCount": 34,
+          "eoCoreTracks": 10,
+          "totalObservations": 7,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 2,
+          "tickDurationMs": 1.93463399999996,
+          "heapUsedMB": 26.23015594482422
+        },
+        {
+          "simTime": 109,
+          "systemTrackCount": 35,
+          "eoCoreTracks": 8,
+          "totalObservations": 2,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 2,
+          "tickDurationMs": 1.559033999999997,
+          "heapUsedMB": 20.677047729492188
+        },
+        {
+          "simTime": 110,
+          "systemTrackCount": 33,
+          "eoCoreTracks": 10,
+          "totalObservations": 7,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 2,
+          "tickDurationMs": 2.4311190000000806,
+          "heapUsedMB": 23.646812438964844
+        },
+        {
+          "simTime": 111,
+          "systemTrackCount": 33,
+          "eoCoreTracks": 8,
+          "totalObservations": 1,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 1,
+          "tickDurationMs": 1.4969120000000657,
+          "heapUsedMB": 25.929885864257812
+        },
+        {
+          "simTime": 112,
+          "systemTrackCount": 30,
+          "eoCoreTracks": 9,
+          "totalObservations": 3,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 1,
+          "tickDurationMs": 2.0308219999999437,
+          "heapUsedMB": 20.760894775390625
+        },
+        {
+          "simTime": 113,
+          "systemTrackCount": 31,
+          "eoCoreTracks": 8,
+          "totalObservations": 1,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 1,
+          "tickDurationMs": 1.2049299999999903,
+          "heapUsedMB": 22.803504943847656
+        },
+        {
+          "simTime": 114,
+          "systemTrackCount": 27,
+          "eoCoreTracks": 9,
+          "totalObservations": 4,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 1,
+          "tickDurationMs": 1.348357999999962,
+          "heapUsedMB": 25.07159423828125
+        },
+        {
+          "simTime": 115,
+          "systemTrackCount": 27,
+          "eoCoreTracks": 8,
+          "totalObservations": 1,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 1,
+          "tickDurationMs": 1.342437000000018,
+          "heapUsedMB": 26.931793212890625
+        },
+        {
+          "simTime": 116,
+          "systemTrackCount": 24,
+          "eoCoreTracks": 9,
+          "totalObservations": 4,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 1,
+          "tickDurationMs": 1.6496929999999566,
+          "heapUsedMB": 21.02570343017578
+        },
+        {
+          "simTime": 117,
+          "systemTrackCount": 24,
+          "eoCoreTracks": 7,
+          "totalObservations": 1,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 1,
+          "tickDurationMs": 1.219742999999994,
+          "heapUsedMB": 22.443695068359375
+        },
+        {
+          "simTime": 118,
+          "systemTrackCount": 21,
+          "eoCoreTracks": 8,
+          "totalObservations": 4,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 1,
+          "tickDurationMs": 1.4029780000000756,
+          "heapUsedMB": 24.00714111328125
+        },
+        {
+          "simTime": 119,
+          "systemTrackCount": 22,
+          "eoCoreTracks": 6,
+          "totalObservations": 1,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 1,
+          "tickDurationMs": 1.0598889999999983,
+          "heapUsedMB": 25.250587463378906
+        },
+        {
+          "simTime": 120,
+          "systemTrackCount": 19,
+          "eoCoreTracks": 7,
+          "totalObservations": 4,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.8746680000000424,
+          "heapUsedMB": 26.500320434570312
+        }
+      ]
+    },
+    {
+      "label": "10 Hz Uncalibrated",
+      "description": "10Hz all sensors, NO parameter recalibration — stress test",
+      "dtSec": 0.1,
+      "crashed": false,
+      "totalTicks": 1200,
+      "wallClockMs": 414,
+      "avgTickMs": 0.3230168941666659,
+      "maxTickMs": 1.9030199999999695,
+      "peakHeapMB": 37.48918151855469,
+      "peakSystemTracks": 17,
+      "confirmedTracks": 3,
+      "tentativeTracks": 0,
+      "droppedTracks": 0,
+      "trackToGtRatio": 3,
+      "snapshotCount": 120,
+      "snapshots": [
+        {
+          "simTime": 1,
+          "systemTrackCount": 1,
+          "eoCoreTracks": 3,
+          "totalObservations": 5,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.1869930000000295,
+          "heapUsedMB": 19.899215698242188
+        },
+        {
+          "simTime": 2,
+          "systemTrackCount": 2,
+          "eoCoreTracks": 3,
+          "totalObservations": 5,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.2463310000000547,
+          "heapUsedMB": 21.16181182861328
+        },
+        {
+          "simTime": 3,
+          "systemTrackCount": 3,
+          "eoCoreTracks": 3,
+          "totalObservations": 5,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.23611799999991945,
+          "heapUsedMB": 22.76348876953125
+        },
+        {
+          "simTime": 4,
+          "systemTrackCount": 3,
+          "eoCoreTracks": 4,
+          "totalObservations": 5,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.19283499999994547,
+          "heapUsedMB": 24.87310028076172
+        },
+        {
+          "simTime": 5,
+          "systemTrackCount": 3,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.13145599999995738,
+          "heapUsedMB": 26.664749145507812
+        },
+        {
+          "simTime": 6,
+          "systemTrackCount": 4,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.14612099999999373,
+          "heapUsedMB": 20.77147674560547
+        },
+        {
+          "simTime": 7,
+          "systemTrackCount": 4,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.11181599999997616,
+          "heapUsedMB": 22.74779510498047
+        },
+        {
+          "simTime": 8,
+          "systemTrackCount": 4,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.13041399999997338,
+          "heapUsedMB": 24.736602783203125
+        },
+        {
+          "simTime": 9,
+          "systemTrackCount": 4,
+          "eoCoreTracks": 4,
+          "totalObservations": 5,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.2245749999999589,
+          "heapUsedMB": 26.768325805664062
+        },
+        {
+          "simTime": 10,
+          "systemTrackCount": 4,
+          "eoCoreTracks": 4,
+          "totalObservations": 5,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.28411000000005515,
+          "heapUsedMB": 20.997886657714844
+        },
+        {
+          "simTime": 11,
+          "systemTrackCount": 4,
+          "eoCoreTracks": 2,
+          "totalObservations": 5,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.30418200000008255,
+          "heapUsedMB": 22.70684051513672
+        },
+        {
+          "simTime": 12,
+          "systemTrackCount": 3,
+          "eoCoreTracks": 3,
+          "totalObservations": 5,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.3013930000000755,
+          "heapUsedMB": 24.2620849609375
+        },
+        {
+          "simTime": 13,
+          "systemTrackCount": 4,
+          "eoCoreTracks": 3,
+          "totalObservations": 6,
+          "totalLocalTracks": 2,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.259270000000015,
+          "heapUsedMB": 26.285873413085938
+        },
+        {
+          "simTime": 14,
+          "systemTrackCount": 5,
+          "eoCoreTracks": 2,
+          "totalObservations": 6,
+          "totalLocalTracks": 2,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.23546300000009524,
+          "heapUsedMB": 20.389564514160156
+        },
+        {
+          "simTime": 15,
+          "systemTrackCount": 5,
+          "eoCoreTracks": 2,
+          "totalObservations": 5,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.2520569999999225,
+          "heapUsedMB": 22.31061553955078
+        },
+        {
+          "simTime": 16,
+          "systemTrackCount": 5,
+          "eoCoreTracks": 2,
+          "totalObservations": 5,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.3081449999999677,
+          "heapUsedMB": 24.3670654296875
+        },
+        {
+          "simTime": 17,
+          "systemTrackCount": 5,
+          "eoCoreTracks": 2,
+          "totalObservations": 5,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.2791669999999158,
+          "heapUsedMB": 26.38446044921875
+        },
+        {
+          "simTime": 18,
+          "systemTrackCount": 6,
+          "eoCoreTracks": 2,
+          "totalObservations": 5,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.4184309999999414,
+          "heapUsedMB": 21.000015258789062
+        },
+        {
+          "simTime": 19,
+          "systemTrackCount": 6,
+          "eoCoreTracks": 2,
+          "totalObservations": 5,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.2683249999998907,
+          "heapUsedMB": 23.410018920898438
+        },
+        {
+          "simTime": 20,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 3,
+          "totalObservations": 10,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.3577179999999771,
+          "heapUsedMB": 25.84239959716797
+        },
+        {
+          "simTime": 21,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 3,
+          "totalObservations": 10,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.5181970000001002,
+          "heapUsedMB": 21.928871154785156
+        },
+        {
+          "simTime": 22,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 3,
+          "totalObservations": 10,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.36756000000002587,
+          "heapUsedMB": 25.403823852539062
+        },
+        {
+          "simTime": 23,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 2,
+          "totalObservations": 10,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.34930899999994836,
+          "heapUsedMB": 20.862640380859375
+        },
+        {
+          "simTime": 24,
+          "systemTrackCount": 5,
+          "eoCoreTracks": 2,
+          "totalObservations": 10,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.3525839999999789,
+          "heapUsedMB": 23.891563415527344
+        },
+        {
+          "simTime": 25,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 2,
+          "totalObservations": 10,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.3410669999999527,
+          "heapUsedMB": 26.602012634277344
+        },
+        {
+          "simTime": 26,
+          "systemTrackCount": 4,
+          "eoCoreTracks": 2,
+          "totalObservations": 11,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.33789999999999054,
+          "heapUsedMB": 21.46277618408203
+        },
+        {
+          "simTime": 27,
+          "systemTrackCount": 5,
+          "eoCoreTracks": 2,
+          "totalObservations": 10,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.33121300000004794,
+          "heapUsedMB": 24.003585815429688
+        },
+        {
+          "simTime": 28,
+          "systemTrackCount": 4,
+          "eoCoreTracks": 2,
+          "totalObservations": 9,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.4301420000000462,
+          "heapUsedMB": 26.6138916015625
+        },
+        {
+          "simTime": 29,
+          "systemTrackCount": 6,
+          "eoCoreTracks": 2,
+          "totalObservations": 9,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.3126230000000305,
+          "heapUsedMB": 21.305526733398438
+        },
+        {
+          "simTime": 30,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 3,
+          "totalObservations": 13,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.36530899999991107,
+          "heapUsedMB": 24.217979431152344
+        },
+        {
+          "simTime": 31,
+          "systemTrackCount": 5,
+          "eoCoreTracks": 3,
+          "totalObservations": 13,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.8823680000000422,
+          "heapUsedMB": 20.41950225830078
+        },
+        {
+          "simTime": 32,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 6,
+          "totalObservations": 14,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.42069200000003093,
+          "heapUsedMB": 25.30290985107422
+        },
+        {
+          "simTime": 33,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 6,
+          "totalObservations": 13,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.681210999999962,
+          "heapUsedMB": 23.703880310058594
+        },
+        {
+          "simTime": 34,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 7,
+          "totalObservations": 14,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.5074080000000549,
+          "heapUsedMB": 21.936134338378906
+        },
+        {
+          "simTime": 35,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 8,
+          "totalObservations": 13,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.5547090000000026,
+          "heapUsedMB": 21.42389678955078
+        },
+        {
+          "simTime": 36,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 9,
+          "totalObservations": 14,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.6076009999999314,
+          "heapUsedMB": 21.568206787109375
+        },
+        {
+          "simTime": 37,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 11,
+          "totalObservations": 14,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.5992760000000317,
+          "heapUsedMB": 23.413543701171875
+        },
+        {
+          "simTime": 38,
+          "systemTrackCount": 13,
+          "eoCoreTracks": 11,
+          "totalObservations": 12,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.6379399999999578,
+          "heapUsedMB": 25.9447021484375
+        },
+        {
+          "simTime": 39,
+          "systemTrackCount": 14,
+          "eoCoreTracks": 12,
+          "totalObservations": 12,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 1.0637400000000525,
+          "heapUsedMB": 30.777183532714844
+        },
+        {
+          "simTime": 40,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 13,
+          "totalObservations": 12,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.6381280000000515,
+          "heapUsedMB": 26.789291381835938
+        },
+        {
+          "simTime": 41,
+          "systemTrackCount": 15,
+          "eoCoreTracks": 13,
+          "totalObservations": 13,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.7023570000000063,
+          "heapUsedMB": 24.442115783691406
+        },
+        {
+          "simTime": 42,
+          "systemTrackCount": 15,
+          "eoCoreTracks": 12,
+          "totalObservations": 13,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.7711369999999533,
+          "heapUsedMB": 22.924110412597656
+        },
+        {
+          "simTime": 43,
+          "systemTrackCount": 15,
+          "eoCoreTracks": 12,
+          "totalObservations": 13,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.8117869999999812,
+          "heapUsedMB": 22.53112030029297
+        },
+        {
+          "simTime": 44,
+          "systemTrackCount": 14,
+          "eoCoreTracks": 11,
+          "totalObservations": 12,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.6337199999999257,
+          "heapUsedMB": 36.01148986816406
+        },
+        {
+          "simTime": 45,
+          "systemTrackCount": 14,
+          "eoCoreTracks": 10,
+          "totalObservations": 12,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.60636599999998,
+          "heapUsedMB": 31.884368896484375
+        },
+        {
+          "simTime": 46,
+          "systemTrackCount": 14,
+          "eoCoreTracks": 9,
+          "totalObservations": 12,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.5746090000000095,
+          "heapUsedMB": 26.793922424316406
+        },
+        {
+          "simTime": 47,
+          "systemTrackCount": 13,
+          "eoCoreTracks": 7,
+          "totalObservations": 12,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.9050799999999981,
+          "heapUsedMB": 20.646820068359375
+        },
+        {
+          "simTime": 48,
+          "systemTrackCount": 14,
+          "eoCoreTracks": 6,
+          "totalObservations": 12,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.6596270000000004,
+          "heapUsedMB": 29.364151000976562
+        },
+        {
+          "simTime": 49,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 5,
+          "totalObservations": 12,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.4995259999999462,
+          "heapUsedMB": 22.088455200195312
+        },
+        {
+          "simTime": 50,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 4,
+          "totalObservations": 13,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.4863749999999527,
+          "heapUsedMB": 29.958755493164062
+        },
+        {
+          "simTime": 51,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 4,
+          "totalObservations": 12,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.9905550000000858,
+          "heapUsedMB": 20.873451232910156
+        },
+        {
+          "simTime": 52,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 3,
+          "totalObservations": 13,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.3195820000000822,
+          "heapUsedMB": 26.391693115234375
+        },
+        {
+          "simTime": 53,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 4,
+          "totalObservations": 12,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.3032100000000355,
+          "heapUsedMB": 31.075424194335938
+        },
+        {
+          "simTime": 54,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 3,
+          "totalObservations": 12,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.3101240000000871,
+          "heapUsedMB": 35.989776611328125
+        },
+        {
+          "simTime": 55,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 3,
+          "totalObservations": 12,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.28297299999996994,
+          "heapUsedMB": 25.148773193359375
+        },
+        {
+          "simTime": 56,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 3,
+          "totalObservations": 12,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.3117210000000341,
+          "heapUsedMB": 29.912628173828125
+        },
+        {
+          "simTime": 57,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 3,
+          "totalObservations": 12,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.34273300000006657,
+          "heapUsedMB": 34.77568054199219
+        },
+        {
+          "simTime": 58,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 3,
+          "totalObservations": 14,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.33853099999998904,
+          "heapUsedMB": 23.772048950195312
+        },
+        {
+          "simTime": 59,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 3,
+          "totalObservations": 13,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.31730499999991935,
+          "heapUsedMB": 28.756988525390625
+        },
+        {
+          "simTime": 60,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 3,
+          "totalObservations": 14,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.36954900000000634,
+          "heapUsedMB": 33.198692321777344
+        },
+        {
+          "simTime": 61,
+          "systemTrackCount": 6,
+          "eoCoreTracks": 3,
+          "totalObservations": 13,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.3033910000000333,
+          "heapUsedMB": 22.675537109375
+        },
+        {
+          "simTime": 62,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 3,
+          "totalObservations": 13,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.4382859999999482,
+          "heapUsedMB": 27.40601348876953
+        },
+        {
+          "simTime": 63,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 4,
+          "totalObservations": 15,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.4124850000000606,
+          "heapUsedMB": 32.97216033935547
+        },
+        {
+          "simTime": 64,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 3,
+          "totalObservations": 15,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.49161900000001424,
+          "heapUsedMB": 23.126007080078125
+        },
+        {
+          "simTime": 65,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.10240599999997357,
+          "heapUsedMB": 26.67706298828125
+        },
+        {
+          "simTime": 66,
+          "systemTrackCount": 6,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.10897399999998925,
+          "heapUsedMB": 30.456443786621094
+        },
+        {
+          "simTime": 67,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.09683900000004542,
+          "heapUsedMB": 34.41758728027344
+        },
+        {
+          "simTime": 68,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.1127320000000509,
+          "heapUsedMB": 23.011756896972656
+        },
+        {
+          "simTime": 69,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.09720600000002833,
+          "heapUsedMB": 27.663490295410156
+        },
+        {
+          "simTime": 70,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.10476100000005317,
+          "heapUsedMB": 32.54740905761719
+        },
+        {
+          "simTime": 71,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.11742000000003827,
+          "heapUsedMB": 21.543556213378906
+        },
+        {
+          "simTime": 72,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.09509100000013859,
+          "heapUsedMB": 26.04222869873047
+        },
+        {
+          "simTime": 73,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.09472899999991569,
+          "heapUsedMB": 30.03466796875
+        },
+        {
+          "simTime": 74,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.09013800000002448,
+          "heapUsedMB": 34.43421173095703
+        },
+        {
+          "simTime": 75,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.09431100000006154,
+          "heapUsedMB": 23.09668731689453
+        },
+        {
+          "simTime": 76,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.12243400000011206,
+          "heapUsedMB": 27.807838439941406
+        },
+        {
+          "simTime": 77,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.10766199999989112,
+          "heapUsedMB": 32.332984924316406
+        },
+        {
+          "simTime": 78,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.945793999999978,
+          "heapUsedMB": 21.363876342773438
+        },
+        {
+          "simTime": 79,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.12880199999995057,
+          "heapUsedMB": 26.152633666992188
+        },
+        {
+          "simTime": 80,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.11007899999981419,
+          "heapUsedMB": 30.530319213867188
+        },
+        {
+          "simTime": 81,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.14621099999999387,
+          "heapUsedMB": 34.97077941894531
+        },
+        {
+          "simTime": 82,
+          "systemTrackCount": 6,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.10824900000011439,
+          "heapUsedMB": 23.427391052246094
+        },
+        {
+          "simTime": 83,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.12069900000005873,
+          "heapUsedMB": 27.658721923828125
+        },
+        {
+          "simTime": 84,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.14830899999992653,
+          "heapUsedMB": 31.97119140625
+        },
+        {
+          "simTime": 85,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.168617999999924,
+          "heapUsedMB": 36.128692626953125
+        },
+        {
+          "simTime": 86,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.10614000000009582,
+          "heapUsedMB": 25.401954650878906
+        },
+        {
+          "simTime": 87,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.128879999999981,
+          "heapUsedMB": 30.24292755126953
+        },
+        {
+          "simTime": 88,
+          "systemTrackCount": 10,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 7,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.11476199999992787,
+          "heapUsedMB": 35.773834228515625
+        },
+        {
+          "simTime": 89,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.10451199999988603,
+          "heapUsedMB": 25.34355926513672
+        },
+        {
+          "simTime": 90,
+          "systemTrackCount": 10,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 7,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.11588899999992464,
+          "heapUsedMB": 30.506324768066406
+        },
+        {
+          "simTime": 91,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.10596800000007534,
+          "heapUsedMB": 35.04564666748047
+        },
+        {
+          "simTime": 92,
+          "systemTrackCount": 6,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.09664300000008552,
+          "heapUsedMB": 23.281898498535156
+        },
+        {
+          "simTime": 93,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.1596999999999298,
+          "heapUsedMB": 27.434295654296875
+        },
+        {
+          "simTime": 94,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.10292499999991378,
+          "heapUsedMB": 31.72955322265625
+        },
+        {
+          "simTime": 95,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.12709000000018023,
+          "heapUsedMB": 36.24822235107422
+        },
+        {
+          "simTime": 96,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 5,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.15987599999994018,
+          "heapUsedMB": 26.314193725585938
+        },
+        {
+          "simTime": 97,
+          "systemTrackCount": 10,
+          "eoCoreTracks": 6,
+          "totalObservations": 0,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.2597059999998237,
+          "heapUsedMB": 31.778671264648438
+        },
+        {
+          "simTime": 98,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 7,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.18863600000008773,
+          "heapUsedMB": 23.453903198242188
+        },
+        {
+          "simTime": 99,
+          "systemTrackCount": 10,
+          "eoCoreTracks": 7,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.1792089999999007,
+          "heapUsedMB": 30.47846221923828
+        },
+        {
+          "simTime": 100,
+          "systemTrackCount": 13,
+          "eoCoreTracks": 6,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.2555899999999838,
+          "heapUsedMB": 22.488815307617188
+        },
+        {
+          "simTime": 101,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 6,
+          "totalObservations": 0,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.17571299999985968,
+          "heapUsedMB": 29.07506561279297
+        },
+        {
+          "simTime": 102,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 6,
+          "totalObservations": 0,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.1494319999999334,
+          "heapUsedMB": 34.27649688720703
+        },
+        {
+          "simTime": 103,
+          "systemTrackCount": 10,
+          "eoCoreTracks": 5,
+          "totalObservations": 0,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.15643500000010135,
+          "heapUsedMB": 23.60236358642578
+        },
+        {
+          "simTime": 104,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 5,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.20391300000005685,
+          "heapUsedMB": 28.40892791748047
+        },
+        {
+          "simTime": 105,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 6,
+          "totalObservations": 0,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.13521200000013778,
+          "heapUsedMB": 33.23692321777344
+        },
+        {
+          "simTime": 106,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 5,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.14392100000009123,
+          "heapUsedMB": 22.606246948242188
+        },
+        {
+          "simTime": 107,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.09946400000012545,
+          "heapUsedMB": 26.845062255859375
+        },
+        {
+          "simTime": 108,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.13461800000004587,
+          "heapUsedMB": 30.561233520507812
+        },
+        {
+          "simTime": 109,
+          "systemTrackCount": 6,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.08200499999998101,
+          "heapUsedMB": 33.901329040527344
+        },
+        {
+          "simTime": 110,
+          "systemTrackCount": 6,
+          "eoCoreTracks": 2,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.11636299999986477,
+          "heapUsedMB": 37.139991760253906
+        },
+        {
+          "simTime": 111,
+          "systemTrackCount": 6,
+          "eoCoreTracks": 2,
+          "totalObservations": 0,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.10627799999997478,
+          "heapUsedMB": 24.20848846435547
+        },
+        {
+          "simTime": 112,
+          "systemTrackCount": 4,
+          "eoCoreTracks": 2,
+          "totalObservations": 0,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.06284400000004098,
+          "heapUsedMB": 26.53722381591797
+        },
+        {
+          "simTime": 113,
+          "systemTrackCount": 4,
+          "eoCoreTracks": 2,
+          "totalObservations": 0,
+          "totalLocalTracks": 2,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.06155300000000352,
+          "heapUsedMB": 28.539283752441406
+        },
+        {
+          "simTime": 114,
+          "systemTrackCount": 4,
+          "eoCoreTracks": 2,
+          "totalObservations": 0,
+          "totalLocalTracks": 2,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.06368799999995645,
+          "heapUsedMB": 30.410110473632812
+        },
+        {
+          "simTime": 115,
+          "systemTrackCount": 4,
+          "eoCoreTracks": 2,
+          "totalObservations": 0,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.09826599999996688,
+          "heapUsedMB": 32.11859893798828
+        },
+        {
+          "simTime": 116,
+          "systemTrackCount": 3,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.09660699999994904,
+          "heapUsedMB": 33.67144012451172
+        },
+        {
+          "simTime": 117,
+          "systemTrackCount": 3,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.09767499999998108,
+          "heapUsedMB": 35.391326904296875
+        },
+        {
+          "simTime": 118,
+          "systemTrackCount": 4,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.0703120000000581,
+          "heapUsedMB": 37.26805877685547
+        },
+        {
+          "simTime": 119,
+          "systemTrackCount": 4,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.07125700000005963,
+          "heapUsedMB": 23.586700439453125
+        },
+        {
+          "simTime": 120,
+          "systemTrackCount": 4,
+          "eoCoreTracks": 2,
+          "totalObservations": 0,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.06272699999999531,
+          "heapUsedMB": 25.487808227539062
+        }
+      ]
+    },
+    {
+      "label": "10 Hz Calibrated",
+      "description": "10Hz all sensors, recalibrated count thresholds + wider correlation gate",
+      "dtSec": 0.1,
+      "crashed": false,
+      "totalTicks": 1200,
+      "wallClockMs": 409,
+      "avgTickMs": 0.3205375516666711,
+      "maxTickMs": 1.9638820000000123,
+      "peakHeapMB": 39.55047607421875,
+      "peakSystemTracks": 19,
+      "confirmedTracks": 4,
+      "tentativeTracks": 0,
+      "droppedTracks": 0,
+      "trackToGtRatio": 4,
+      "snapshotCount": 120,
+      "snapshots": [
+        {
+          "simTime": 1,
+          "systemTrackCount": 1,
+          "eoCoreTracks": 3,
+          "totalObservations": 5,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.09218399999986104,
+          "heapUsedMB": 26.21062469482422
+        },
+        {
+          "simTime": 2,
+          "systemTrackCount": 2,
+          "eoCoreTracks": 3,
+          "totalObservations": 5,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.14104200000019773,
+          "heapUsedMB": 27.030540466308594
+        },
+        {
+          "simTime": 3,
+          "systemTrackCount": 2,
+          "eoCoreTracks": 3,
+          "totalObservations": 5,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.21385499999996682,
+          "heapUsedMB": 28.071670532226562
+        },
+        {
+          "simTime": 4,
+          "systemTrackCount": 3,
+          "eoCoreTracks": 4,
+          "totalObservations": 5,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.12076700000011442,
+          "heapUsedMB": 29.378128051757812
+        },
+        {
+          "simTime": 5,
+          "systemTrackCount": 3,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.05750799999987066,
+          "heapUsedMB": 30.626876831054688
+        },
+        {
+          "simTime": 6,
+          "systemTrackCount": 4,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.09277700000006917,
+          "heapUsedMB": 32.1170654296875
+        },
+        {
+          "simTime": 7,
+          "systemTrackCount": 4,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.07573099999990518,
+          "heapUsedMB": 33.661346435546875
+        },
+        {
+          "simTime": 8,
+          "systemTrackCount": 5,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.08915300000012394,
+          "heapUsedMB": 35.41827392578125
+        },
+        {
+          "simTime": 9,
+          "systemTrackCount": 6,
+          "eoCoreTracks": 4,
+          "totalObservations": 5,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.18378400000005968,
+          "heapUsedMB": 37.2398681640625
+        },
+        {
+          "simTime": 10,
+          "systemTrackCount": 5,
+          "eoCoreTracks": 4,
+          "totalObservations": 5,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.2178400000000238,
+          "heapUsedMB": 23.55811309814453
+        },
+        {
+          "simTime": 11,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 2,
+          "totalObservations": 6,
+          "totalLocalTracks": 2,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.17827299999999013,
+          "heapUsedMB": 25.137657165527344
+        },
+        {
+          "simTime": 12,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 2,
+          "totalObservations": 6,
+          "totalLocalTracks": 2,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.23591999999985092,
+          "heapUsedMB": 26.849632263183594
+        },
+        {
+          "simTime": 13,
+          "systemTrackCount": 6,
+          "eoCoreTracks": 2,
+          "totalObservations": 6,
+          "totalLocalTracks": 2,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.16438100000004852,
+          "heapUsedMB": 28.596878051757812
+        },
+        {
+          "simTime": 14,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 1,
+          "totalObservations": 6,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.2657090000000153,
+          "heapUsedMB": 30.211380004882812
+        },
+        {
+          "simTime": 15,
+          "systemTrackCount": 5,
+          "eoCoreTracks": 1,
+          "totalObservations": 5,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.2777300000000196,
+          "heapUsedMB": 31.706298828125
+        },
+        {
+          "simTime": 16,
+          "systemTrackCount": 5,
+          "eoCoreTracks": 1,
+          "totalObservations": 5,
+          "totalLocalTracks": 2,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.30997499999989486,
+          "heapUsedMB": 32.92726135253906
+        },
+        {
+          "simTime": 17,
+          "systemTrackCount": 5,
+          "eoCoreTracks": 1,
+          "totalObservations": 5,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.20276200000012068,
+          "heapUsedMB": 34.41779327392578
+        },
+        {
+          "simTime": 18,
+          "systemTrackCount": 5,
+          "eoCoreTracks": 1,
+          "totalObservations": 5,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.19322199999987788,
+          "heapUsedMB": 35.88568115234375
+        },
+        {
+          "simTime": 19,
+          "systemTrackCount": 5,
+          "eoCoreTracks": 1,
+          "totalObservations": 5,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.19065299999988383,
+          "heapUsedMB": 37.429847717285156
+        },
+        {
+          "simTime": 20,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 2,
+          "totalObservations": 10,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.33932400000003327,
+          "heapUsedMB": 23.686317443847656
+        },
+        {
+          "simTime": 21,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 2,
+          "totalObservations": 10,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.21165500000006432,
+          "heapUsedMB": 26.200149536132812
+        },
+        {
+          "simTime": 22,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 2,
+          "totalObservations": 10,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.21894099999985883,
+          "heapUsedMB": 28.725906372070312
+        },
+        {
+          "simTime": 23,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 2,
+          "totalObservations": 11,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.2016510000000835,
+          "heapUsedMB": 31.104232788085938
+        },
+        {
+          "simTime": 24,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 2,
+          "totalObservations": 11,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.21448899999995774,
+          "heapUsedMB": 33.793724060058594
+        },
+        {
+          "simTime": 25,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 2,
+          "totalObservations": 10,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.19803300000012314,
+          "heapUsedMB": 36.238525390625
+        },
+        {
+          "simTime": 26,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 2,
+          "totalObservations": 10,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.19346500000006017,
+          "heapUsedMB": 22.978591918945312
+        },
+        {
+          "simTime": 27,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 2,
+          "totalObservations": 10,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.22239300000001094,
+          "heapUsedMB": 25.573318481445312
+        },
+        {
+          "simTime": 28,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 2,
+          "totalObservations": 10,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.40858299999990777,
+          "heapUsedMB": 27.993263244628906
+        },
+        {
+          "simTime": 29,
+          "systemTrackCount": 7,
+          "eoCoreTracks": 2,
+          "totalObservations": 9,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.23431600000003527,
+          "heapUsedMB": 30.61754608154297
+        },
+        {
+          "simTime": 30,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 3,
+          "totalObservations": 14,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.32687699999996767,
+          "heapUsedMB": 33.41144561767578
+        },
+        {
+          "simTime": 31,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 3,
+          "totalObservations": 13,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.3108429999999771,
+          "heapUsedMB": 37.347557067871094
+        },
+        {
+          "simTime": 32,
+          "systemTrackCount": 10,
+          "eoCoreTracks": 4,
+          "totalObservations": 14,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.4380660000001626,
+          "heapUsedMB": 25.957359313964844
+        },
+        {
+          "simTime": 33,
+          "systemTrackCount": 10,
+          "eoCoreTracks": 4,
+          "totalObservations": 13,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.3461580000000595,
+          "heapUsedMB": 31.587814331054688
+        },
+        {
+          "simTime": 34,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 5,
+          "totalObservations": 13,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.3870150000000194,
+          "heapUsedMB": 37.217124938964844
+        },
+        {
+          "simTime": 35,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 5,
+          "totalObservations": 13,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.40401200000019344,
+          "heapUsedMB": 27.98389434814453
+        },
+        {
+          "simTime": 36,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 6,
+          "totalObservations": 13,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.6926250000001346,
+          "heapUsedMB": 35.44892120361328
+        },
+        {
+          "simTime": 37,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 7,
+          "totalObservations": 13,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.4615759999999227,
+          "heapUsedMB": 27.670677185058594
+        },
+        {
+          "simTime": 38,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 9,
+          "totalObservations": 13,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.5518379999998615,
+          "heapUsedMB": 36.037818908691406
+        },
+        {
+          "simTime": 39,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 11,
+          "totalObservations": 12,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.5258609999998498,
+          "heapUsedMB": 30.52745819091797
+        },
+        {
+          "simTime": 40,
+          "systemTrackCount": 13,
+          "eoCoreTracks": 11,
+          "totalObservations": 12,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.5671039999999721,
+          "heapUsedMB": 25.911270141601562
+        },
+        {
+          "simTime": 41,
+          "systemTrackCount": 14,
+          "eoCoreTracks": 11,
+          "totalObservations": 13,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.6072719999999663,
+          "heapUsedMB": 37.15802764892578
+        },
+        {
+          "simTime": 42,
+          "systemTrackCount": 16,
+          "eoCoreTracks": 11,
+          "totalObservations": 13,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.6280360000000655,
+          "heapUsedMB": 33.064727783203125
+        },
+        {
+          "simTime": 43,
+          "systemTrackCount": 16,
+          "eoCoreTracks": 12,
+          "totalObservations": 13,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.764803000000029,
+          "heapUsedMB": 30.38896942138672
+        },
+        {
+          "simTime": 44,
+          "systemTrackCount": 15,
+          "eoCoreTracks": 11,
+          "totalObservations": 13,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.673462999999856,
+          "heapUsedMB": 28.577178955078125
+        },
+        {
+          "simTime": 45,
+          "systemTrackCount": 16,
+          "eoCoreTracks": 11,
+          "totalObservations": 13,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.7233610000000681,
+          "heapUsedMB": 26.0858154296875
+        },
+        {
+          "simTime": 46,
+          "systemTrackCount": 17,
+          "eoCoreTracks": 10,
+          "totalObservations": 12,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.8096069999999145,
+          "heapUsedMB": 23.933815002441406
+        },
+        {
+          "simTime": 47,
+          "systemTrackCount": 17,
+          "eoCoreTracks": 9,
+          "totalObservations": 12,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.8800470000001042,
+          "heapUsedMB": 35.515281677246094
+        },
+        {
+          "simTime": 48,
+          "systemTrackCount": 17,
+          "eoCoreTracks": 6,
+          "totalObservations": 12,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.5634259999999358,
+          "heapUsedMB": 30.724525451660156
+        },
+        {
+          "simTime": 49,
+          "systemTrackCount": 18,
+          "eoCoreTracks": 4,
+          "totalObservations": 12,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.5129339999998592,
+          "heapUsedMB": 23.528724670410156
+        },
+        {
+          "simTime": 50,
+          "systemTrackCount": 17,
+          "eoCoreTracks": 4,
+          "totalObservations": 13,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.7630400000000463,
+          "heapUsedMB": 31.61126708984375
+        },
+        {
+          "simTime": 51,
+          "systemTrackCount": 15,
+          "eoCoreTracks": 4,
+          "totalObservations": 13,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 1.0025590000000193,
+          "heapUsedMB": 23.448623657226562
+        },
+        {
+          "simTime": 52,
+          "systemTrackCount": 15,
+          "eoCoreTracks": 6,
+          "totalObservations": 12,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.8335849999998572,
+          "heapUsedMB": 31.609024047851562
+        },
+        {
+          "simTime": 53,
+          "systemTrackCount": 13,
+          "eoCoreTracks": 6,
+          "totalObservations": 12,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.5055789999998979,
+          "heapUsedMB": 25.344459533691406
+        },
+        {
+          "simTime": 54,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 5,
+          "totalObservations": 12,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.41341800000009243,
+          "heapUsedMB": 33.36419677734375
+        },
+        {
+          "simTime": 55,
+          "systemTrackCount": 15,
+          "eoCoreTracks": 5,
+          "totalObservations": 12,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.5773230000002059,
+          "heapUsedMB": 25.719512939453125
+        },
+        {
+          "simTime": 56,
+          "systemTrackCount": 13,
+          "eoCoreTracks": 5,
+          "totalObservations": 12,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.4115480000000389,
+          "heapUsedMB": 33.688270568847656
+        },
+        {
+          "simTime": 57,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 5,
+          "totalObservations": 12,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.6831769999998869,
+          "heapUsedMB": 25.5609130859375
+        },
+        {
+          "simTime": 58,
+          "systemTrackCount": 13,
+          "eoCoreTracks": 5,
+          "totalObservations": 13,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.45504699999992226,
+          "heapUsedMB": 32.93818664550781
+        },
+        {
+          "simTime": 59,
+          "systemTrackCount": 13,
+          "eoCoreTracks": 5,
+          "totalObservations": 14,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.5215940000000501,
+          "heapUsedMB": 25.089401245117188
+        },
+        {
+          "simTime": 60,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 5,
+          "totalObservations": 14,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.4950370000001385,
+          "heapUsedMB": 31.80786895751953
+        },
+        {
+          "simTime": 61,
+          "systemTrackCount": 13,
+          "eoCoreTracks": 5,
+          "totalObservations": 13,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.34178899999983514,
+          "heapUsedMB": 38.351112365722656
+        },
+        {
+          "simTime": 62,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 4,
+          "totalObservations": 14,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.3288830000001326,
+          "heapUsedMB": 29.413650512695312
+        },
+        {
+          "simTime": 63,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 4,
+          "totalObservations": 15,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.4013270000000375,
+          "heapUsedMB": 35.182838439941406
+        },
+        {
+          "simTime": 64,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 3,
+          "totalObservations": 14,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.2926949999998669,
+          "heapUsedMB": 24.644271850585938
+        },
+        {
+          "simTime": 65,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.1324529999999413,
+          "heapUsedMB": 29.21276092529297
+        },
+        {
+          "simTime": 66,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.14810400000010304,
+          "heapUsedMB": 34.111289978027344
+        },
+        {
+          "simTime": 67,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.18901499999992666,
+          "heapUsedMB": 23.515953063964844
+        },
+        {
+          "simTime": 68,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.18622400000003836,
+          "heapUsedMB": 28.514007568359375
+        },
+        {
+          "simTime": 69,
+          "systemTrackCount": 10,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.1591680000001361,
+          "heapUsedMB": 33.82804870605469
+        },
+        {
+          "simTime": 70,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.17430400000012014,
+          "heapUsedMB": 23.423789978027344
+        },
+        {
+          "simTime": 71,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.22850100000005114,
+          "heapUsedMB": 28.861831665039062
+        },
+        {
+          "simTime": 72,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.24399399999992966,
+          "heapUsedMB": 34.3133544921875
+        },
+        {
+          "simTime": 73,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.1520460000001549,
+          "heapUsedMB": 24.731101989746094
+        },
+        {
+          "simTime": 74,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.13721600000008038,
+          "heapUsedMB": 30.773086547851562
+        },
+        {
+          "simTime": 75,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.13926300000002811,
+          "heapUsedMB": 36.571075439453125
+        },
+        {
+          "simTime": 76,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.12125900000000911,
+          "heapUsedMB": 26.88262176513672
+        },
+        {
+          "simTime": 77,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.11489000000005944,
+          "heapUsedMB": 32.804466247558594
+        },
+        {
+          "simTime": 78,
+          "systemTrackCount": 13,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.1620420000001559,
+          "heapUsedMB": 38.70762634277344
+        },
+        {
+          "simTime": 79,
+          "systemTrackCount": 13,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.1265129999999317,
+          "heapUsedMB": 29.235427856445312
+        },
+        {
+          "simTime": 80,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.1151830000001155,
+          "heapUsedMB": 34.57550048828125
+        },
+        {
+          "simTime": 81,
+          "systemTrackCount": 14,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.18219599999997627,
+          "heapUsedMB": 24.776466369628906
+        },
+        {
+          "simTime": 82,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.1107640000000174,
+          "heapUsedMB": 30.104110717773438
+        },
+        {
+          "simTime": 83,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.12160500000004504,
+          "heapUsedMB": 36.044097900390625
+        },
+        {
+          "simTime": 84,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.1901420000001508,
+          "heapUsedMB": 26.736549377441406
+        },
+        {
+          "simTime": 85,
+          "systemTrackCount": 10,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.12772199999994882,
+          "heapUsedMB": 32.86927032470703
+        },
+        {
+          "simTime": 86,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.14861799999994219,
+          "heapUsedMB": 38.99494934082031
+        },
+        {
+          "simTime": 87,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.2049250000000029,
+          "heapUsedMB": 29.4620361328125
+        },
+        {
+          "simTime": 88,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.14832000000001244,
+          "heapUsedMB": 35.82978057861328
+        },
+        {
+          "simTime": 89,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.16626099999984945,
+          "heapUsedMB": 26.10771942138672
+        },
+        {
+          "simTime": 90,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 4,
+          "tickDurationMs": 0.14273100000013983,
+          "heapUsedMB": 32.50880432128906
+        },
+        {
+          "simTime": 91,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 7,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.15275799999994888,
+          "heapUsedMB": 39.01277160644531
+        },
+        {
+          "simTime": 92,
+          "systemTrackCount": 10,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.10754699999984041,
+          "heapUsedMB": 28.901809692382812
+        },
+        {
+          "simTime": 93,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.1733799999999519,
+          "heapUsedMB": 34.494422912597656
+        },
+        {
+          "simTime": 94,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.1334980000001451,
+          "heapUsedMB": 24.229400634765625
+        },
+        {
+          "simTime": 95,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.13926699999979064,
+          "heapUsedMB": 29.38990020751953
+        },
+        {
+          "simTime": 96,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 5,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.23294099999998252,
+          "heapUsedMB": 35.35790252685547
+        },
+        {
+          "simTime": 97,
+          "systemTrackCount": 13,
+          "eoCoreTracks": 6,
+          "totalObservations": 0,
+          "totalLocalTracks": 6,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.17678999999998268,
+          "heapUsedMB": 27.273605346679688
+        },
+        {
+          "simTime": 98,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 7,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.17436500000007982,
+          "heapUsedMB": 34.50171661376953
+        },
+        {
+          "simTime": 99,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 8,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.20823700000005374,
+          "heapUsedMB": 27.148605346679688
+        },
+        {
+          "simTime": 100,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 8,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 3,
+          "tickDurationMs": 0.26127699999983633,
+          "heapUsedMB": 35.27882385253906
+        },
+        {
+          "simTime": 101,
+          "systemTrackCount": 13,
+          "eoCoreTracks": 8,
+          "totalObservations": 0,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.2893810000000485,
+          "heapUsedMB": 27.328147888183594
+        },
+        {
+          "simTime": 102,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 8,
+          "totalObservations": 0,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.20033699999999044,
+          "heapUsedMB": 35.0516357421875
+        },
+        {
+          "simTime": 103,
+          "systemTrackCount": 12,
+          "eoCoreTracks": 8,
+          "totalObservations": 0,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.20307199999979275,
+          "heapUsedMB": 26.702651977539062
+        },
+        {
+          "simTime": 104,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 7,
+          "totalObservations": 0,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.16872600000010607,
+          "heapUsedMB": 33.6939697265625
+        },
+        {
+          "simTime": 105,
+          "systemTrackCount": 10,
+          "eoCoreTracks": 8,
+          "totalObservations": 0,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.7809700000000248,
+          "heapUsedMB": 24.14429473876953
+        },
+        {
+          "simTime": 106,
+          "systemTrackCount": 10,
+          "eoCoreTracks": 6,
+          "totalObservations": 0,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.14870999999993728,
+          "heapUsedMB": 29.843116760253906
+        },
+        {
+          "simTime": 107,
+          "systemTrackCount": 11,
+          "eoCoreTracks": 6,
+          "totalObservations": 0,
+          "totalLocalTracks": 4,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.2366389999999683,
+          "heapUsedMB": 35.310462951660156
+        },
+        {
+          "simTime": 108,
+          "systemTrackCount": 10,
+          "eoCoreTracks": 5,
+          "totalObservations": 0,
+          "totalLocalTracks": 5,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.18478800000002593,
+          "heapUsedMB": 24.9110107421875
+        },
+        {
+          "simTime": 109,
+          "systemTrackCount": 10,
+          "eoCoreTracks": 4,
+          "totalObservations": 0,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.13492599999995036,
+          "heapUsedMB": 29.50909423828125
+        },
+        {
+          "simTime": 110,
+          "systemTrackCount": 9,
+          "eoCoreTracks": 2,
+          "totalObservations": 0,
+          "totalLocalTracks": 3,
+          "activeGtTargets": 2,
+          "tickDurationMs": 0.07405000000017026,
+          "heapUsedMB": 33.37583923339844
+        },
+        {
+          "simTime": 111,
+          "systemTrackCount": 10,
+          "eoCoreTracks": 2,
+          "totalObservations": 0,
+          "totalLocalTracks": 2,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.10399299999994582,
+          "heapUsedMB": 35.96397399902344
+        },
+        {
+          "simTime": 112,
+          "systemTrackCount": 8,
+          "eoCoreTracks": 2,
+          "totalObservations": 0,
+          "totalLocalTracks": 2,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.09536200000002282,
+          "heapUsedMB": 38.32989501953125
+        },
+        {
+          "simTime": 113,
+          "systemTrackCount": 6,
+          "eoCoreTracks": 2,
+          "totalObservations": 0,
+          "totalLocalTracks": 2,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.08355899999992289,
+          "heapUsedMB": 24.81916046142578
+        },
+        {
+          "simTime": 114,
+          "systemTrackCount": 5,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 2,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.07085099999994782,
+          "heapUsedMB": 26.83575439453125
+        },
+        {
+          "simTime": 115,
+          "systemTrackCount": 4,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.053351000000020576,
+          "heapUsedMB": 28.945343017578125
+        },
+        {
+          "simTime": 116,
+          "systemTrackCount": 5,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.05774999999994179,
+          "heapUsedMB": 30.63780975341797
+        },
+        {
+          "simTime": 117,
+          "systemTrackCount": 4,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.052075000000058935,
+          "heapUsedMB": 32.382347106933594
+        },
+        {
+          "simTime": 118,
+          "systemTrackCount": 5,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.06295000000000073,
+          "heapUsedMB": 34.16761016845703
+        },
+        {
+          "simTime": 119,
+          "systemTrackCount": 5,
+          "eoCoreTracks": 3,
+          "totalObservations": 0,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.10248900000010508,
+          "heapUsedMB": 36.035011291503906
+        },
+        {
+          "simTime": 120,
+          "systemTrackCount": 5,
+          "eoCoreTracks": 2,
+          "totalObservations": 0,
+          "totalLocalTracks": 1,
+          "activeGtTargets": 1,
+          "tickDurationMs": 0.08831999999983964,
+          "heapUsedMB": 37.99159240722656
+        }
+      ]
+    }
+  ],
+  "scores": {
+    "baseline": {
+      "total": 60,
+      "stability": 30,
+      "quality": 10,
+      "perf": 20
+    },
+    "hz10_uncalibrated": {
+      "total": 70,
+      "stability": 30,
+      "quality": 20,
+      "perf": 20
+    },
+    "hz10_calibrated": {
+      "total": 80,
+      "stability": 30,
+      "quality": 30,
+      "perf": 20
+    }
+  },
+  "grades": {
+    "baseline": "B",
+    "hz10_uncalibrated": "B",
+    "hz10_calibrated": "A"
+  }
+}
