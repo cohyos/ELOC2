@@ -100,6 +100,21 @@ export function MapView() {
 
   /** Initialize Leaflet map */
   function initLeaflet(container: HTMLElement, tileUrl: string) {
+    // Fix tile seam lines — Leaflet tiles show 1px white gaps at fractional zoom
+    // levels. The gaps are caused by sub-pixel rounding in the tile positioning.
+    // Solution: slightly oversize each tile so edges overlap by ~1px.
+    if (!document.getElementById('leaflet-tile-fix')) {
+      const style = document.createElement('style');
+      style.id = 'leaflet-tile-fix';
+      style.textContent = `
+        .leaflet-tile {
+          width: 256.5px !important;
+          height: 256.5px !important;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
     const leafletMap = L.map(container, {
       center: [31.5, 34.8],
       zoom: 8,
