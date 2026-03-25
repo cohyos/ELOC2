@@ -129,6 +129,9 @@ importers:
       '@eloc2/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@eloc2/geometry':
+        specifier: workspace:*
+        version: link:../../packages/geometry
       '@eloc2/shared-utils':
         specifier: workspace:*
         version: link:../../packages/shared-utils
@@ -512,6 +515,9 @@ importers:
       '@eloc2/events':
         specifier: workspace:*
         version: link:../events
+      '@eloc2/geometry':
+        specifier: workspace:*
+        version: link:../geometry
     devDependencies:
       tsup:
         specifier: ^8.3.0

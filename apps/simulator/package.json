@@ -14,6 +14,7 @@
   "dependencies": {
     "@eloc2/domain": "workspace:*",
     "@eloc2/events": "workspace:*",
+    "@eloc2/geometry": "workspace:*",
     "@eloc2/shared-utils": "workspace:*",
     "@eloc2/terrain": "workspace:*"
   },

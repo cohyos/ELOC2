@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@eloc2/domain": "workspace:*",
-    "@eloc2/events": "workspace:*"
+    "@eloc2/events": "workspace:*",
+    "@eloc2/geometry": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.3.0",
