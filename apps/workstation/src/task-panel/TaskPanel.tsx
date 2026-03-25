@@ -156,9 +156,9 @@ export function TaskPanel() {
                 <span style={styles.label}>Track</span>
                 <span
                   style={{ ...styles.value, color: '#4a9eff', cursor: 'pointer' }}
-                  onClick={() => selectTrack(task.systemTrackId as string)}
+                  onClick={() => task.systemTrackId && selectTrack(task.systemTrackId as string)}
                 >
-                  {(task.systemTrackId as string).slice(0, 8)}
+                  {(task.systemTrackId as string)?.slice(0, 8) ?? '—'}
                 </span>
               </div>
               <div style={styles.taskRow}>
@@ -182,7 +182,7 @@ export function TaskPanel() {
                   <div style={{ fontSize: '10px', color: '#666', fontWeight: 600, marginBottom: '2px' }}>
                     SCORE
                   </div>
-                  <ScoreRow label="Threat" value={task.scoreBreakdown.threat ?? 0} color="#ff3333" />
+                  <ScoreRow label="Threat" value={task.scoreBreakdown.threatScore ?? (task.scoreBreakdown as any).threat ?? 0} color="#ff3333" />
                   <ScoreRow label="Uncertainty" value={task.scoreBreakdown.uncertaintyReduction ?? 0} color="#ffcc00" />
                   <ScoreRow label="Geometry" value={task.scoreBreakdown.geometryGain ?? 0} color="#00cc44" />
                 </div>
@@ -218,7 +218,7 @@ export function TaskPanel() {
             <div key={task.taskId as string} style={{ ...styles.taskCard, opacity: 0.6 }}>
               <div style={styles.taskRow}>
                 <span style={styles.label}>Track</span>
-                <span style={styles.value}>{(task.systemTrackId as string).slice(0, 8)}</span>
+                <span style={styles.value}>{(task.systemTrackId as string)?.slice(0, 8) ?? '—'}</span>
               </div>
               <div style={styles.taskRow}>
                 <span style={styles.label}>Status</span>

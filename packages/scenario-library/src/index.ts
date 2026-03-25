@@ -17,6 +17,7 @@ export type {
 export { composeScenario } from './types.js';
 
 // ── Scenarios ──────────────────────────────────────────────────────────────
+export { gpFighterSortie, gpFormationSortie, gpBallisticSortie, gpMixedSortie } from './scenarios/green-pine-sorties.js';
 export { greenPineDefense } from './scenarios/green-pine-defense.js';
 export { centralIsrael } from './scenarios/central-israel.js';
 export { fusionDemo } from './scenarios/fusion-demo.js';
@@ -52,6 +53,7 @@ export { threats, getThreatById } from './threats/index.js';
 
 // ── Lookup ─────────────────────────────────────────────────────────────────
 import type { ScenarioDefinition } from './types.js';
+import { gpFighterSortie, gpFormationSortie, gpBallisticSortie, gpMixedSortie } from './scenarios/green-pine-sorties.js';
 import { greenPineDefense } from './scenarios/green-pine-defense.js';
 import { centralIsrael } from './scenarios/central-israel.js';
 import { fusionDemo } from './scenarios/fusion-demo.js';
@@ -63,6 +65,12 @@ import { eoStaringDefense } from './scenarios/eo-staring-defense.js';
 import { simpleScenarios } from './scenarios/simple-scenarios.js';
 
 const allScenarios: readonly ScenarioDefinition[] = [
+  // ── Green Pine per-sortie scenarios (at head for quick access) ──
+  gpFighterSortie,
+  gpFormationSortie,
+  gpBallisticSortie,
+  gpMixedSortie,
+  // ── Full scenarios ──
   greenPineDefense,
   centralIsrael,
   fusionDemo,
