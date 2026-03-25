@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import type { SystemTrack, SystemTrackId } from '@eloc2/domain';
-import { useUiStore } from './ui-store';
 
 export interface RapSnapshot {
   tracks: SystemTrack[];
@@ -11,8 +10,8 @@ export interface RapSnapshot {
 }
 
 /** Max number of trail positions stored per track */
-const MAX_TRAIL = 5;         // breadcrumb dots (visual trail)
-const MAX_TRAJECTORY = 2000; // full trajectory path (toggled on from context menu)
+const MAX_TRAIL = 10;        // breadcrumb dots shown when trajectory is off
+const MAX_TRAJECTORY = 2000; // always accumulated — displayed when trajectory toggled on
 
 interface TrackState {
   tracks: SystemTrack[];
@@ -84,9 +83,10 @@ export const useTrackStore = create<TrackState>((set, get) => ({
     for (const t of tracks) {
       byId.set(t.systemTrackId, t);
     }
-    // Update trail history: append current position, keep last MAX_TRAIL
+    // Always accumulate full trajectory (up to MAX_TRAJECTORY).
+    // Display layer decides how much to show: full path when trajectory
+    // toggled on, last MAX_TRAIL breadcrumbs when off.
     const prevTrail = get().trailHistory;
-    const trajectoryIds = useUiStore.getState().trajectoryTrackIds;
     const newTrail = new Map<string, Array<{ lon: number; lat: number }>>();
     const activeIds = new Set<string>();
     for (const t of tracks) {
@@ -95,13 +95,10 @@ export const useTrackStore = create<TrackState>((set, get) => ({
       const trackId = t.systemTrackId as string;
       const prev = prevTrail.get(trackId) ?? [];
       const last = prev[prev.length - 1];
-      // When trajectory mode is ON: keep full path (up to MAX_TRAJECTORY)
-      // When OFF: keep only last MAX_TRAIL breadcrumbs
-      const maxPoints = trajectoryIds.has(trackId) ? MAX_TRAJECTORY : MAX_TRAIL;
       // Only append if position changed (>~10m threshold)
       if (!last || Math.abs(last.lat - t.state.lat) > 0.0001 || Math.abs(last.lon - t.state.lon) > 0.0001) {
         const updated = [...prev, { lon: t.state.lon, lat: t.state.lat }];
-        newTrail.set(trackId, updated.length > maxPoints ? updated.slice(-maxPoints) : updated);
+        newTrail.set(trackId, updated.length > MAX_TRAJECTORY ? updated.slice(-MAX_TRAJECTORY) : updated);
       } else {
         newTrail.set(trackId, prev);
       }
