@@ -159,13 +159,14 @@ export const fusionDemo: ScenarioDefinition = {
         { time: 540, position: { lat: 31.78, lon: 35.15, alt: 300 } },
       ],
     },
-    // Target 4a "Formation A": Close pair with 4b (~1.5 km separation).
-    // Tests split/merge ambiguity logic.
+    // Target 4a "Formation A": Close pair with 4b (~3 km separation).
+    // Tests split/merge ambiguity logic. Spaced above radar merge threshold
+    // so both EO and radar can discriminate the pair.
     {
       targetId: 'TGT-4a',
       name: 'Formation A',
       description:
-        'Formation pair member A, closely spaced with TGT-4b (~1.5 km). ' +
+        'Formation pair member A, closely spaced with TGT-4b (~3 km). ' +
         'Tests split/merge ambiguity resolution.',
       classification: 'uav',
       startTime: 90,
@@ -175,19 +176,19 @@ export const fusionDemo: ScenarioDefinition = {
         { time: 510, position: { lat: 31.9, lon: 34.9, alt: 5000 } },
       ],
     },
-    // Target 4b "Formation B": ~0.015° offset from 4a (~1.5 km).
+    // Target 4b "Formation B": ~0.027° offset from 4a (~3 km).
     {
       targetId: 'TGT-4b',
       name: 'Formation B',
       description:
-        'Formation pair member B, closely spaced with TGT-4a (~1.5 km). ' +
+        'Formation pair member B, closely spaced with TGT-4a (~3 km). ' +
         'Tests split/merge ambiguity resolution.',
       classification: 'uav',
       startTime: 90,
       waypoints: [
-        { time: 0, position: { lat: 32.315, lon: 34.9, alt: 5000 }, velocity: { vx: 0, vy: -80, vz: 0 } },
-        { time: 255, position: { lat: 32.115, lon: 34.9, alt: 5000 } },
-        { time: 510, position: { lat: 31.915, lon: 34.9, alt: 5000 } },
+        { time: 0, position: { lat: 32.327, lon: 34.9, alt: 5000 }, velocity: { vx: 0, vy: -80, vz: 0 } },
+        { time: 255, position: { lat: 32.127, lon: 34.9, alt: 5000 } },
+        { time: 510, position: { lat: 31.927, lon: 34.9, alt: 5000 } },
       ],
     },
     // Target 5 "Pop-up": Appears at T=300s. Tests late track initialization.
