@@ -346,36 +346,7 @@ export const greenPineDefense: ScenarioDefinition = {
   ],
 
   // ── Faults ─────────────────────────────────────────────────────────────
-  faults: [
-    // Brief radar maintenance during phase 2
-    {
-      type: 'sensor_outage',
-      sensorId: 'GREEN-PINE',
-      startTime: 450,
-      endTime: 470,
-    },
-    // EO investigator clock drift during BM engagement
-    {
-      type: 'clock_drift',
-      sensorId: 'EO-INV-2',
-      startTime: 650,
-      magnitude: 80, // 80ms
-    },
-    // Staring sensor outage during phase 4
-    {
-      type: 'sensor_outage',
-      sensorId: 'STARE-N-A',
-      startTime: 1500,
-      endTime: 1560,
-    },
-    // Azimuth bias on staring sensor during dense phase
-    {
-      type: 'azimuth_bias',
-      sensorId: 'STARE-SW-B',
-      startTime: 2000,
-      magnitude: 1.5,
-    },
-  ],
+  faults: [],
 
   // ── Operator Actions ───────────────────────────────────────────────────
   operatorActions: [
