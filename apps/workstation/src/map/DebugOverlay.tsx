@@ -260,11 +260,14 @@ export function DebugOverlay({
 
     if (type === 'track') {
       const hasTrajectory = useUiStore.getState().trajectoryTrackIds.has(id);
+      const isCued = useUiStore.getState().operatorPriorityTrackIds.has(id);
       actions.push(
         { label: 'Select', action: () => callbacksRef.current.onSelectTrack?.(id) },
         { label: hasTrajectory ? 'Hide Trajectory' : 'Show Trajectory', action: () => useUiStore.getState().toggleTrajectory(id) },
-        { label: 'Cue EO', action: () => { fetch('/api/operator/priority', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ trackId: id, priority: true }) }).catch(() => {}); } },
-        { label: 'Stop Cue EO', action: () => { fetch('/api/operator/priority', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ trackId: id, priority: false }) }).catch(() => {}); } },
+        { label: isCued ? '\u2713 Cue EO (active)' : 'Cue EO', action: () => {
+          const nowCued = useUiStore.getState().operatorPriorityTrackIds.has(id);
+          fetch('/api/operator/priority', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ trackId: id, priority: !nowCued }) }).catch(() => {});
+        } },
         { label: 'Set Priority', action: () => { fetch('/api/operator/set-priority', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ trackId: id, priority: 'high' }) }).catch(() => {}); } },
         { label: 'Open EO Video', action: () => useUiStore.getState().setEoVideoPopupTrackId(id) },
       );

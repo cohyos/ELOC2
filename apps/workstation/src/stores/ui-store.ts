@@ -123,6 +123,9 @@ interface UiState {
   connectedUsers: { total: number; instructors: number; operators: number };
   autoLoopEnabled: boolean;
 
+  // Operator EO priority tracks (synced from backend via WS)
+  operatorPriorityTrackIds: Set<string>;
+
   // Investigation mode
   investigationMode: InvestigationMode;
 
@@ -193,6 +196,7 @@ interface UiState {
   // Connected users actions
   setConnectedUsers: (users: { total: number; instructors: number; operators: number }) => void;
   setAutoLoopEnabled: (enabled: boolean) => void;
+  setOperatorPriorityTrackIds: (ids: string[]) => void;
 
   // Investigation mode actions
   setInvestigationMode: (mode: InvestigationMode) => void;
@@ -280,6 +284,7 @@ export const useUiStore = create<UiState>((set) => ({
 
   connectedUsers: { total: 0, instructors: 0, operators: 0 },
   autoLoopEnabled: false,
+  operatorPriorityTrackIds: new Set<string>(),
 
   investigationMode: 'standard',
 
@@ -396,6 +401,7 @@ export const useUiStore = create<UiState>((set) => ({
 
   setConnectedUsers: (users) => set({ connectedUsers: users }),
   setAutoLoopEnabled: (enabled) => set({ autoLoopEnabled: enabled }),
+  setOperatorPriorityTrackIds: (ids) => set({ operatorPriorityTrackIds: new Set(ids) }),
 
   setInvestigationMode: (mode) => set({ investigationMode: mode }),
 
