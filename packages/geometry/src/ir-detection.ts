@@ -172,12 +172,78 @@ export function computeExtinctionCoeff(atm: AtmosphereCondition): number {
 }
 
 /**
- * Compute atmospheric transmission at a given range.
+ * Compute atmospheric transmission at a given range (horizontal path).
  * Beer-Lambert: T = exp(-σ × R_km)
  */
 export function atmosphericTransmission(rangeM: number, extinctionCoeffKm: number): number {
   const rangeKm = rangeM / 1000;
   return Math.exp(-extinctionCoeffKm * rangeKm);
+}
+
+/** Atmospheric scale height in meters (troposphere). */
+const SCALE_HEIGHT_M = 8500;
+
+/**
+ * Compute atmospheric transmission along a slant path from sensor to target,
+ * accounting for exponential decrease of air density with altitude.
+ *
+ * The extinction coefficient at altitude z is:
+ *   σ(z) = σ₀ × exp(-z / H)
+ * where σ₀ is the sea-level extinction and H is the scale height (~8.5 km).
+ *
+ * For a slant path from altitude z₁ (sensor) to z₂ (target) over horizontal
+ * range R, the optical depth is the integral of σ(z) along the path:
+ *
+ *   τ = ∫₀ˢ σ(z(s)) ds
+ *
+ * where s is the path parameter. For a straight-line path:
+ *   z(s) = z₁ + (z₂ - z₁) × s / S, where S = slant range
+ *
+ * Analytical solution (for exponential atmosphere):
+ *   τ = σ₀ × H × (exp(-z₁/H) - exp(-z₂/H)) / sin(θ)
+ * where θ is the elevation angle.
+ *
+ * For near-horizontal paths (θ → 0), falls back to horizontal model.
+ *
+ * @param slantRangeM  Total slant range from sensor to target (meters)
+ * @param sensorAltM   Sensor altitude ASL (meters)
+ * @param targetAltM   Target altitude ASL (meters)
+ * @param sigma0Km     Sea-level extinction coefficient (1/km)
+ */
+export function slantPathTransmission(
+  slantRangeM: number,
+  sensorAltM: number,
+  targetAltM: number,
+  sigma0Km: number,
+): number {
+  const sigma0M = sigma0Km / 1000; // convert to 1/m
+
+  const dAlt = targetAltM - sensorAltM;
+  const absDAlt = Math.abs(dAlt);
+
+  // Near-horizontal path (altitude difference < 100m): use horizontal model
+  if (absDAlt < 100) {
+    const avgAlt = (sensorAltM + targetAltM) / 2;
+    const sigmaAvg = sigma0M * Math.exp(-avgAlt / SCALE_HEIGHT_M);
+    return Math.exp(-sigmaAvg * slantRangeM);
+  }
+
+  // Slant path: analytical integral of exponential atmosphere
+  // τ = σ₀ × H × |exp(-z₁/H) - exp(-z₂/H)| × (slantRange / |dAlt|)
+  //
+  // The factor (slantRange / |dAlt|) = 1/sin(elevation) converts the
+  // vertical integral to the actual slant path.
+  const expSensor = Math.exp(-sensorAltM / SCALE_HEIGHT_M);
+  const expTarget = Math.exp(-targetAltM / SCALE_HEIGHT_M);
+
+  // Vertical optical depth between the two altitudes
+  const verticalOpticalDepth = sigma0M * SCALE_HEIGHT_M * Math.abs(expSensor - expTarget);
+
+  // Scale to slant path: slantRange / dAlt = 1/sin(elev)
+  const slantFactor = slantRangeM / absDAlt;
+  const totalOpticalDepth = verticalOpticalDepth * slantFactor;
+
+  return Math.exp(-totalOpticalDepth);
 }
 
 // ─── Standard Atmosphere Profiles ────────────────────────────────────────────
@@ -301,8 +367,12 @@ export function computeIrDetectionRange(
   targetClassification: string,
   sensorSpec: EoSensorSpec,
   atmosphere: AtmosphereCondition = GOOD_WEATHER_ATMOSPHERE,
+  /** Target altitude ASL in meters — enables path-integral atmosphere model.
+   *  High-altitude targets (BMs at 50-100 km) benefit from reduced atmospheric path. */
+  targetAltitudeM: number = 0,
 ): IrDetectionResult {
   const extinctionCoeff = computeExtinctionCoeff(atmosphere);
+  const sensorAltM = atmosphere.altitudeM;
   const ifovMrad = computeIfovMrad(sensorSpec);
 
   // Target critical dimension for Johnson's criteria
@@ -392,7 +462,10 @@ export function computeIrDetectionRange(
   let lo = 100, hi = 500_000; // 100m to 500km (BMs detectable at >150km)
   for (let i = 0; i < 50; i++) {
     const mid = (lo + hi) / 2;
-    const transmission = atmosphericTransmission(mid, extinctionCoeff);
+    // Use slant-path model for elevated targets (BMs at 50+ km altitude)
+    const transmission = targetAltitudeM > 500
+      ? slantPathTransmission(mid, sensorAltM, targetAltitudeM, extinctionCoeff)
+      : atmosphericTransmission(mid, extinctionCoeff);
     // Point-source signal power at detector: I × T × A_aperture × η / R²
     const signalPower = (targetIrWsr * transmission * apertureAreaM2 * opticalThroughput) / (mid * mid);
     const snr = (signalPower / Math.max(nep, 1e-30)) * integrationGain;
@@ -435,7 +508,9 @@ export function computeIrDetectionRange(
     ? Math.min(snrRangeM * 0.25, johnsonIdentificationRangeM) // staring: very limited ID capability
     : Math.min(snrRangeM * 0.35, johnsonIdentificationRangeM);
 
-  const transmissionAtDetection = atmosphericTransmission(detectionRangeM, extinctionCoeff);
+  const transmissionAtDetection = targetAltitudeM > 500
+    ? slantPathTransmission(detectionRangeM, sensorAltM, targetAltitudeM, extinctionCoeff)
+    : atmosphericTransmission(detectionRangeM, extinctionCoeff);
   const signalAtDetection = (targetIrWsr * transmissionAtDetection * apertureAreaM2 * opticalThroughput) / (detectionRangeM ** 2);
   const snrAtDetection = (signalAtDetection / Math.max(nep, 1e-30)) * integrationGain;
 
@@ -459,8 +534,9 @@ export function checkIrDetection(
   targetClassification: string,
   sensorSpec: EoSensorSpec,
   atmosphere: AtmosphereCondition = GOOD_WEATHER_ATMOSPHERE,
+  targetAltitudeM: number = 0,
 ): { tier: 'detection' | 'recognition' | 'identification' | null; snr: number } {
-  const result = computeIrDetectionRange(targetIrWsr, targetClassification, sensorSpec, atmosphere);
+  const result = computeIrDetectionRange(targetIrWsr, targetClassification, sensorSpec, atmosphere, targetAltitudeM);
 
   if (rangeM <= result.identificationRangeM) {
     return { tier: 'identification', snr: result.snrAtDetection * (result.detectionRangeM / rangeM) ** 2 };

@@ -109,6 +109,33 @@ describe('IR Detection Range Calculator', () => {
     });
   });
 
+  describe('path-integral atmosphere (high-altitude targets)', () => {
+    const staringSpec = STARING_SENSOR_PROFILE.wideSpec;
+
+    it('BM at 50 km altitude detected at 150+ km (reduced atmospheric path)', () => {
+      const seaLevel = computeIrDetectionRange(65_000, 'missile', staringSpec, GOOD_WEATHER_ATMOSPHERE, 0);
+      const highAlt = computeIrDetectionRange(65_000, 'missile', staringSpec, GOOD_WEATHER_ATMOSPHERE, 50_000);
+      expect(highAlt.detectionRangeM).toBeGreaterThan(150_000); // 150+ km
+      expect(highAlt.detectionRangeM).toBeGreaterThan(seaLevel.detectionRangeM * 1.3); // significantly longer
+      console.log(`BM: sea-level=${(seaLevel.detectionRangeM/1000).toFixed(1)}km vs 50km-alt=${(highAlt.detectionRangeM/1000).toFixed(1)}km (${((highAlt.detectionRangeM/seaLevel.detectionRangeM)*100).toFixed(0)}%)`);
+    });
+
+    it('fighter at 10 km altitude has longer range than at sea level', () => {
+      const low = computeIrDetectionRange(15_000, 'fighter_aircraft', staringSpec, GOOD_WEATHER_ATMOSPHERE, 0);
+      const high = computeIrDetectionRange(15_000, 'fighter_aircraft', staringSpec, GOOD_WEATHER_ATMOSPHERE, 10_000);
+      expect(high.detectionRangeM).toBeGreaterThan(low.detectionRangeM);
+      console.log(`Fighter: sea-level=${(low.detectionRangeM/1000).toFixed(1)}km vs 10km-alt=${(high.detectionRangeM/1000).toFixed(1)}km`);
+    });
+
+    it('low-altitude drone (300m) has minimal benefit from path integral', () => {
+      const ground = computeIrDetectionRange(200, 'uav', staringSpec, GOOD_WEATHER_ATMOSPHERE, 0);
+      const low = computeIrDetectionRange(200, 'uav', staringSpec, GOOD_WEATHER_ATMOSPHERE, 300);
+      // Less than 5% improvement at 300m altitude
+      expect(low.detectionRangeM).toBeLessThan(ground.detectionRangeM * 1.1);
+      console.log(`Drone: ground=${(ground.detectionRangeM/1000).toFixed(1)}km vs 300m-alt=${(low.detectionRangeM/1000).toFixed(1)}km`);
+    });
+  });
+
   describe('weather effects', () => {
     it('rain reduces detection range significantly', () => {
       const clear = computeIrDetectionRange(15_000, 'fighter_aircraft', STARING_SENSOR_PROFILE.wideSpec, GOOD_WEATHER_ATMOSPHERE);
