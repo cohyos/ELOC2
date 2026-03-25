@@ -268,6 +268,9 @@ export class ReplayController {
     if (typeof data.autoLoopEnabled === 'boolean') {
       useUiStore.getState().setAutoLoopEnabled(data.autoLoopEnabled);
     }
+    if (data.operatorPriorityTrackIds && Array.isArray(data.operatorPriorityTrackIds)) {
+      useUiStore.getState().setOperatorPriorityTrackIds(data.operatorPriorityTrackIds);
+    }
     // Update replay time from simulation
     if (typeof data.simTimeSec === 'number') {
       useUiStore.getState().setReplayTime(data.simTimeSec);

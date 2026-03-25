@@ -965,6 +965,7 @@ export class LiveEngine {
       ballisticEstimates: this.cachedBallisticEstimates,
       connectedUsers: this.getConnectedUsers(),
       autoLoopEnabled: this.autoLoopEnabled,
+      operatorPriorityTrackIds: [...this.operatorPriorityTracks],
       pipelineHealth: this.pipelineHealth,
     };
   }
@@ -5991,6 +5992,8 @@ export class LiveEngine {
       // Connected user counts
       connectedUsers: this.getConnectedUsers(),
       autoLoopEnabled: this.autoLoopEnabled,
+      // Operator EO priority tracks (for context menu toggle)
+      operatorPriorityTrackIds: [...this.operatorPriorityTracks],
       // Pipeline health monitoring
       pipelineHealth: {
         healthScore: this.pipelineHealth.healthScore,
