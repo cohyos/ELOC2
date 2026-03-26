@@ -599,8 +599,8 @@ export function App() {
       color: colors.text,
       overflow: 'hidden',
       gridTemplateRows: showInjection
-        ? (timelinePanelOpen ? `40px auto 1fr 4px ${timelinePanelHeight}px` : '40px auto 1fr 32px')
-        : (timelinePanelOpen ? `40px 1fr 4px ${timelinePanelHeight}px` : '40px 1fr 32px'),
+        ? (timelinePanelOpen ? `46px auto 1fr 4px ${timelinePanelHeight}px` : '46px auto 1fr 32px')
+        : (timelinePanelOpen ? `46px 1fr 4px ${timelinePanelHeight}px` : '46px 1fr 32px'),
       gridTemplateColumns: showDetail ? `1fr 4px ${rightPanelWidth}px` : '1fr',
       gridTemplateAreas: showDetail
         ? (showInjection

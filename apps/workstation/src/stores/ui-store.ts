@@ -233,7 +233,7 @@ export interface InjectionLogEntry {
 
 let eventCounter = 0;
 
-const PANEL_DEFAULTS = { rightPanelWidth: 380, timelinePanelHeight: 150 };
+const PANEL_DEFAULTS = { rightPanelWidth: 420, timelinePanelHeight: 170 };
 const LS_RIGHT_WIDTH_KEY = 'eloc2_rightPanelWidth';
 const LS_TIMELINE_HEIGHT_KEY = 'eloc2_timelinePanelHeight';
 
