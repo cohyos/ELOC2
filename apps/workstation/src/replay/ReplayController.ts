@@ -26,6 +26,16 @@ export class ReplayController {
   /** Set when the server sends running=false; suppresses stale buffered messages */
   private _pauseReceived = false;
 
+  /** Allow App to set pause guard before the API request completes.
+   *  This prevents stale WS messages from flipping UI back to "running". */
+  setPauseGuard(on: boolean) {
+    this._pauseReceived = on;
+    if (on && this.rafId) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+  }
+
   connect(role?: 'instructor' | 'operator') {
     if (this.ws) return;
     if (role) this._lastRole = role;
@@ -112,30 +122,46 @@ export class ReplayController {
       return;
     }
     if (data.type === 'rap.snapshot' || data.type === 'rap.update') {
-      // After receiving a pause signal, suppress stale buffered messages
-      // until the server genuinely restarts (sends running=true).
-      if (this._pauseReceived && data.running === true) {
-        // Server restarted — clear the guard
-        this._pauseReceived = false;
-      } else if (this._pauseReceived && data.running !== false) {
-        // Stale buffered message from before pause — discard
-        return;
+      // ── Pause guard ──────────────────────────────────────────────────
+      // After user clicks pause, suppress ALL WS messages until the server
+      // confirms with running=false. This prevents stale buffered messages
+      // from flipping the UI back to "running" before the server processes
+      // the pause request.
+      if (this._pauseReceived) {
+        if (data.running === false) {
+          // Server confirmed pause — accept this message
+          this._pauseReceived = false;
+        } else if (data.running === true) {
+          // Stale message from before pause — discard entirely
+          return;
+        } else {
+          // Message without running flag — discard during pause guard
+          return;
+        }
+      }
+
+      // ── Time monotonicity guard ──────────────────────────────────────
+      // Prevent display from jumping backward in time. The 2 Hz WS throttle
+      // can cause slight time reordering — only accept forward progress.
+      if (typeof data.simTimeSec === 'number' && this.pendingData) {
+        const prevTime = this.pendingData.simTimeSec as number | undefined;
+        if (prevTime !== undefined && data.simTimeSec < prevTime - 0.5) {
+          return; // reject backward time jump (>0.5s tolerance)
+        }
       }
 
       // Merge into pending buffer — later messages overwrite earlier ones
       if (!this.pendingData) {
         this.pendingData = {};
       }
-      // Overwrite each field with latest data
       for (const key of Object.keys(data)) {
         if (key !== 'type') {
           this.pendingData[key] = data[key];
         }
       }
-      // Preserve snapshot type so first-connect snapshot is applied correctly
       this.pendingData._type = data.type;
 
-      // Pause signal: flush immediately to prevent buffered messages from advancing UI
+      // Pause signal: flush immediately
       if (data.running === false) {
         this._pauseReceived = true;
         if (this.rafId) {
@@ -146,7 +172,7 @@ export class ReplayController {
         return;
       }
 
-      // Schedule flush on next animation frame
+      // Schedule flush on next animation frame (coalesces rapid messages)
       if (!this.rafId) {
         this.rafId = requestAnimationFrame(() => {
           this.flushPendingData();
