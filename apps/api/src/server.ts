@@ -26,6 +26,7 @@ const AUTH_ENABLED = process.env.AUTH_ENABLED === 'true';
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 const server = Fastify({
+  trustProxy: true,
   logger: {
     level: process.env.LOG_LEVEL || 'info',
     // Redact sensitive fields from logs

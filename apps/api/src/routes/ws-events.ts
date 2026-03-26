@@ -3,8 +3,45 @@ import { engine } from '../simulation/live-engine.js';
 
 const AUTH_ENABLED = process.env.AUTH_ENABLED === 'true';
 
+/**
+ * Extract session-id from raw cookie header string.
+ */
+function extractSessionIdFromCookie(cookieHeader: string | undefined): string | null {
+  if (!cookieHeader) return null;
+  const match = cookieHeader.match(/session-id=([^;]+)/);
+  return match ? match[1] : null;
+}
+
 export async function wsEventsRoute(app: FastifyInstance) {
-  app.get('/ws/events', { websocket: true }, (socket, request) => {
+  app.get('/ws/events', { websocket: true }, async (socket, request) => {
+    // When auth is enabled, validate session cookie before allowing WS connection
+    if (AUTH_ENABLED) {
+      const sessionId = extractSessionIdFromCookie(request.headers.cookie);
+      if (!sessionId) {
+        socket.close(1008, 'Unauthorized');
+        return;
+      }
+      try {
+        const { getPool, findSession, findById } = await import('@eloc2/database');
+        const pool = getPool();
+        const session = await findSession(pool, sessionId);
+        if (!session) {
+          socket.close(1008, 'Unauthorized');
+          return;
+        }
+        const user = await findById(pool, session.user_id);
+        if (!user || !user.enabled) {
+          socket.close(1008, 'Unauthorized');
+          return;
+        }
+        // Attach session info for role detection below
+        (request as any).session = { user: { role: user.role } };
+      } catch {
+        socket.close(1008, 'Unauthorized');
+        return;
+      }
+    }
+
     // Determine user role from session (if auth enabled)
     let role: 'instructor' | 'operator' | 'anonymous' = 'anonymous';
     let downgraded = false;

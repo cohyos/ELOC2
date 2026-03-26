@@ -39,8 +39,8 @@ import { LoginPage } from './auth/LoginPage';
 import { ReportModal } from './reports/ReportModal';
 
 // Panel size defaults (must match ui-store defaults)
-const DEFAULT_RIGHT_PANEL_WIDTH = 380;
-const DEFAULT_TIMELINE_HEIGHT = 150;
+const DEFAULT_RIGHT_PANEL_WIDTH = 420;
+const DEFAULT_TIMELINE_HEIGHT = 170;
 
 // ---------------------------------------------------------------------------
 // Colors
@@ -107,17 +107,17 @@ function DefaultPanel() {
   const dominantMode = Object.entries(modeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'N/A';
   const modeColor = dominantMode === 'centralized' ? '#00cc44' : dominantMode === 'conservative' ? '#ffcc00' : '#ff8800';
 
-  const sectionTitle: React.CSSProperties = { fontSize: '11px', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', borderBottom: '1px solid #333', paddingBottom: '3px' };
-  const row: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', padding: '2px 0' };
+  const sectionTitle: React.CSSProperties = { fontSize: '13px', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', borderBottom: '1px solid #333', paddingBottom: '3px' };
+  const row: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', padding: '3px 0' };
 
   return (
     <div style={{ padding: '12px', color: '#e0e0e0', fontSize: '13px' }}>
       <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#fff', margin: '0 0 16px' }}>Overview</h3>
       <div style={{ marginBottom: '16px' }}>
         <div style={sectionTitle}>Tracks</div>
-        <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Total</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{trackCount}</span></div>
-        <div style={row}><span style={{ color: '#00cc44', fontSize: '12px' }}>Confirmed</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#00cc44' }}>{confirmedCount}</span></div>
-        <div style={row}><span style={{ color: '#ffcc00', fontSize: '12px' }}>Tentative</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#ffcc00' }}>{tentativeCount}</span></div>
+        <div style={row}><span style={{ color: '#888', fontSize: '13px' }}>Total</span><span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{trackCount}</span></div>
+        <div style={row}><span style={{ color: '#00cc44', fontSize: '13px' }}>Confirmed</span><span style={{ fontFamily: 'monospace', fontSize: '13px', color: '#00cc44' }}>{confirmedCount}</span></div>
+        <div style={row}><span style={{ color: '#ffcc00', fontSize: '13px' }}>Tentative</span><span style={{ fontFamily: 'monospace', fontSize: '13px', color: '#ffcc00' }}>{tentativeCount}</span></div>
         {tracks.length > 0 && tracks.length <= 20 && (
           <div style={{ marginTop: '6px', maxHeight: '120px', overflowY: 'auto' }}>
             {tracks.filter(t => t.status !== 'dropped').map(t => {
@@ -142,23 +142,23 @@ function DefaultPanel() {
       </div>
       <div style={{ marginBottom: '16px' }}>
         <div style={sectionTitle}>Sensors</div>
-        <div style={row}><span style={{ color: '#4488ff', fontSize: '12px' }}>Radar</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{radarCount}</span></div>
-        <div style={row}><span style={{ color: '#ff8800', fontSize: '12px' }}>EO</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{eoCount}</span></div>
-        <div style={row}><span style={{ color: onlineCount === sensors.length ? '#00cc44' : '#ffcc00', fontSize: '12px' }}>Online</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{onlineCount}/{sensors.length}</span></div>
-        {offlineCount > 0 && <div style={row}><span style={{ color: '#ff3333', fontSize: '12px' }}>Offline</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#ff3333' }}>{offlineCount}</span></div>}
+        <div style={row}><span style={{ color: '#4488ff', fontSize: '13px' }}>Radar</span><span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{radarCount}</span></div>
+        <div style={row}><span style={{ color: '#ff8800', fontSize: '13px' }}>EO</span><span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{eoCount}</span></div>
+        <div style={row}><span style={{ color: onlineCount === sensors.length ? '#00cc44' : '#ffcc00', fontSize: '13px' }}>Online</span><span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{onlineCount}/{sensors.length}</span></div>
+        {offlineCount > 0 && <div style={row}><span style={{ color: '#ff3333', fontSize: '13px' }}>Offline</span><span style={{ fontFamily: 'monospace', fontSize: '13px', color: '#ff3333' }}>{offlineCount}</span></div>}
       </div>
       <div style={{ marginBottom: '16px' }}>
         <div style={sectionTitle}>System Health</div>
-        <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Fusion Mode</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: modeColor }}>{dominantMode}</span></div>
-        <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Registration</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: degradedCount === 0 ? '#00cc44' : '#ffcc00' }}>{degradedCount === 0 ? 'Healthy' : `${degradedCount} degraded`}</span></div>
-        {unsafeCount > 0 && <div style={row}><span style={{ color: '#ff3333', fontSize: '12px' }}>Fusion Unsafe</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#ff3333' }}>{unsafeCount} sensors</span></div>}
+        <div style={row}><span style={{ color: '#888', fontSize: '13px' }}>Fusion Mode</span><span style={{ fontFamily: 'monospace', fontSize: '13px', color: modeColor }}>{dominantMode}</span></div>
+        <div style={row}><span style={{ color: '#888', fontSize: '13px' }}>Registration</span><span style={{ fontFamily: 'monospace', fontSize: '13px', color: degradedCount === 0 ? '#00cc44' : '#ffcc00' }}>{degradedCount === 0 ? 'Healthy' : `${degradedCount} degraded`}</span></div>
+        {unsafeCount > 0 && <div style={row}><span style={{ color: '#ff3333', fontSize: '13px' }}>Fusion Unsafe</span><span style={{ fontFamily: 'monospace', fontSize: '13px', color: '#ff3333' }}>{unsafeCount} sensors</span></div>}
         {(() => {
           const avgColor = latency.avgMs < 50 ? '#00cc44' : latency.avgMs < 100 ? '#ffcc00' : '#ff3333';
           const maxColor = latency.maxMs < 50 ? '#00cc44' : latency.maxMs < 100 ? '#ffcc00' : '#ff3333';
           return (
             <div style={row}>
-              <span style={{ color: '#888', fontSize: '12px' }}>Latency</span>
-              <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>
+              <span style={{ color: '#888', fontSize: '13px' }}>Latency</span>
+              <span style={{ fontFamily: 'monospace', fontSize: '13px' }}>
                 <span style={{ color: avgColor }}>{latency.avgMs}ms</span>
                 <span style={{ color: '#555' }}> avg / </span>
                 <span style={{ color: maxColor }}>{latency.maxMs}ms</span>
@@ -170,30 +170,30 @@ function DefaultPanel() {
       </div>
       <div style={{ marginBottom: '16px' }}>
         <div style={sectionTitle}>Connected Users</div>
-        <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Online</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: connectedUsers.total > 0 ? '#00cc44' : '#888' }}>{connectedUsers.total}</span></div>
-        {connectedUsers.instructors > 0 && <div style={row}><span style={{ color: '#4a9eff', fontSize: '12px' }}>Instructors</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{connectedUsers.instructors}</span></div>}
-        {connectedUsers.operators > 0 && <div style={row}><span style={{ color: '#ff8800', fontSize: '12px' }}>Operators</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{connectedUsers.operators}</span></div>}
+        <div style={row}><span style={{ color: '#888', fontSize: '13px' }}>Online</span><span style={{ fontFamily: 'monospace', fontSize: '13px', color: connectedUsers.total > 0 ? '#00cc44' : '#888' }}>{connectedUsers.total}</span></div>
+        {connectedUsers.instructors > 0 && <div style={row}><span style={{ color: '#4a9eff', fontSize: '13px' }}>Instructors</span><span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{connectedUsers.instructors}</span></div>}
+        {connectedUsers.operators > 0 && <div style={row}><span style={{ color: '#ff8800', fontSize: '13px' }}>Operators</span><span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{connectedUsers.operators}</span></div>}
         {connectedUsers.total - connectedUsers.instructors - connectedUsers.operators > 0 && (
-          <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Anonymous</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{connectedUsers.total - connectedUsers.instructors - connectedUsers.operators}</span></div>
+          <div style={row}><span style={{ color: '#888', fontSize: '13px' }}>Anonymous</span><span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{connectedUsers.total - connectedUsers.instructors - connectedUsers.operators}</span></div>
         )}
-        {autoLoopEnabled && <div style={row}><span style={{ color: '#ffcc00', fontSize: '12px' }}>Auto-Loop</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#ffcc00' }}>Active</span></div>}
+        {autoLoopEnabled && <div style={row}><span style={{ color: '#ffcc00', fontSize: '13px' }}>Auto-Loop</span><span style={{ fontFamily: 'monospace', fontSize: '13px', color: '#ffcc00' }}>Active</span></div>}
       </div>
       <div style={{ marginBottom: '16px' }}>
         <div style={sectionTitle}>EO Tasking</div>
-        <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Active Tasks</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{activeTasks}</span></div>
+        <div style={row}><span style={{ color: '#888', fontSize: '13px' }}>Active Tasks</span><span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{activeTasks}</span></div>
         <button onClick={() => selectView('tasks')} style={{ marginTop: '6px', background: '#333', color: '#aaa', border: 'none', padding: '4px 12px', borderRadius: '3px', cursor: 'pointer', fontSize: '11px', width: '100%' }}>View Tasks</button>
       </div>
       {eoModuleStatus && (
         <div style={{ marginBottom: '16px' }}>
           <div style={sectionTitle}>EO Module (REQ-16)</div>
-          <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Mode</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: eoModuleStatus.mode === 'tracking' ? '#00cc44' : eoModuleStatus.mode === 'searching' ? '#ffcc00' : eoModuleStatus.mode === 'mixed' ? '#4a9eff' : '#888' }}>{eoModuleStatus.mode}</span></div>
-          <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Active Pipelines</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{eoModuleStatus.activePipelines.length}</span></div>
-          <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Enriched Tracks</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{eoModuleStatus.enrichedTrackCount}</span></div>
-          <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Ticks</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{eoModuleStatus.tickCount}</span></div>
+          <div style={row}><span style={{ color: '#888', fontSize: '13px' }}>Mode</span><span style={{ fontFamily: 'monospace', fontSize: '13px', color: eoModuleStatus.mode === 'tracking' ? '#00cc44' : eoModuleStatus.mode === 'searching' ? '#ffcc00' : eoModuleStatus.mode === 'mixed' ? '#4a9eff' : '#888' }}>{eoModuleStatus.mode}</span></div>
+          <div style={row}><span style={{ color: '#888', fontSize: '13px' }}>Active Pipelines</span><span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{eoModuleStatus.activePipelines.length}</span></div>
+          <div style={row}><span style={{ color: '#888', fontSize: '13px' }}>Enriched Tracks</span><span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{eoModuleStatus.enrichedTrackCount}</span></div>
+          <div style={row}><span style={{ color: '#888', fontSize: '13px' }}>Ticks</span><span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{eoModuleStatus.tickCount}</span></div>
           {eoModuleStatus.activePipelines.length > 0 && (
             <>
-              <div style={row}><span style={{ color: '#ff8800', fontSize: '12px' }}>Sub-pixel</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{eoModuleStatus.activePipelines.filter(p => p.pipeline === 'sub-pixel').length}</span></div>
-              <div style={row}><span style={{ color: '#aa44ff', fontSize: '12px' }}>Image</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{eoModuleStatus.activePipelines.filter(p => p.pipeline === 'image').length}</span></div>
+              <div style={row}><span style={{ color: '#ff8800', fontSize: '13px' }}>Sub-pixel</span><span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{eoModuleStatus.activePipelines.filter(p => p.pipeline === 'sub-pixel').length}</span></div>
+              <div style={row}><span style={{ color: '#aa44ff', fontSize: '13px' }}>Image</span><span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{eoModuleStatus.activePipelines.filter(p => p.pipeline === 'image').length}</span></div>
             </>
           )}
         </div>
@@ -208,12 +208,12 @@ function DefaultPanel() {
           const uptimeM = Math.floor((systemLoad.uptime % 3600) / 60);
           return (
             <>
-              <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Tick</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: tickColor }}>{systemLoad.tickMs}ms</span></div>
-              <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Obs/sec</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{systemLoad.observationsPerSec}</span></div>
-              <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Tracks</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{systemLoad.tracksActive} active</span></div>
-              <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>WS msg/sec</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{systemLoad.wsMessagesPerSec}</span></div>
-              <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Memory</span><span style={{ fontFamily: 'monospace', fontSize: '12px', color: memColor }}>{systemLoad.memoryMB} MB</span></div>
-              <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Uptime</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{uptimeH}h {uptimeM}m</span></div>
+              <div style={row}><span style={{ color: '#888', fontSize: '13px' }}>Tick</span><span style={{ fontFamily: 'monospace', fontSize: '13px', color: tickColor }}>{systemLoad.tickMs}ms</span></div>
+              <div style={row}><span style={{ color: '#888', fontSize: '13px' }}>Obs/sec</span><span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{systemLoad.observationsPerSec}</span></div>
+              <div style={row}><span style={{ color: '#888', fontSize: '13px' }}>Tracks</span><span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{systemLoad.tracksActive} active</span></div>
+              <div style={row}><span style={{ color: '#888', fontSize: '13px' }}>WS msg/sec</span><span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{systemLoad.wsMessagesPerSec}</span></div>
+              <div style={row}><span style={{ color: '#888', fontSize: '13px' }}>Memory</span><span style={{ fontFamily: 'monospace', fontSize: '13px', color: memColor }}>{systemLoad.memoryMB} MB</span></div>
+              <div style={row}><span style={{ color: '#888', fontSize: '13px' }}>Uptime</span><span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{uptimeH}h {uptimeM}m</span></div>
             </>
           );
         })()}
@@ -221,9 +221,9 @@ function DefaultPanel() {
       <FusionConfigPanel />
       <div style={{ marginBottom: '16px' }}>
         <div style={sectionTitle}>Build Info</div>
-        <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Git SHA</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{__APP_REVISION__}</span></div>
-        <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Branch</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{__BUILD_BRANCH__}</span></div>
-        <div style={row}><span style={{ color: '#888', fontSize: '12px' }}>Built</span><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{__BUILD_TIMESTAMP__}</span></div>
+        <div style={row}><span style={{ color: '#888', fontSize: '13px' }}>Git SHA</span><span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{__APP_REVISION__}</span></div>
+        <div style={row}><span style={{ color: '#888', fontSize: '13px' }}>Branch</span><span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{__BUILD_BRANCH__}</span></div>
+        <div style={row}><span style={{ color: '#888', fontSize: '13px' }}>Built</span><span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{__BUILD_TIMESTAMP__}</span></div>
       </div>
     </div>
   );
@@ -307,10 +307,11 @@ const btnBase = (isMobile: boolean): React.CSSProperties => ({
   background: '#333',
   color: '#aaa',
   border: 'none',
-  padding: isMobile ? '6px 10px' : '2px 8px',
-  borderRadius: '3px',
+  padding: isMobile ? '6px 10px' : '5px 14px',
+  borderRadius: '4px',
   cursor: 'pointer',
-  fontSize: isMobile ? '12px' : '11px',
+  fontSize: isMobile ? '12px' : '12px',
+  minWidth: '40px',
   touchAction: 'manipulation',
   WebkitTapHighlightColor: 'transparent',
 });
@@ -530,9 +531,12 @@ export function App() {
     return () => window.removeEventListener('keydown', handler);
   }, [handleStartPause, simElapsed, toggleInjectionMode, setDemoActive]);
 
-  // Periodic refresh (every 10s)
+  // Periodic refresh fallback (only when WS is disconnected)
   useEffect(() => {
-    const interval = setInterval(() => { fetchRap(); fetchSensors(); }, 5000);
+    const interval = setInterval(() => {
+      if (useUiStore.getState().wsConnected) return;
+      fetchRap(); fetchSensors();
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -595,8 +599,8 @@ export function App() {
       color: colors.text,
       overflow: 'hidden',
       gridTemplateRows: showInjection
-        ? (timelinePanelOpen ? `40px auto 1fr 4px ${timelinePanelHeight}px` : '40px auto 1fr 32px')
-        : (timelinePanelOpen ? `40px 1fr 4px ${timelinePanelHeight}px` : '40px 1fr 32px'),
+        ? (timelinePanelOpen ? `46px auto 1fr 4px ${timelinePanelHeight}px` : '46px auto 1fr 32px')
+        : (timelinePanelOpen ? `46px 1fr 4px ${timelinePanelHeight}px` : '46px 1fr 32px'),
       gridTemplateColumns: showDetail ? `1fr 4px ${rightPanelWidth}px` : '1fr',
       gridTemplateAreas: showDetail
         ? (showInjection
@@ -619,7 +623,7 @@ export function App() {
 
         {/* ── Left: Logo, version, revision ── */}
         <span style={{ fontSize: '15px', fontWeight: 700, color: '#fff', letterSpacing: '1px' }}>ELOC2</span>
-        <span style={{ color: colors.textDim, fontSize: '12px' }}>EO C2 Air Defense Demonstrator</span>
+        <span style={{ color: colors.textDim, fontSize: '13px' }}>EO C2 Air Defense Demonstrator</span>
         <span style={{ color: colors.accent, fontSize: '10px', fontFamily: 'monospace', cursor: 'help' }} title={`SHA: ${__APP_REVISION__}\nBranch: ${__BUILD_BRANCH__}\nBuilt: ${__BUILD_TIMESTAMP__}`}>rev:{__APP_REVISION__}</span>
 
         {/* ── Divider: Logo | Instructor Zone ── */}
@@ -633,7 +637,7 @@ export function App() {
             <select value={currentScenarioId} onChange={(e) => handleScenarioChange(e.target.value)}
               disabled={!isInstructor}
               title={!isInstructor ? 'Instructor role required' : 'Select scenario'}
-              style={{ background: '#333', color: '#e0e0e0', border: '1px solid #555', borderRadius: '3px', padding: '2px 6px', fontSize: '11px', maxWidth: '180px', opacity: !isInstructor ? 0.35 : 1, cursor: !isInstructor ? 'not-allowed' : 'pointer' }}>
+              style={{ background: '#333', color: '#e0e0e0', border: '1px solid #555', borderRadius: '3px', padding: '5px 10px', fontSize: '13px', maxWidth: '220px', opacity: !isInstructor ? 0.35 : 1, cursor: !isInstructor ? 'not-allowed' : 'pointer' }}>
               {availableScenarios.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           )}
@@ -669,15 +673,15 @@ export function App() {
           {[1, 2, 5, 10].map(s => (
             <InstructorButton isInstructor={isInstructor} key={s} style={{ ...btn, background: simSpeed === s ? '#4a9eff' : '#333', color: simSpeed === s ? '#fff' : '#aaa' }} onClick={() => handleSpeed(s)}>{s}x</InstructorButton>
           ))}
-          <span style={{ fontSize: '11px', color: '#aaa', fontFamily: 'monospace', minWidth: '50px' }}>T+{formatTime(simElapsed)}</span>
+          <span style={{ fontSize: '13px', color: '#aaa', fontFamily: 'monospace', minWidth: '60px' }}>T+{formatTime(simElapsed)}</span>
 
           {/* State badge */}
           <span style={{
-            fontSize: '9px',
+            fontSize: '11px',
             fontWeight: 700,
             letterSpacing: '0.5px',
             textTransform: 'uppercase',
-            padding: '2px 6px',
+            padding: '3px 8px',
             borderRadius: '3px',
             background: simulationState === 'running' ? '#00aa4422' : simulationState === 'paused' ? '#ffcc0022' : '#88888822',
             color: simulationState === 'running' ? '#00cc44' : simulationState === 'paused' ? '#ffcc00' : '#888',
@@ -837,7 +841,7 @@ export function App() {
                   useGroundTruthStore.getState().setShowGroundTruth(false);
                 }
               }}
-              style={{ background: '#333', color: '#e0e0e0', border: '1px solid #555', borderRadius: '3px', padding: '2px 6px', fontSize: '11px' }}
+              style={{ background: '#333', color: '#e0e0e0', border: '1px solid #555', borderRadius: '3px', padding: '5px 10px', fontSize: '13px' }}
               title="Select your role"
             >
               <option value="operator">Operator</option>
@@ -846,7 +850,7 @@ export function App() {
           )}
 
           {/* Version label */}
-          <span style={{ fontSize: '10px', opacity: 0.5 }} title="ELOC2 Air Defense Demonstrator">v0.3.0</span>
+          <span style={{ fontSize: '11px', opacity: 0.5 }} title="ELOC2 Air Defense Demonstrator">v0.3.0</span>
         </div>
       </header>
 
@@ -907,7 +911,7 @@ export function App() {
       {/* Timeline */}
       <div style={{ gridArea: 'timeline', background: colors.headerBg, borderTop: timelinePanelOpen ? 'none' : `1px solid ${colors.border}`, overflow: 'hidden' }}>
         {timelinePanelOpen ? <TimelinePanel /> : (
-          <div style={{ padding: '6px 16px', fontSize: '12px', color: '#666' }}>Timeline (collapsed) — click Show Timeline to expand</div>
+          <div style={{ padding: '6px 16px', fontSize: '13px', color: '#666' }}>Timeline (collapsed) — click Show Timeline to expand</div>
         )}
       </div>
 
@@ -1067,7 +1071,7 @@ function MobileLayout() {
             {/* Scenario selector */}
             {availableScenarios.length > 0 && (
               <select value={currentScenarioId} onChange={(e) => handleScenarioChange(e.target.value)}
-                style={{ background: '#333', color: '#e0e0e0', border: '1px solid #555', borderRadius: '3px', padding: '6px 8px', fontSize: '12px', width: '100%' }}>
+                style={{ background: '#333', color: '#e0e0e0', border: '1px solid #555', borderRadius: '3px', padding: '6px 8px', fontSize: '13px', width: '100%' }}>
                 {availableScenarios.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             )}

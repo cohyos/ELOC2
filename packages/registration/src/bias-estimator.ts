@@ -39,12 +39,14 @@ export function estimateBias(
   let rangeSum = 0;
 
   for (const pair of recentPairs) {
-    // Azimuth bias: difference in bearing from origin (0,0) is not meaningful;
-    // instead compute the difference in bearing that each position implies.
-    // We use the bearing from position2 to position1 minus the reverse as a
-    // proxy for the angular offset between the two sensor reports.
-    const bearing1 = bearingDeg(0, 0, pair.position1.lat, pair.position1.lon);
-    const bearing2 = bearingDeg(0, 0, pair.position2.lat, pair.position2.lon);
+    // Azimuth bias: compute bearing from each sensor to the estimated target
+    // position, then compare.  The midpoint of the two reported positions
+    // approximates the true target position.  Each sensor's bearing to that
+    // midpoint represents its measured azimuth; the difference is the bias.
+    const midLat = (pair.position1.lat + pair.position2.lat) / 2;
+    const midLon = (pair.position1.lon + pair.position2.lon) / 2;
+    const bearing1 = bearingDeg(pair.position1.lat, pair.position1.lon, midLat, midLon);
+    const bearing2 = bearingDeg(pair.position2.lat, pair.position2.lon, midLat, midLon);
     let azDiff = bearing1 - bearing2;
     // Normalize to [-180, 180]
     if (azDiff > 180) azDiff -= 360;

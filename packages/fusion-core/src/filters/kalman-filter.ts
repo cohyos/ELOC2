@@ -110,10 +110,27 @@ export function kalmanUpdate(
   for (let i = 0; i < m; i++) {
     logLikelihood -= 0.5 * y[i] * Sy[i];
   }
-  // Determinant term (approximation using trace for numerical stability)
-  let logDetS = 0;
-  for (let i = 0; i < m; i++) {
-    logDetS += Math.log(Math.abs(S[i][i]) + 1e-30);
+  // Determinant term — proper determinant computation for the innovation covariance.
+  // The previous sum-of-log-diagonal was only correct for diagonal matrices.
+  let logDetS: number;
+  if (m === 3) {
+    // Standard 3×3 determinant via cofactor expansion
+    const det =
+      S[0][0] * (S[1][1] * S[2][2] - S[1][2] * S[2][1]) -
+      S[0][1] * (S[1][0] * S[2][2] - S[1][2] * S[2][0]) +
+      S[0][2] * (S[1][0] * S[2][1] - S[1][1] * S[2][0]);
+    logDetS = Math.log(Math.abs(det) + 1e-30);
+  } else if (m === 2) {
+    const det = S[0][0] * S[1][1] - S[0][1] * S[1][0];
+    logDetS = Math.log(Math.abs(det) + 1e-30);
+  } else if (m === 1) {
+    logDetS = Math.log(Math.abs(S[0][0]) + 1e-30);
+  } else {
+    // General fallback: sum of log diagonals (approximate for larger matrices)
+    logDetS = 0;
+    for (let i = 0; i < m; i++) {
+      logDetS += Math.log(Math.abs(S[i][i]) + 1e-30);
+    }
   }
   logLikelihood -= 0.5 * logDetS;
   logLikelihood -= (m / 2) * Math.log(2 * Math.PI);

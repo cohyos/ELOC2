@@ -7,7 +7,7 @@ import type {
   SourceObservation,
   SystemTrack,
 } from '@eloc2/domain';
-import { mat3x3Inverse, mat3x3Add, normalizeLon } from '@eloc2/shared-utils';
+import { mat3x3Inverse, mat3x3Add, normalizeLon, geodeticToENU, enuToGeodetic } from '@eloc2/shared-utils';
 
 // ---------------------------------------------------------------------------
 // Result type
@@ -105,14 +105,26 @@ export function fuseObservation(
     return fallbackAverage(observation, track);
   }
 
-  // State vectors — use PREDICTED track position, not stored position.
-  // The correlator uses predicted position for the gate check; the fuser
-  // must be consistent to avoid a bias between what passes the gate and
-  // what gets fused.
-  const xTrack = [predLat, predLon, predAlt];
-  const xObs = [observation.position.lat, observation.position.lon, observation.position.alt];
+  // ── Convert to ENU coordinates centered on the track position ──
+  // Operating in lat/lon/alt directly causes numerical issues because
+  // latitude and longitude have vastly different scales from altitude (meters).
+  // ENU provides a local Cartesian frame where all axes are in meters.
+  const refLat = predLat;
+  const refLon = predLon;
+  const refAlt = predAlt;
+
+  // Track is at the ENU origin
+  const xTrack = [0, 0, 0];
+
+  // Observation in ENU relative to track
+  const obsENU = geodeticToENU(
+    observation.position.lat, observation.position.lon, observation.position.alt,
+    refLat, refLon, refAlt,
+  );
+  const xObs = [obsENU.east, obsENU.north, obsENU.up];
 
   // Information-weighted state: P_track^-1 * x_track + P_obs^-1 * x_obs
+  // Since xTrack = [0,0,0], the first term vanishes.
   const infoState: number[] = [0, 0, 0];
   for (let i = 0; i < 3; i++) {
     for (let j = 0; j < 3; j++) {
@@ -120,13 +132,16 @@ export function fuseObservation(
     }
   }
 
-  // Fused state: P_fused * infoState
-  const fusedState: number[] = [0, 0, 0];
+  // Fused state in ENU: P_fused * infoState
+  const fusedENU: number[] = [0, 0, 0];
   for (let i = 0; i < 3; i++) {
     for (let j = 0; j < 3; j++) {
-      fusedState[i] += fusedCov[i][j] * infoState[j];
+      fusedENU[i] += fusedCov[i][j] * infoState[j];
     }
   }
+
+  // Convert fused ENU back to geodetic
+  const fusedGeo = enuToGeodetic(fusedENU[0], fusedENU[1], fusedENU[2], refLat, refLon, refAlt);
 
   // Compute a confidence score based on the trace of the fused covariance
   // relative to the track's previous covariance.
@@ -147,9 +162,9 @@ export function fuseObservation(
 
   return {
     state: {
-      lat: fusedState[0],
-      lon: normalizeLon(fusedState[1]),
-      alt: fusedState[2],
+      lat: fusedGeo.lat,
+      lon: normalizeLon(fusedGeo.lon),
+      alt: fusedGeo.alt,
     },
     covariance: fusedCov,
     confidence,

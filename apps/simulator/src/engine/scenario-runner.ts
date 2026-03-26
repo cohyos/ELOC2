@@ -305,11 +305,11 @@ export class ScenarioRunner {
   ): boolean {
     switch (sensorType) {
       case 'radar':
-        return true;
+        return stepCount % 15 === 0;
       case 'eo':
-        return stepCount % 2 === 0;
+        return stepCount % 30 === 0;
       case 'c4isr':
-        return stepCount % 12 === 0;
+        return stepCount % 180 === 0;
       default:
         return true;
     }

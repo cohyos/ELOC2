@@ -67,7 +67,7 @@ const panelStyle: React.CSSProperties = {
   background: 'rgba(20, 20, 37, 0.92)',
   border: '1px solid #2a2a3e',
   borderRadius: '6px',
-  minWidth: '180px',
+  minWidth: '200px',
   fontSize: '12px',
   color: '#e0e0e0',
   userSelect: 'none',
@@ -78,10 +78,10 @@ const headerStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  padding: '6px 10px',
+  padding: '8px 12px',
   cursor: 'pointer',
   borderBottom: '1px solid #2a2a3e',
-  fontSize: '11px',
+  fontSize: '12px',
   fontWeight: 600,
   letterSpacing: '0.5px',
   color: '#aaa',
@@ -90,16 +90,16 @@ const headerStyle: React.CSSProperties = {
 const collapsedStyle: React.CSSProperties = {
   ...panelStyle,
   cursor: 'pointer',
-  padding: '6px 10px',
-  fontSize: '11px',
+  padding: '8px 12px',
+  fontSize: '12px',
   fontWeight: 600,
   color: '#aaa',
   letterSpacing: '0.5px',
 };
 
 const groupLabelStyle: React.CSSProperties = {
-  padding: '5px 10px 2px',
-  fontSize: '10px',
+  padding: '6px 12px 3px',
+  fontSize: '11px',
   fontWeight: 600,
   color: '#666',
   textTransform: 'uppercase',
@@ -111,15 +111,16 @@ const isMobileView = () => window.innerWidth < 768;
 const itemStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  gap: '6px',
-  padding: isMobileView() ? '6px 10px' : '3px 10px',
+  gap: '8px',
+  padding: isMobileView() ? '6px 12px' : '5px 12px',
   cursor: 'pointer',
+  fontSize: '12px',
   touchAction: 'manipulation',
 };
 
 const checkboxStyle = (checked: boolean, color: string): React.CSSProperties => ({
-  width: '12px',
-  height: '12px',
+  width: '14px',
+  height: '14px',
   borderRadius: '2px',
   border: `1.5px solid ${checked ? color : '#555'}`,
   background: checked ? color : 'transparent',
