@@ -37,7 +37,7 @@ import { DEFAULT_INGEST_CONFIG } from './types.js';
 // Constants
 // ---------------------------------------------------------------------------
 
-const EO_TASKING_INTERVAL_SEC = 5;
+const EO_TASKING_INTERVAL_SEC = 3; // unified with live-engine.ts
 const DEFAULT_DWELL_SEC = 15;
 
 // ---------------------------------------------------------------------------
@@ -418,8 +418,8 @@ export class EoManagementModule {
         state.active = false;
         state.idleTickCount = 0;
       } else {
-        state.idleTickCount++;
-        if (state.idleTickCount >= 3) {
+        state.idleTickCount += dtSec; // accumulate elapsed time, not tick count
+        if (state.idleTickCount >= 3) { // 3 seconds idle (works at any tick rate)
           state.active = true;
           // Advance scan: azimuth sweep with elevation stepping
           state.currentAzimuth += state.scanSpeed * dtSec;

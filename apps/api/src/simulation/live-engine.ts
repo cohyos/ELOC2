@@ -3296,15 +3296,15 @@ export class LiveEngine {
       : Date.now() as Timestamp;
     const EO_FUSION_GATE_M = 3000; // 3km gate for EO→radar track fusion
 
-    // ── Step 1: Check if a nearby radar/system track already exists ──
-    // If so, enhance it directly without creating a separate EO system track.
-    // This prevents zombie EO tracks from competing with radar in the correlator.
+    // ── Step 1: Check if a nearby system track already exists ──
+    // Search ALL active tracks (including EO-triangulated) for correlation.
+    // This allows EO-only tracks to be updated on subsequent triangulations,
+    // enabling them to accumulate updates and progress to confirmed status.
     let bestRadarTrack: SystemTrack | undefined;
     let bestDistance = Infinity;
 
     for (const track of this.state.tracks) {
       if (track.status === 'dropped') continue;
-      if (track.fusionMode === 'eo_triangulation') continue;
 
       const dLat = (target.position.lat - track.state.lat) * 110540;
       const dLon = (target.position.lon - track.state.lon) * 111320 *
@@ -3319,11 +3319,8 @@ export class LiveEngine {
     }
 
     if (bestRadarTrack && bestDistance <= EO_FUSION_GATE_M) {
-      // ── Enhance existing radar track with EO metadata (no position change) ──
-      // EO triangulation (~km accuracy) is much less precise than radar (~50m).
-      // Modifying the radar position from EO causes accumulated drift that
-      // eventually breaks radar correlation. Instead, only update metadata.
-      const radarTrackId = bestRadarTrack.systemTrackId as string;
+      const existingTrackId = bestRadarTrack.systemTrackId as string;
+      const isEoTrack = bestRadarTrack.fusionMode === 'eo_triangulation';
 
       for (const sid of target.sensorIds) {
         if (!bestRadarTrack.sources.includes(sid as SensorId)) {
@@ -3331,6 +3328,33 @@ export class LiveEngine {
         }
       }
 
+      if (isEoTrack) {
+        // ── Update existing EO-triangulated track with new position ──
+        // Compute velocity from position change
+        const dtSec = (now as number - (bestRadarTrack.lastUpdated as number)) / 1000;
+        if (dtSec > 0.1 && dtSec < 30) {
+          const dLat = target.position.lat - bestRadarTrack.state.lat;
+          const dLon = target.position.lon - bestRadarTrack.state.lon;
+          const dAlt = target.position.alt - bestRadarTrack.state.alt;
+          const mPerDegLat = 111_320;
+          const mPerDegLon = mPerDegLat * Math.cos(bestRadarTrack.state.lat * Math.PI / 180);
+          bestRadarTrack.velocity = {
+            vx: (dLon * mPerDegLon) / dtSec,
+            vy: (dLat * mPerDegLat) / dtSec,
+            vz: dAlt / dtSec,
+          };
+        }
+        // Update position from new triangulation
+        bestRadarTrack.state = { ...target.position };
+        // Boost confidence on each update — enables existence promotion
+        bestRadarTrack.confidence = Math.min(0.95, bestRadarTrack.confidence + 0.15);
+        // Promote tentative → confirmed when confidence reaches threshold
+        if (bestRadarTrack.status === 'tentative' && bestRadarTrack.confidence >= 0.7) {
+          bestRadarTrack.status = 'confirmed';
+        }
+      }
+
+      // For radar tracks: only update metadata (no position change — EO less precise than radar)
       bestRadarTrack.lineage.push(
         createLineageEntry(
           'eo.target.fused',
@@ -3340,8 +3364,8 @@ export class LiveEngine {
       bestRadarTrack.lastUpdated = now;
       bestRadarTrack.eoInvestigationStatus = 'confirmed';
 
-      // Copy geometry estimate to the radar track
-      this.state.geometryEstimates.set(radarTrackId, {
+      // Copy geometry estimate to the track
+      this.state.geometryEstimates.set(existingTrackId, {
         estimateId: generateId(),
         eoTrackIds: target.detectionIds.map(d => d as EoTrackId),
         position3D: target.position,
@@ -3358,11 +3382,11 @@ export class LiveEngine {
 
       this.pushEvent(
         'eo.track.fused',
-        `EO 3D from ${target.sensorIds.length} sensors fused into ${radarTrackId.slice(0, 8)} (dist=${bestDistance.toFixed(0)}m)`,
-        { radarTrackId, distance: bestDistance },
+        `EO 3D from ${target.sensorIds.length} sensors fused into ${existingTrackId.slice(0, 8)} (dist=${bestDistance.toFixed(0)}m)`,
+        { trackId: existingTrackId, distance: bestDistance },
       );
 
-      return radarTrackId;
+      return existingTrackId;
     }
 
     // ── Step 2: No nearby radar track — create standalone EO system track ──
@@ -4372,10 +4396,10 @@ export class LiveEngine {
         this.searchModeState.set(sId, searchState);
       }
 
-      searchState.idleTickCount++;
+      searchState.idleTickCount += dtSec; // accumulate elapsed time, not tick count
 
-      if (!searchState.active && searchState.idleTickCount >= 45) {
-        // Activate search mode after ~3 seconds idle (45 ticks at 15 Hz)
+      if (!searchState.active && searchState.idleTickCount >= 3) {
+        // Activate search mode after 3 seconds idle (tick-rate independent)
         searchState.active = true;
         searchState.currentAzimuth = sensor.gimbal.azimuthDeg ?? 0;
         this.pushEvent('eo.search.activated', `${sId}: search mode (idle)`);

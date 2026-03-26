@@ -253,7 +253,7 @@ export class CoreEoTargetDetector {
         existing.angularVelocityAzDegPerSec = dAz / dtSec;
         existing.angularVelocityElDegPerSec = dEl / dtSec;
         // Predict next bearing position (for improved matching next tick)
-        const predictDt = 2; // next EO tick is ~2s away
+        const predictDt = 2; // next EO bearing at ~2s interval (30 steps × 1/15s)
         let predAz = obs.bearing.azimuthDeg + existing.angularVelocityAzDegPerSec * predictDt;
         if (predAz > 360) predAz -= 360;
         if (predAz < 0) predAz += 360;
