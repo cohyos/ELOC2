@@ -91,11 +91,7 @@ export class EoCoreEntity {
       sensorId: 'EO-CORE' as SensorId,
       position: { ...t.position },
       velocity: t.velocity ? { ...t.velocity } : undefined,
-      covariance: [
-        [100, 0, 0],
-        [0, 100, 0],
-        [0, 0, 100],
-      ],
+      covariance: qualityToCovariance(t.quality),
       confidence: t.confidence,
       status: 'maintained' as const,
       updateCount: t.updateCount,
