@@ -121,9 +121,9 @@ export function MapView() {
       zoomControl: false,
       attributionControl: true,
       zoomDelta: 1,             // One full level per scroll tick
-      zoomSnap: 0,              // Smooth fractional zoom (no snap = no two-step animation)
-      wheelPxPerZoomLevel: 120, // Require more scroll to change zoom (default 60)
-      wheelDebounceTime: 80,    // Coalesce rapid scroll events (ms)
+      zoomSnap: 1,              // Snap to integer zoom — prevents tile flickering at fractional levels
+      wheelPxPerZoomLevel: 200, // Require more scroll to change zoom (prevents aggressive jumps)
+      wheelDebounceTime: 150,   // Coalesce rapid scroll events (150ms prevents zoom jumping)
     });
 
     // Add tile layer

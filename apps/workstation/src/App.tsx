@@ -444,9 +444,10 @@ export function App() {
 
   const handleStartPause = useCallback(async () => {
     if (simRunning) {
-      // Optimistic pause: immediately update UI to prevent stale-state lag
+      // Optimistic pause: update UI + set pause guard on WS to suppress stale messages
       useUiStore.getState().setReplayPlaying(false);
       useUiStore.getState().setSimulationState('paused', ['resume', 'stop', 'reset', 'seek', 'inject']);
+      replayController.setPauseGuard(true);
     }
     await fetch(simRunning ? '/api/scenario/pause' : '/api/scenario/start', { method: 'POST' });
   }, [simRunning]);
@@ -974,9 +975,10 @@ function MobileLayout() {
 
   const handleStartPause = useCallback(async () => {
     if (simRunning) {
-      // Optimistic pause: immediately update UI to prevent stale-state lag
+      // Optimistic pause: update UI + set pause guard on WS to suppress stale messages
       useUiStore.getState().setReplayPlaying(false);
       useUiStore.getState().setSimulationState('paused', ['resume', 'stop', 'reset', 'seek', 'inject']);
+      replayController.setPauseGuard(true);
     }
     await fetch(simRunning ? '/api/scenario/pause' : '/api/scenario/start', { method: 'POST' });
   }, [simRunning]);
