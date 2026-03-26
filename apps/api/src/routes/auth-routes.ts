@@ -76,7 +76,6 @@ export function registerAuthRoutes(app: FastifyInstance): void {
         username: user.username,
         role: user.role,
       },
-      sessionId: session.session_id,
     };
   });
 
@@ -132,6 +131,9 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     const { username, password, role } = request.body ?? {};
     if (!username || !password || !role) {
       return reply.code(400).send({ error: 'username, password, and role are required' });
+    }
+    if (!/^[a-zA-Z0-9_]{3,64}$/.test(username)) {
+      return reply.code(400).send({ error: 'username must be 3-64 characters, alphanumeric or underscore only' });
     }
     if (!['instructor', 'operator'].includes(role)) {
       return reply.code(400).send({ error: 'role must be instructor or operator' });

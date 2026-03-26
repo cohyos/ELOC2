@@ -64,7 +64,6 @@ const DEFAULT_WAVELENGTH_M = 0.1;
 function computeDetectionProbability(
   rangeM: number,
   effectiveMaxRangeM: number,
-  rcs: number,
 ): number {
   if (rangeM <= 0 || effectiveMaxRangeM <= 0) return 1.0;
   // Normalized range ratio (0 = at sensor, 1 = at max effective range)
@@ -72,9 +71,8 @@ function computeDetectionProbability(
   // Pd follows a sigmoid-like curve: high at close range, drops near max range
   // At fraction=0.5: Pd≈0.99, at fraction=0.9: Pd≈0.85, at fraction=1.0: Pd≈0.50
   const basePd = 1.0 / (1.0 + Math.exp(10 * (rangeFraction - 0.95)));
-  // RCS boost: larger targets are easier to detect
-  const rcsBoost = Math.min(1.0, Math.sqrt(Math.max(rcs, 0.01)));
-  return Math.min(1.0, basePd * (0.5 + 0.5 * rcsBoost));
+  // RCS already accounted for in effectiveMaxRangeM via computeEffectiveRange()
+  return Math.min(1.0, basePd);
 }
 
 // ---------------------------------------------------------------------------
@@ -276,7 +274,7 @@ export function generateRadarObservation(
   // RCS and range. Small targets at long range are sometimes missed.
   // Opt-in: disabled by default to preserve deterministic behavior in tests.
   if (options?.enablePd === true) {
-    const pd = computeDetectionProbability(coverage.rangeM, effectiveMaxRange, rcs);
+    const pd = computeDetectionProbability(coverage.rangeM, effectiveMaxRange);
     const r0 = rng ?? Math.random;
     if (r0() > pd) {
       return undefined; // target not detected this scan
@@ -287,7 +285,7 @@ export function generateRadarObservation(
   // A phased array scanning at N Hz with a simulation tick of T seconds
   // integrates N*T scans. Noise reduces by √(N*T) (incoherent integration).
   const scanRateHz = options?.scanRateHz ?? DEFAULT_SCAN_RATE_HZ;
-  const tickSec = options?.tickIntervalSec ?? 1;
+  const tickSec = options?.tickIntervalSec ?? 1/15;
   const scansPerTick = Math.max(1, Math.round(scanRateHz * tickSec));
   const integrationFactor = Math.sqrt(scansPerTick); // noise reduction
 

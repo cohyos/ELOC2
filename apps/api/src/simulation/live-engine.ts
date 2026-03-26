@@ -425,6 +425,8 @@ export class LiveEngine {
   private currentParameters: InvestigationParameters = { ...DEFAULT_INVESTIGATION_PARAMETERS, weights: { ...DEFAULT_INVESTIGATION_PARAMETERS.weights }, thresholds: { ...DEFAULT_INVESTIGATION_PARAMETERS.thresholds } };
   /** Formal event envelopes for validation runner. */
   private eventEnvelopes: EventEnvelope[] = [];
+  /** Buffered events to flush in a single WS message with the next rap.update. */
+  private pendingEvents: Array<{type: string; data: any}> = [];
 
   /** Dwell state: tracks how long each sensor has been dwelling on its current target */
   private dwellState = new Map<string, {
@@ -900,6 +902,7 @@ export class LiveEngine {
       timestamp: Date.now(),
       simTimeSec: this.state.elapsedSec,
       scenarioId: this.scenario.id,
+      durationSec: this.scenario.durationSec,
       running: this.state.running,
       speed: this.state.speed,
       trackCount: tracks.length,
@@ -1314,9 +1317,10 @@ export class LiveEngine {
     // Reset all state and replay up to target time
     this.resetInternalState();
 
-    // Fast-forward by stepping 1 second at a time
-    for (let t = 0; t < toSec; t++) {
-      const result = this.runner.step(1);
+    // Fast-forward by stepping at pipeline rate (1/15 sec per tick)
+    const totalTicks = Math.round(toSec * 15);
+    for (let t = 0; t < totalTicks; t++) {
+      const result = this.runner.step(1 / 15);
       this.state.elapsedSec = result.currentTimeSec;
 
       // Separate observation events for batch processing (prevents ghost tracks)
@@ -1356,7 +1360,7 @@ export class LiveEngine {
       }
 
       // Compute quality metrics on last tick
-      if (t === Math.floor(toSec) - 1) {
+      if (t === totalTicks - 1) {
         this.computeQualityMetrics();
       }
     }
@@ -1572,6 +1576,7 @@ export class LiveEngine {
     this.lastBroadcastSec = 0;
     this.fusionModePerSensor.clear();
     this.eventEnvelopes = [];
+    this.pendingEvents = [];
     this.operatorLockedSensors.clear();
     this.operatorTrackPriority.clear();
     this.dwellState.clear();
@@ -1940,7 +1945,7 @@ export class LiveEngine {
 
     // REQ-16: Delegate to EO Management Module (facade over existing EO logic)
     this.eoModule.ingestTracks(this.state.tracks, this.state.sensors);
-    this.eoModule.tick(result.currentTimeSec, 1);
+    this.eoModule.tick(result.currentTimeSec, 1/15);
     this.cachedEoModuleStatus = this.eoModule.getStatus();
 
     // REQ-12: Accumulate report timeline data
@@ -1954,6 +1959,9 @@ export class LiveEngine {
 
     // Update ballistic estimates
     this.updateBallisticEstimates();
+
+    // Cap eventEnvelopes to prevent unbounded growth
+    if (this.eventEnvelopes.length > 2000) this.eventEnvelopes = this.eventEnvelopes.slice(-2000);
 
     // Broadcast updated RAP to WebSocket clients
     this.broadcastRap();
@@ -2020,8 +2028,7 @@ export class LiveEngine {
 
     if (observations.length === 0) return;
 
-    // Track observation count for system load metrics
-    this.currentTickObservations += observations.length;
+    // (observation count already tracked in tick() via observationEvents.length)
 
     // Batch process through TrackManager (clusters spatially, creates fewer tracks)
     const results = this.trackManager.processObservationBatch(observations, healthMap);
@@ -4670,8 +4677,8 @@ export class LiveEngine {
       this.state.eventLog = this.state.eventLog.slice(-500);
     }
 
-    // Broadcast to WebSocket clients
-    this.broadcast({
+    // Buffer event — will be flushed with the next rap.update broadcast
+    this.pendingEvents.push({
       type: 'event',
       eventType: event.eventType,
       timestamp: event.timestamp,
@@ -5911,6 +5918,7 @@ export class LiveEngine {
       type: 'rap.update',
       timestamp: Date.now(),
       simTimeSec: this.state.elapsedSec,
+      durationSec: this.scenario.durationSec,
       running: this.state.running,
       speed: this.state.speed,
       trackCount: tracks.length,
@@ -6022,7 +6030,12 @@ export class LiveEngine {
           ? this.pipelineHealth.alerts[this.pipelineHealth.alerts.length - 1]
           : undefined,
       },
+      // Buffered events (flushed with this rap.update)
+      events: this.pendingEvents.length > 0 ? this.pendingEvents : undefined,
     });
+
+    // Flush pending events after broadcast
+    this.pendingEvents = [];
 
     // Separate ground truth broadcast
     const groundTruthTargets = this.getGroundTruth();

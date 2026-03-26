@@ -530,9 +530,12 @@ export function App() {
     return () => window.removeEventListener('keydown', handler);
   }, [handleStartPause, simElapsed, toggleInjectionMode, setDemoActive]);
 
-  // Periodic refresh (every 10s)
+  // Periodic refresh fallback (only when WS is disconnected)
   useEffect(() => {
-    const interval = setInterval(() => { fetchRap(); fetchSensors(); }, 5000);
+    const interval = setInterval(() => {
+      if (useUiStore.getState().wsConnected) return;
+      fetchRap(); fetchSensors();
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 

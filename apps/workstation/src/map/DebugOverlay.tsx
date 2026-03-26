@@ -163,6 +163,7 @@ export function DebugOverlay({
   convergedTrackIds, ballisticEstimates, sectorScan,
 }: DebugOverlayProps) {
 
+  const gtTrailHistory = useGroundTruthStore(s => s.trailHistory);
   const groupsRef = useRef<LayerGroups | null>(null);
   const callbacksRef = useRef({ onSelectTrack, onSelectSensor, onSelectGroundTruth });
   callbacksRef.current = { onSelectTrack, onSelectSensor, onSelectGroundTruth };
@@ -378,7 +379,7 @@ export function DebugOverlay({
   const zoomingRef = useRef(false);
   useEffect(() => {
     if (!map) return;
-    const onZoomStart = () => { zoomingRef.current = true; };
+    const onZoomStart = () => { zoomingRef.current = true; setTimeout(() => { zoomingRef.current = false; }, 500); };
     const onZoomEnd = () => { zoomingRef.current = false; };
     map.on('zoomanim', onZoomStart);
     map.on('zoomend', onZoomEnd);
@@ -1310,8 +1311,7 @@ export function DebugOverlay({
 
       // GT trajectory polyline (when toggled on via context menu)
       if (trajectoryTrackIds.has(`gt-${gtId}`)) {
-        const gtTrails = useGroundTruthStore.getState().trailHistory;
-        const trail = gtTrails.get(gtId);
+        const trail = gtTrailHistory.get(gtId);
         if (trail && trail.length >= 2) {
           const latlngs = trail
             .filter(p => Number.isFinite(p.lon) && Number.isFinite(p.lat))
@@ -1334,7 +1334,7 @@ export function DebugOverlay({
         }
       }
     }
-  }, [groundTruthTargets, showGroundTruth, selectedGroundTruthId, tracks, trajectoryTrackIds]);
+  }, [groundTruthTargets, showGroundTruth, selectedGroundTruthId, tracks, trajectoryTrackIds, gtTrailHistory]);
 
   // ── EO Video Popup ─────────────────────────────────────────────────────────
   const eoVideoPopupTrackId = useUiStore(s => s.eoVideoPopupTrackId);

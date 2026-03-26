@@ -16,6 +16,12 @@ import {
   encodeCAT062Record,
   encodeAsterixBlock,
 } from '@eloc2/asterix-adapter';
+import { requireRole } from '../auth/auth-middleware.js';
+
+const AUTH_ENABLED = process.env.AUTH_ENABLED === 'true';
+function instructorGuard(): any[] {
+  return AUTH_ENABLED ? [requireRole('instructor')] : [];
+}
 
 // ---------------------------------------------------------------------------
 // State
@@ -67,13 +73,19 @@ export function registerAsterixRoutes(app: FastifyInstance, engine: LiveEngine) 
       multicastGroup?: string;
       sensorPosition?: { lat: number; lon: number; alt: number };
     };
-  }>('/api/asterix/enable', async (request, reply) => {
+  }>('/api/asterix/enable', { preHandler: instructorGuard() }, async (request, reply) => {
     if (state.enabled && state.listener) {
       return reply.code(409).send({ error: 'ASTERIX listener already enabled' });
     }
 
     const body = request.body ?? {};
     const port = body.port ?? 30003;
+
+    // Validate port range
+    if (typeof port !== 'number' || port < 1024 || port > 65535) {
+      return reply.code(400).send({ error: 'port must be between 1024 and 65535' });
+    }
+
     const category = body.category ?? 48;
     const sensorPosition = body.sensorPosition ?? { lat: 31.5, lon: 34.5, alt: 0 };
 
@@ -125,7 +137,7 @@ export function registerAsterixRoutes(app: FastifyInstance, engine: LiveEngine) 
   });
 
   // POST /api/asterix/disable — Stop UDP listener
-  app.post('/api/asterix/disable', async (_request, reply) => {
+  app.post('/api/asterix/disable', { preHandler: instructorGuard() }, async (_request, reply) => {
     if (!state.enabled || !state.listener) {
       return reply.code(409).send({ error: 'ASTERIX listener is not enabled' });
     }
@@ -162,7 +174,7 @@ export function registerAsterixRoutes(app: FastifyInstance, engine: LiveEngine) 
       port?: number;
       intervalMs?: number;
     };
-  }>('/api/asterix/export', async (request, reply) => {
+  }>('/api/asterix/export', { preHandler: instructorGuard() }, async (request, reply) => {
     const body = request.body ?? {} as any;
 
     if (body.enable) {

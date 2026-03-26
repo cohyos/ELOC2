@@ -163,7 +163,6 @@ export class ReplayController {
 
       // Pause signal: flush immediately
       if (data.running === false) {
-        this._pauseReceived = true;
         if (this.rafId) {
           cancelAnimationFrame(this.rafId);
           this.rafId = null;

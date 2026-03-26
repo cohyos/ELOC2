@@ -48,21 +48,21 @@ function gaussianNoise(stddev: number, rng: () => number = Math.random): number 
 }
 
 /**
- * Compute time-of-day range modifier for EO sensors.
+ * Compute time-of-day range modifier for EO sensors (MWIR).
  * Assumes scenario start at 08:00 local time.
  *   Day   (06:00-18:00): 100%
- *   Dawn  (05:00-06:00): 70%
- *   Dusk  (18:00-19:00): 70%
- *   Night (19:00-05:00): 40%
+ *   Dawn  (05:00-06:00): 85% (thermal crossover reduces contrast ~30 min)
+ *   Dusk  (18:00-19:00): 85% (thermal crossover reduces contrast ~30 min)
+ *   Night (19:00-05:00): 110% (MWIR: cold background = better contrast)
  */
 function timeOfDayRangeModifier(timeSec: number): number {
   const SCENARIO_START_HOUR = 8; // 08:00 local
   const hourOfDay = (SCENARIO_START_HOUR + timeSec / 3600) % 24;
 
   if (hourOfDay >= 6 && hourOfDay < 18) return 1.0;   // Day
-  if (hourOfDay >= 5 && hourOfDay < 6) return 0.7;     // Dawn
-  if (hourOfDay >= 18 && hourOfDay < 19) return 0.7;   // Dusk
-  return 0.4;                                           // Night
+  if (hourOfDay >= 5 && hourOfDay < 6) return 0.85;    // Dawn (thermal crossover)
+  if (hourOfDay >= 18 && hourOfDay < 19) return 0.85;  // Dusk (thermal crossover)
+  return 1.1;                                           // Night (MWIR: cold background bonus)
 }
 
 /**
