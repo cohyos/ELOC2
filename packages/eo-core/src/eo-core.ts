@@ -18,6 +18,26 @@ import { EoTrackManager } from './eo-track-manager.js';
 import type { EoCoreConfig, EoCoreTrack } from './types.js';
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Map triangulation quality to covariance matrix for system fuser weighting */
+function qualityToCovariance(
+  quality: 'strong' | 'acceptable' | 'weak' | 'insufficient',
+): number[][] {
+  switch (quality) {
+    case 'strong':
+      return [[50, 0, 0], [0, 50, 0], [0, 0, 200]];
+    case 'acceptable':
+      return [[200, 0, 0], [0, 200, 0], [0, 0, 500]];
+    case 'weak':
+      return [[1000, 0, 0], [0, 1000, 0], [0, 0, 2000]];
+    default:
+      return [[100, 0, 0], [0, 100, 0], [0, 0, 100]];
+  }
+}
+
+// ---------------------------------------------------------------------------
 // EoCoreEntity
 // ---------------------------------------------------------------------------
 
