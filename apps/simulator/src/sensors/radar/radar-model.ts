@@ -57,8 +57,8 @@ const DEFAULT_PRF_HZ = 3000;
 const DEFAULT_WAVELENGTH_M = 0.1;
 
 /**
- * Compute detection probability based on RCS and range.
- * Uses simplified radar equation: Pd degrades with range^4 / RCS.
+ * Compute detection probability based on range ratio.
+ * RCS is already factored into effectiveMaxRangeM via computeEffectiveRange().
  * At max effective range, Pd ≈ 0.5. At half range, Pd ≈ 0.99.
  */
 function computeDetectionProbability(

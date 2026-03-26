@@ -296,6 +296,10 @@ export class ReplayController {
     if (data.operatorPriorityTrackIds && Array.isArray(data.operatorPriorityTrackIds)) {
       useUiStore.getState().setOperatorPriorityTrackIds(data.operatorPriorityTrackIds);
     }
+    // Update scenario duration from simulation
+    if (typeof data.durationSec === 'number') {
+      useUiStore.getState().setScenarioDurationSec(data.durationSec);
+    }
     // Update replay time from simulation
     if (typeof data.simTimeSec === 'number') {
       useUiStore.getState().setReplayTime(data.simTimeSec);

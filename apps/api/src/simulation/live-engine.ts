@@ -5972,15 +5972,6 @@ export class LiveEngine {
       fusionModes: Object.fromEntries(this.fusionModePerSensor),
       // Investigation summaries for InvestigationManagerPanel
       investigationSummaries: this.getActiveInvestigations(),
-      // Dwell and revisit state
-      dwellStates: this.getDwellStates(),
-      revisitSchedule: this.getRevisitSchedule(),
-      // Operator overrides
-      operatorOverrides: this.getOperatorOverrides(),
-      // EO cycling histories (last 5 per sensor)
-      cyclingHistories: Object.fromEntries(
-        [...this.cyclingHistory.entries()].map(([sensorId, history]) => [sensorId, history.slice(-5)]),
-      ),
       // Cover zones (REQ-11)
       coverZones: this.scenario.coverZones ?? [],
       operationalZones: (this.scenario as any).operationalZones ?? [],
@@ -5990,8 +5981,6 @@ export class LiveEngine {
       decisionChains: this.decisionChains.length > 0 ? this.decisionChains : undefined,
       // EO allocation quality (REQ-10)
       eoAllocationQuality: this.cachedEoAllocationQuality ?? undefined,
-      // Before/after EO comparison aggregate (REQ-9)
-      beforeAfterAggregate: this.getBeforeAfterComparison().aggregate,
       // FOV overlap detection (REQ-6)
       fovOverlaps: this.fovOverlaps,
       // Multi-target bearing association (REQ-6)
@@ -6017,19 +6006,6 @@ export class LiveEngine {
       autoLoopEnabled: this.autoLoopEnabled,
       // Operator EO priority tracks (for context menu toggle)
       operatorPriorityTrackIds: [...this.operatorPriorityTracks],
-      // Pipeline health monitoring
-      pipelineHealth: {
-        healthScore: this.pipelineHealth.healthScore,
-        milestones: this.pipelineHealth.milestones,
-        bearingsReceived: this.pipelineHealth.bearingsReceived,
-        bearingsMatched: this.pipelineHealth.bearingsMatched,
-        bearingsUnmatched: this.pipelineHealth.bearingsUnmatched,
-        peakTrackToGtRatio: this.pipelineHealth.peakTrackToGtRatio,
-        alertCount: this.pipelineHealth.alerts.length,
-        latestAlert: this.pipelineHealth.alerts.length > 0
-          ? this.pipelineHealth.alerts[this.pipelineHealth.alerts.length - 1]
-          : undefined,
-      },
       // Buffered events (flushed with this rap.update)
       events: this.pendingEvents.length > 0 ? this.pendingEvents : undefined,
     });

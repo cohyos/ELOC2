@@ -17,7 +17,7 @@ function operatorGuard() {
 const VALID_CLASSIFICATIONS: TargetClassification[] = [
   'civilian_aircraft', 'passenger_aircraft', 'light_aircraft', 'fighter_aircraft',
   'ally', 'predator', 'neutral', 'unknown', 'bird', 'birds',
-  'helicopter', 'uav', 'small_uav', 'drone',
+  'helicopter', 'uav', 'small_uav', 'drone', 'missile', 'rocket',
 ];
 
 const VALID_PRIORITIES = ['high', 'normal', 'low'] as const;
