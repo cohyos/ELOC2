@@ -3547,6 +3547,17 @@ export class LiveEngine {
         eoTrack.confidence = Math.min(1, eoTrack.confidence + 0.05);
       }
 
+      // Promote tentative → confirmed when confidence is high enough
+      if (eoTrack.status === 'tentative' && eoTrack.confidence >= 0.7) {
+        eoTrack.status = 'confirmed';
+        eoTrack.lineage.push(
+          createLineageEntry(
+            'track.confirmed',
+            `Confirmed via EO triangulation (confidence=${eoTrack.confidence.toFixed(2)}, ${target.sensorIds.length} sensors)`,
+          ),
+        );
+      }
+
       // Update geometry estimate for EO track
       this.state.geometryEstimates.set(target.promotedTrackId, {
         estimateId: generateId(),
