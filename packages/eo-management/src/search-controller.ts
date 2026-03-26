@@ -30,7 +30,7 @@ export interface SearchControllerConfig {
 }
 
 const DEFAULT_CONFIG: SearchControllerConfig = {
-  idleThreshold: 3,
+  idleThreshold: 3, // 3 seconds idle before search activates (time-based, tick-rate independent)
   defaultScanSpeed: 5,
   defaultElevationStep: 5,
 };
@@ -79,7 +79,7 @@ export class SearchController {
         state.active = false;
         state.idleTickCount = 0;
       } else {
-        state.idleTickCount++;
+        state.idleTickCount += dtSec; // accumulate elapsed time, not tick count
         if (state.idleTickCount >= this.config.idleThreshold) {
           state.active = true;
           state.currentAzimuth += state.scanSpeed * dtSec;

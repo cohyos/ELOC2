@@ -294,10 +294,10 @@ export class ScenarioRunner {
 
   /**
    * Determine whether a sensor should produce an update on this step.
-   * Uses modular arithmetic on step count to stagger updates:
-   *   - radar: every step (1s)
-   *   - eo: every 2-3s → every 2 steps
-   *   - c4isr: every 10-15s → every 12 steps
+   * Uses modular arithmetic on step count to stagger updates at 15 Hz:
+   *   - radar: every 15 steps (~1s at 15 Hz)
+   *   - eo: every 30 steps (~2s at 15 Hz)
+   *   - c4isr: every 180 steps (~12s at 15 Hz)
    */
   private shouldSensorUpdate(
     sensorType: string,

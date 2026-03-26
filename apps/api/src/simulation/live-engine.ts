@@ -4396,10 +4396,10 @@ export class LiveEngine {
         this.searchModeState.set(sId, searchState);
       }
 
-      searchState.idleTickCount++;
+      searchState.idleTickCount += dtSec; // accumulate elapsed time, not tick count
 
-      if (!searchState.active && searchState.idleTickCount >= 45) {
-        // Activate search mode after ~3 seconds idle (45 ticks at 15 Hz)
+      if (!searchState.active && searchState.idleTickCount >= 3) {
+        // Activate search mode after 3 seconds idle (tick-rate independent)
         searchState.active = true;
         searchState.currentAzimuth = sensor.gimbal.azimuthDeg ?? 0;
         this.pushEvent('eo.search.activated', `${sId}: search mode (idle)`);
