@@ -3212,8 +3212,25 @@ export class LiveEngine {
     }
 
     // ── 2. Updated 3D targets → update associated system track ──
+    // The Core EO Detector re-triangulates every tick using stale bearings.
+    // Only call the full update (position + velocity) when fresh bearings
+    // have actually arrived — detected by checking if the target's lastUpdated
+    // timestamp is newer than the track's lastUpdated (>100ms difference).
     for (const target of result.updatedTargets) {
-      if (target.promotedTrackId) {
+      if (!target.promotedTrackId) continue;
+      const track = this.trackManager.getTrack(target.promotedTrackId as SystemTrackId);
+      if (!track) continue;
+
+      // Always refresh the stale timer (prevents coasting/drop during re-triangulation)
+      this.trackManager.setTrackUpdateTick(target.promotedTrackId as SystemTrackId, this.state.elapsedSec);
+
+      // Only do full position+velocity update when position has meaningfully moved
+      // (>20m), indicating fresh bearings arrived vs stale re-triangulation
+      const dLat = Math.abs(target.position.lat - track.state.lat) * 110540;
+      const dLon = Math.abs(target.position.lon - track.state.lon) * 111320 *
+        Math.cos(track.state.lat * Math.PI / 180);
+      const movement = Math.sqrt(dLat * dLat + dLon * dLon);
+      if (movement > 20) {
         this.updateTrackFromEoTarget(target);
       }
     }
@@ -3389,8 +3406,8 @@ export class LiveEngine {
       return existingTrackId;
     }
 
-    // ── Step 2: No nearby radar track — create standalone EO system track ──
-    const eoTrackId = generateId() as SystemTrackId;
+    // ── Step 2: No nearby track — create standalone EO system track ──
+    const eoTrackId = this.trackManager.generateTrackId();
 
     const eoSystemTrack: SystemTrack = {
       systemTrackId: eoTrackId,
@@ -3487,7 +3504,9 @@ export class LiveEngine {
       const prevPos = eoTrack.state;
       const prevTime = eoTrack.lastUpdated as number;
       const dtMs = (simNow as number) - prevTime;
-      if (dtMs > 500 && dtMs < 30_000 && prevPos) {
+      // Velocity from consecutive triangulations (fresh bearings only —
+      // caller already filtered out stale re-triangulations by movement check)
+      if (dtMs > 50 && dtMs < 30_000 && prevPos) {
         // Convert geodetic delta to approximate velocity (m/s)
         const dLatM = (target.position.lat - prevPos.lat) * 110540;
         const dLonM = (target.position.lon - prevPos.lon) * 111320 *
