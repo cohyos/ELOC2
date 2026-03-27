@@ -148,6 +148,12 @@ export class TrackManager {
   /** Sequential counter for human-readable track IDs (STK-001, STK-002, ...) */
   private nextTrackNumber: number = 1;
 
+  /** Generate the next sequential STK-XXX track ID (for external track injection). */
+  generateTrackId(): SystemTrackId {
+    const num = this.nextTrackNumber++;
+    return `STK-${String(num).padStart(3, '0')}` as SystemTrackId;
+  }
+
   /** 6DOF consistency evaluator — tracks position/velocity/acceleration/Doppler consistency. */
   readonly consistencyEvaluator = new ConsistencyEvaluator();
 

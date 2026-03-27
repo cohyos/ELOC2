@@ -15,7 +15,12 @@ describe('EO Staring Defense — Track Promotion', () => {
     const engine = new LiveEngine('eo-staring-defense');
     engine.start();
     engine.pause();
-    engine.seek(30);
+
+    // Manually tick the engine 450 times (30s × 15 Hz) to simulate live play
+    // This exercises the full finalizeTick path including processCoreEoDetector
+    for (let i = 0; i < 450; i++) {
+      (engine as any).tick();
+    }
 
     const state = engine.getState();
     const tracks = state.tracks;
